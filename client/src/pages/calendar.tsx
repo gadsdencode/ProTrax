@@ -1,16 +1,24 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useParams } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { Task } from "@shared/schema";
+import type { Task, Project } from "@shared/schema";
 
 export default function Calendar() {
+  const params = useParams();
+  const projectIdFromUrl = params.id ? parseInt(params.id) : null;
   const [currentDate, setCurrentDate] = useState(new Date());
 
+  const { data: project } = useQuery<Project>({
+    queryKey: [`/api/projects/${projectIdFromUrl}`],
+    enabled: !!projectIdFromUrl,
+  });
+
   const { data: tasks, isLoading } = useQuery<Task[]>({
-    queryKey: ["/api/tasks"],
+    queryKey: ["/api/tasks", projectIdFromUrl ? { projectId: projectIdFromUrl } : {}],
   });
 
   const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
@@ -42,7 +50,9 @@ export default function Calendar() {
     <div className="p-6 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold" data-testid="text-calendar-title">Calendar</h1>
+        <h1 className="text-2xl font-semibold" data-testid="text-calendar-title">
+          {project ? `${project.name} - Calendar` : 'Calendar'}
+        </h1>
         <div className="flex items-center gap-2">
           <Button
             variant="outline"

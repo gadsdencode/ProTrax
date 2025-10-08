@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Search, Filter, Download, ArrowUpDown } from "lucide-react";
+import { useParams } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -14,16 +15,23 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
-import type { Task } from "@shared/schema";
+import type { Task, Project } from "@shared/schema";
 
 export default function ListView() {
+  const params = useParams();
+  const projectIdFromUrl = params.id ? parseInt(params.id) : null;
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTasks, setSelectedTasks] = useState<number[]>([]);
   const [sortField, setSortField] = useState<keyof Task>("dueDate");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
 
+  const { data: project } = useQuery<Project>({
+    queryKey: [`/api/projects/${projectIdFromUrl}`],
+    enabled: !!projectIdFromUrl,
+  });
+
   const { data: tasks, isLoading } = useQuery<Task[]>({
-    queryKey: ["/api/tasks"],
+    queryKey: ["/api/tasks", projectIdFromUrl ? { projectId: projectIdFromUrl } : {}],
   });
 
   const filteredAndSortedTasks = tasks
@@ -73,7 +81,9 @@ export default function ListView() {
     <div className="p-6 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold" data-testid="text-list-title">List View</h1>
+        <h1 className="text-2xl font-semibold" data-testid="text-list-title">
+          {project ? `${project.name} - List View` : 'List View'}
+        </h1>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" data-testid="button-filter">
             <Filter className="h-4 w-4 mr-2" />

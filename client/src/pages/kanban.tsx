@@ -18,7 +18,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { DndContext, DragEndEvent, DragOverlay, useDraggable, useDroppable } from "@dnd-kit/core";
 import { TaskForm } from "@/components/task-form";
 import { TaskDetail } from "@/components/task-detail";
-import type { Task, KanbanColumn, InsertTask } from "@shared/schema";
+import type { Task, KanbanColumn, InsertTask, Project } from "@shared/schema";
 
 export default function Kanban() {
   const params = useParams();
@@ -30,6 +30,11 @@ export default function Kanban() {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const { toast } = useToast();
+
+  const { data: project } = useQuery<Project>({
+    queryKey: [`/api/projects/${selectedProject}`],
+    enabled: !!selectedProject,
+  });
 
   const { data: columns, isLoading: columnsLoading } = useQuery<KanbanColumn[]>({
     queryKey: ["/api/kanban/columns", { projectId: selectedProject }],
@@ -117,7 +122,9 @@ export default function Kanban() {
       {/* Header */}
       <div className="border-b p-4 bg-background">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-semibold" data-testid="text-kanban-title">Kanban Board</h1>
+          <h1 className="text-2xl font-semibold" data-testid="text-kanban-title">
+            {project ? `${project.name} - Kanban Board` : 'Kanban Board'}
+          </h1>
           <Button variant="outline" size="sm" data-testid="button-configure-kanban">
             Configure Columns
           </Button>

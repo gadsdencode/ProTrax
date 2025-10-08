@@ -7,7 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import type { Task } from "@shared/schema";
+import type { Task, Project } from "@shared/schema";
 
 export default function Gantt() {
   const params = useParams();
@@ -15,6 +15,11 @@ export default function Gantt() {
   const [zoom, setZoom] = useState(1);
   const [selectedProject, setSelectedProject] = useState<number | null>(projectIdFromUrl);
   const { toast } = useToast();
+
+  const { data: project } = useQuery<Project>({
+    queryKey: [`/api/projects/${selectedProject}`],
+    enabled: !!selectedProject,
+  });
 
   const { data: tasks, isLoading } = useQuery<Task[]>({
     queryKey: ["/api/tasks", { projectId: selectedProject }],
@@ -72,7 +77,14 @@ export default function Gantt() {
       {/* Header */}
       <div className="border-b p-4 bg-background">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-semibold" data-testid="text-gantt-title">Gantt Chart</h1>
+          <div>
+            <h1 className="text-2xl font-semibold" data-testid="text-gantt-title">
+              {project ? `${project.name} - Gantt Chart` : 'Gantt Chart'}
+            </h1>
+            {project && (
+              <p className="text-sm text-muted-foreground mt-1">{project.description}</p>
+            )}
+          </div>
           <div className="flex items-center gap-2">
             <Button
               variant="outline"
