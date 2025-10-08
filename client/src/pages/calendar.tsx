@@ -1,16 +1,18 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { useParams } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { TaskForm } from "@/components/task-form";
 import type { Task, Project } from "@shared/schema";
 
 export default function Calendar() {
   const params = useParams();
   const projectIdFromUrl = params.id ? parseInt(params.id) : null;
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [taskFormOpen, setTaskFormOpen] = useState(false);
 
   const { data: project } = useQuery<Project>({
     queryKey: [`/api/projects/${projectIdFromUrl}`],
@@ -54,6 +56,15 @@ export default function Calendar() {
           {project ? `${project.name} - Calendar` : 'Calendar'}
         </h1>
         <div className="flex items-center gap-2">
+          {projectIdFromUrl && (
+            <Button
+              onClick={() => setTaskFormOpen(true)}
+              data-testid="button-new-task"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              New Task
+            </Button>
+          )}
           <Button
             variant="outline"
             size="sm"
@@ -144,6 +155,13 @@ export default function Calendar() {
           </div>
         </Card>
       )}
+
+      {/* Task Form Dialog */}
+      <TaskForm
+        open={taskFormOpen}
+        onOpenChange={setTaskFormOpen}
+        projectId={projectIdFromUrl}
+      />
     </div>
   );
 }

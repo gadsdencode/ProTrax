@@ -319,6 +319,7 @@ export const insertTaskSchema = createInsertSchema(tasks).omit({ id: true, creat
   startDate: z.union([z.string(), z.date()]).transform(val => typeof val === 'string' ? new Date(val) : val).optional(),
   dueDate: z.union([z.string(), z.date()]).transform(val => typeof val === 'string' ? new Date(val) : val).optional(),
   recurrenceEndDate: z.union([z.string(), z.date()]).transform(val => typeof val === 'string' ? new Date(val) : val).optional(),
+  estimatedHours: z.union([z.string(), z.number()]).transform(val => typeof val === 'number' ? val.toString() : val).optional(),
 });
 export const insertTaskDependencySchema = createInsertSchema(taskDependencies).omit({ id: true, createdAt: true });
 export const insertCustomFieldSchema = createInsertSchema(customFields).omit({ id: true, createdAt: true });

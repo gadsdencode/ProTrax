@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Search, Filter, Download, ArrowUpDown } from "lucide-react";
+import { Search, Filter, Download, ArrowUpDown, Plus } from "lucide-react";
 import { useParams } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +15,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
+import { TaskForm } from "@/components/task-form";
 import type { Task, Project } from "@shared/schema";
 
 export default function ListView() {
@@ -24,6 +25,7 @@ export default function ListView() {
   const [selectedTasks, setSelectedTasks] = useState<number[]>([]);
   const [sortField, setSortField] = useState<keyof Task>("dueDate");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+  const [taskFormOpen, setTaskFormOpen] = useState(false);
 
   const { data: project } = useQuery<Project>({
     queryKey: [`/api/projects/${projectIdFromUrl}`],
@@ -85,6 +87,15 @@ export default function ListView() {
           {project ? `${project.name} - List View` : 'List View'}
         </h1>
         <div className="flex items-center gap-2">
+          {projectIdFromUrl && (
+            <Button
+              onClick={() => setTaskFormOpen(true)}
+              data-testid="button-new-task"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              New Task
+            </Button>
+          )}
           <Button variant="outline" size="sm" data-testid="button-filter">
             <Filter className="h-4 w-4 mr-2" />
             Filter
@@ -257,6 +268,13 @@ export default function ListView() {
           </Table>
         </div>
       )}
+
+      {/* Task Form Dialog */}
+      <TaskForm
+        open={taskFormOpen}
+        onOpenChange={setTaskFormOpen}
+        projectId={projectIdFromUrl}
+      />
     </div>
   );
 }
