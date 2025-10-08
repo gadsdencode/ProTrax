@@ -47,6 +47,10 @@ function Router() {
     <Switch>
       <Route path="/" component={Dashboard} />
       <Route path="/projects" component={Projects} />
+      <Route path="/projects/:id/gantt" component={Gantt} />
+      <Route path="/projects/:id/kanban" component={Kanban} />
+      <Route path="/projects/:id/calendar" component={Calendar} />
+      <Route path="/projects/:id/list" component={ListView} />
       <Route path="/gantt" component={Gantt} />
       <Route path="/kanban" component={Kanban} />
       <Route path="/calendar" component={Calendar} />

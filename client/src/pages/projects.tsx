@@ -111,7 +111,7 @@ export default function Projects() {
             <Card
               key={project.id}
               className="hover-elevate transition-all cursor-pointer"
-              onClick={() => window.location.href = `/projects/${project.id}`}
+              onClick={() => window.location.href = `/projects/${project.id}/gantt`}
               data-testid={`project-card-${project.id}`}
             >
               <CardHeader>

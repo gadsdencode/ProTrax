@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronRight, Download, ZoomIn, ZoomOut } from "lucide-react";
+import { useParams } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent } from "@/components/ui/card";
@@ -9,8 +10,10 @@ import { apiRequest } from "@/lib/queryClient";
 import type { Task } from "@shared/schema";
 
 export default function Gantt() {
+  const params = useParams();
+  const projectIdFromUrl = params.id ? parseInt(params.id) : null;
   const [zoom, setZoom] = useState(1);
-  const [selectedProject, setSelectedProject] = useState<number | null>(null);
+  const [selectedProject, setSelectedProject] = useState<number | null>(projectIdFromUrl);
   const { toast } = useToast();
 
   const { data: tasks, isLoading } = useQuery<Task[]>({

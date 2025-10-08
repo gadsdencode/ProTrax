@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Plus, MoreVertical } from "lucide-react";
+import { useParams } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -12,7 +13,9 @@ import { DndContext, DragEndEvent, DragOverlay, useDraggable, useDroppable } fro
 import type { Task, KanbanColumn } from "@shared/schema";
 
 export default function Kanban() {
-  const [selectedProject, setSelectedProject] = useState<number | null>(null);
+  const params = useParams();
+  const projectIdFromUrl = params.id ? parseInt(params.id) : null;
+  const [selectedProject, setSelectedProject] = useState<number | null>(projectIdFromUrl);
   const [activeId, setActiveId] = useState<number | null>(null);
   const { toast } = useToast();
 
