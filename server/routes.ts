@@ -231,6 +231,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ============= COMMENT ROUTES =============
   
+  app.get('/api/comments', isAuthenticated, async (req, res) => {
+    try {
+      if (!req.query.taskId) {
+        return res.status(400).json({ message: "taskId query parameter is required" });
+      }
+      const taskId = parseInt(req.query.taskId as string);
+      if (isNaN(taskId)) {
+        return res.status(400).json({ message: "taskId must be a valid number" });
+      }
+      const comments = await storage.getComments(taskId);
+      res.json(comments);
+    } catch (error) {
+      console.error("Error fetching comments:", error);
+      res.status(500).json({ message: "Failed to fetch comments" });
+    }
+  });
+
   app.get('/api/tasks/:taskId/comments', isAuthenticated, async (req, res) => {
     try {
       const taskId = parseInt(req.params.taskId);
