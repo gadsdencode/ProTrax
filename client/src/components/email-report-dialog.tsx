@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,13 +15,21 @@ interface EmailReportDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   projectId?: number;
+  initialReportType?: string;
 }
 
-export function EmailReportDialog({ open, onOpenChange, projectId }: EmailReportDialogProps) {
+export function EmailReportDialog({ open, onOpenChange, projectId, initialReportType }: EmailReportDialogProps) {
   const { toast } = useToast();
-  const [reportType, setReportType] = useState<string>("summary");
+  const [reportType, setReportType] = useState<string>(initialReportType || "summary");
   const [emailInput, setEmailInput] = useState("");
   const [recipients, setRecipients] = useState<Array<{ email: string; name?: string }>>([]);
+
+  // Update report type when initialReportType changes
+  useEffect(() => {
+    if (initialReportType) {
+      setReportType(initialReportType);
+    }
+  }, [initialReportType, open]);
 
   const { data: projects } = useQuery<Project[]>({
     queryKey: ['/api/projects'],
@@ -59,7 +67,7 @@ export function EmailReportDialog({ open, onOpenChange, projectId }: EmailReport
       onOpenChange(false);
       setRecipients([]);
       setEmailInput("");
-      setReportType("summary");
+      setReportType(initialReportType || "summary");
     },
     onError: (error: any) => {
       toast({

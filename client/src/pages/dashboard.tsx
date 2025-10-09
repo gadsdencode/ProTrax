@@ -1,12 +1,18 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AlertCircle, CheckCircle2, Clock, FolderKanban } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { AlertCircle, CheckCircle2, Clock, FolderKanban, Mail, ChevronDown } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { EmailReportDialog } from "@/components/email-report-dialog";
 import type { Project, Task } from "@shared/schema";
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const [emailDialogOpen, setEmailDialogOpen] = useState(false);
+  const [selectedReportType, setSelectedReportType] = useState<string>("summary");
   
   const { data: projects, isLoading: projectsLoading } = useQuery<Project[]>({
     queryKey: ["/api/projects"],
@@ -15,6 +21,11 @@ export default function Dashboard() {
   const { data: myTasks, isLoading: tasksLoading } = useQuery<Task[]>({
     queryKey: ["/api/tasks/my-tasks"],
   });
+
+  const handleEmailReport = (reportType: string) => {
+    setSelectedReportType(reportType);
+    setEmailDialogOpen(true);
+  };
 
   const stats = [
     {
@@ -59,13 +70,38 @@ export default function Dashboard() {
 
   return (
     <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold mb-2" data-testid="text-dashboard-title">
-          Welcome back, {user?.firstName || 'there'}!
-        </h1>
-        <p className="text-muted-foreground">
-          Here's an overview of your projects and tasks
-        </p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold mb-2" data-testid="text-dashboard-title">
+            Welcome back, {user?.firstName || 'there'}!
+          </h1>
+          <p className="text-muted-foreground">
+            Here's an overview of your projects and tasks
+          </p>
+        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button className="gap-2" data-testid="button-email-updates">
+              <Mail className="h-4 w-4" />
+              Email Updates
+              <ChevronDown className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuItem onClick={() => handleEmailReport("summary")} data-testid="menu-email-summary">
+              Project Summary
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleEmailReport("status")} data-testid="menu-email-status">
+              Status Report
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleEmailReport("gantt")} data-testid="menu-email-gantt">
+              Gantt Chart Data
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleEmailReport("kanban")} data-testid="menu-email-kanban">
+              Kanban Board Data
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {/* Stats Grid */}
@@ -181,6 +217,13 @@ export default function Dashboard() {
           )}
         </CardContent>
       </Card>
+
+      <EmailReportDialog 
+        open={emailDialogOpen} 
+        onOpenChange={setEmailDialogOpen}
+        projectId={projects?.find(p => p.status === 'active')?.id}
+        initialReportType={selectedReportType}
+      />
     </div>
   );
 }
