@@ -1,16 +1,18 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Download, FileText, BarChart3, PieChart, TrendingUp, Loader2 } from "lucide-react";
+import { Download, FileText, BarChart3, PieChart, TrendingUp, Loader2, Mail } from "lucide-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
 import type { Project } from "@shared/schema";
+import { EmailReportDialog } from "@/components/email-report-dialog";
 
 export default function Reports() {
   const { toast } = useToast();
   const [summary, setSummary] = useState<string>("");
   const [predictions, setPredictions] = useState<string>("");
+  const [emailDialogOpen, setEmailDialogOpen] = useState(false);
 
   const { data: projects } = useQuery<Project[]>({
     queryKey: ['/api/projects'],
@@ -101,11 +103,21 @@ export default function Reports() {
 
   return (
     <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold mb-2" data-testid="text-reports-title">Reports & Exports</h1>
-        <p className="text-muted-foreground">
-          Generate comprehensive reports and export data to Excel
-        </p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold mb-2" data-testid="text-reports-title">Reports & Exports</h1>
+          <p className="text-muted-foreground">
+            Generate comprehensive reports and export data to Excel
+          </p>
+        </div>
+        <Button
+          onClick={() => setEmailDialogOpen(true)}
+          data-testid="button-email-report"
+          className="gap-2"
+        >
+          <Mail className="h-4 w-4" />
+          Email Report
+        </Button>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
@@ -192,6 +204,12 @@ export default function Reports() {
           </div>
         </CardContent>
       </Card>
+
+      <EmailReportDialog 
+        open={emailDialogOpen} 
+        onOpenChange={setEmailDialogOpen}
+        projectId={projects?.[0]?.id}
+      />
     </div>
   );
 }
