@@ -6,7 +6,7 @@ import {
   Layout,
   List,
   Plus,
-  Settings,
+  LogOut,
   Target,
   Users,
 } from "lucide-react";
@@ -140,8 +140,9 @@ export function AppSidebar() {
             onClick={() => window.location.href = '/api/logout'}
             data-testid="button-logout"
             className="h-8 w-8"
+            title="Log out"
           >
-            <Settings className="h-4 w-4" />
+            <LogOut className="h-4 w-4" />
           </Button>
         </div>
       </SidebarFooter>
