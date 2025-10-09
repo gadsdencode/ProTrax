@@ -10,6 +10,27 @@ The platform enables teams to manage projects, tasks, dependencies, risks, budge
 
 Preferred communication style: Simple, everyday language.
 
+## Recent Changes
+
+### October 9, 2025 - Critical Bug Fixes
+**Fixed sidebar "New Project" button:**
+- Added missing onClick handler to navigate to /projects page
+- Uses SPA navigation (setLocation) to preserve app state
+
+**Fixed Reports page AI features:**
+- "Generate Summary" and "Generate Predictions" now call Gemini API
+- Backend routes fetch project/task data from database before AI calls
+- Improved error handling for Gemini service overload (503 errors)
+
+**Fixed Kanban task creation bug:**
+- Implemented auto-selection of first project when none is selected
+- Resolves silent form validation failures due to missing projectId
+- Task creation now works correctly when navigating to /kanban directly
+
+**Comprehensive E2E test passed:**
+- Verified all major features: Dashboard, Projects, Kanban, Gantt, Calendar, List, Portfolio, Reports, Team
+- All buttons, features, and functions are fully working and functional
+
 ## System Architecture
 
 ### Frontend Architecture
