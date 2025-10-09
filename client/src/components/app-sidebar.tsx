@@ -43,7 +43,7 @@ const viewItems = [
 ];
 
 export function AppSidebar() {
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
   const { user } = useAuth();
 
   const getUserInitials = () => {
@@ -67,6 +67,7 @@ export function AppSidebar() {
           <div className="px-3 py-2">
             <Button
               className="w-full"
+              onClick={() => setLocation('/projects')}
               data-testid="button-new-project"
             >
               <Plus className="h-4 w-4 mr-2" />
