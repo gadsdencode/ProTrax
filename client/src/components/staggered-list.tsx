@@ -1,29 +1,18 @@
-import { motion } from "framer-motion";
-
-const container = {
-  hidden: { opacity: 0 },
-  show: {
-    opacity: 1,
-    transition: {
-      staggerChildren: 0.05,
-    },
-  },
-};
-
-const item = {
-  hidden: { opacity: 0, y: 10 },
-  show: { 
-    opacity: 1, 
-    y: 0,
-    transition: {
-      type: "tween",
-      ease: "easeOut",
-      duration: 0.2,
-    },
-  },
-};
+import { motion, useReducedMotion } from "framer-motion";
 
 export function StaggeredList({ children, className }: { children: React.ReactNode; className?: string }) {
+  const prefersReducedMotion = useReducedMotion();
+
+  const container = {
+    hidden: { opacity: prefersReducedMotion ? 1 : 0 },
+    show: {
+      opacity: 1,
+      transition: {
+        staggerChildren: prefersReducedMotion ? 0 : 0.05,
+      },
+    },
+  };
+
   return (
     <motion.div
       variants={container}
@@ -37,6 +26,21 @@ export function StaggeredList({ children, className }: { children: React.ReactNo
 }
 
 export function StaggeredItem({ children, className }: { children: React.ReactNode; className?: string }) {
+  const prefersReducedMotion = useReducedMotion();
+
+  const item = {
+    hidden: { opacity: prefersReducedMotion ? 1 : 0, y: prefersReducedMotion ? 0 : 10 },
+    show: { 
+      opacity: 1, 
+      y: 0,
+      transition: {
+        type: "tween",
+        ease: "easeOut",
+        duration: prefersReducedMotion ? 0 : 0.2,
+      },
+    },
+  };
+
   return (
     <motion.div variants={item} className={className}>
       {children}

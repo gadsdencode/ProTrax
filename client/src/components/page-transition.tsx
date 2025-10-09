@@ -1,6 +1,5 @@
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { useLocation } from "wouter";
-import { useEffect, useState } from "react";
 
 const pageVariants = {
   initial: {
@@ -11,39 +10,33 @@ const pageVariants = {
     opacity: 1,
     y: 0,
   },
-  exit: {
-    opacity: 0,
-    y: -8,
-  },
 };
 
 const pageTransition = {
   type: "tween",
-  ease: "easeInOut",
-  duration: 0.2,
+  ease: "easeOut",
+  duration: 0.15,
 };
 
 export function PageTransition({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
-  const [displayLocation, setDisplayLocation] = useState(location);
+  const prefersReducedMotion = useReducedMotion();
 
-  useEffect(() => {
-    setDisplayLocation(location);
-  }, [location]);
+  // If user prefers reduced motion, skip animations
+  if (prefersReducedMotion) {
+    return <div className="h-full">{children}</div>;
+  }
 
   return (
-    <AnimatePresence mode="wait">
-      <motion.div
-        key={displayLocation}
-        initial="initial"
-        animate="animate"
-        exit="exit"
-        variants={pageVariants}
-        transition={pageTransition}
-        className="h-full"
-      >
-        {children}
-      </motion.div>
-    </AnimatePresence>
+    <motion.div
+      key={location}
+      initial="initial"
+      animate="animate"
+      variants={pageVariants}
+      transition={pageTransition}
+      className="h-full"
+    >
+      {children}
+    </motion.div>
   );
 }
