@@ -12,6 +12,17 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+### October 9, 2025 - One-Click Email Updates from Dashboard
+
+**Implemented streamlined email functionality:**
+- Added "Email Updates" dropdown button to Dashboard header
+- One-click workflow: Click button → Select report type → Email dialog opens pre-configured
+- Four report type options: Project Summary, Status Report, Gantt Chart Data, Kanban Board Data
+- Email dialog automatically opens with selected report type pre-filled
+- Utilizes Outlook integration for sending beautifully formatted HTML emails to stakeholders
+- Seamless UX: Report type persists across dialog opens/closes
+- Auto-selects first active project for quick sending
+
 ### October 9, 2025 - Critical Bug Fixes & Task Creation Enhancement
 
 **Fixed sidebar "New Project" button:**
