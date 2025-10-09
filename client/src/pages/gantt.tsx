@@ -253,7 +253,7 @@ function GanttRow({ task, dateRange, dayWidth }: { task: Task; dateRange: { star
           }}
           title={task.title}
         >
-          {!task.isMilestone && task.progress && task.progress > 0 && (
+          {!task.isMilestone && (task.progress ?? 0) > 0 && (
             <div
               className="h-full bg-primary-foreground/30 rounded-l"
               style={{ width: `${task.progress}%` }}
