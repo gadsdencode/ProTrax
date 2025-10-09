@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Plus, MoreVertical, GripVertical } from "lucide-react";
 import { useParams } from "wouter";
@@ -30,6 +30,18 @@ export default function Kanban() {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const { toast } = useToast();
+
+  // Fetch all projects for auto-selection
+  const { data: projects } = useQuery<Project[]>({
+    queryKey: ["/api/projects"],
+  });
+
+  // Auto-select first project if none is selected
+  useEffect(() => {
+    if (!selectedProject && projects && projects.length > 0) {
+      setSelectedProject(projects[0].id);
+    }
+  }, [selectedProject, projects]);
 
   const { data: project } = useQuery<Project>({
     queryKey: [`/api/projects/${selectedProject}`],

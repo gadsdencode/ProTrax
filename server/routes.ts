@@ -535,8 +535,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/ai/predict-deadline', isAuthenticated, async (req, res) => {
     try {
       const { predictProjectDeadline } = await import('./gemini');
-      const { taskData } = req.body;
-      const prediction = await predictProjectDeadline(taskData);
+      const { projectId } = req.body;
+      
+      if (!projectId) {
+        return res.status(400).json({ message: "projectId is required" });
+      }
+      
+      // Fetch tasks for the project
+      const tasks = await storage.getTasks(projectId);
+      const prediction = await predictProjectDeadline(tasks);
       res.json(prediction);
     } catch (error: any) {
       console.error("Error predicting deadline:", error);
@@ -547,8 +554,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/ai/generate-summary', isAuthenticated, async (req, res) => {
     try {
       const { generateProjectSummary } = await import('./gemini');
-      const { projectData } = req.body;
-      const summary = await generateProjectSummary(projectData);
+      const { projectId } = req.body;
+      
+      if (!projectId) {
+        return res.status(400).json({ message: "projectId is required" });
+      }
+      
+      // Fetch project data
+      const project = await storage.getProject(projectId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+      
+      const summary = await generateProjectSummary(project);
       res.json({ summary });
     } catch (error: any) {
       console.error("Error generating summary:", error);

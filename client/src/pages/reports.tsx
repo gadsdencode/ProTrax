@@ -1,8 +1,71 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Download, FileText, BarChart3, PieChart, TrendingUp } from "lucide-react";
+import { Download, FileText, BarChart3, PieChart, TrendingUp, Loader2 } from "lucide-react";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { useState } from "react";
+import type { Project } from "@shared/schema";
 
 export default function Reports() {
+  const { toast } = useToast();
+  const [summary, setSummary] = useState<string>("");
+  const [predictions, setPredictions] = useState<string>("");
+
+  const { data: projects } = useQuery<Project[]>({
+    queryKey: ['/api/projects'],
+  });
+
+  const summaryMutation = useMutation({
+    mutationFn: async () => {
+      const projectId = projects?.[0]?.id;
+      if (!projectId) {
+        throw new Error("No projects found");
+      }
+      const res = await apiRequest("POST", "/api/ai/generate-summary", { projectId });
+      return res.json();
+    },
+    onSuccess: (data: any) => {
+      setSummary(data.summary || "Summary generated successfully");
+      toast({
+        title: "Summary Generated",
+        description: "AI summary has been generated",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to generate summary",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const predictionsMutation = useMutation({
+    mutationFn: async () => {
+      const projectId = projects?.[0]?.id;
+      if (!projectId) {
+        throw new Error("No projects found");
+      }
+      const res = await apiRequest("POST", "/api/ai/predict-deadline", { projectId });
+      return res.json();
+    },
+    onSuccess: (data: any) => {
+      setPredictions(data.prediction || data.message || "Predictions generated successfully");
+      toast({
+        title: "Predictions Generated",
+        description: "AI predictions have been generated",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to generate predictions",
+        variant: "destructive",
+      });
+    },
+  });
+
   const reports = [
     {
       title: "Gantt Chart Export",
@@ -89,9 +152,21 @@ export default function Reports() {
             <p className="text-sm text-muted-foreground mb-3">
               Use AI to predict project completion dates and identify potential delays
             </p>
-            <Button variant="outline" size="sm" data-testid="button-generate-predictions">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              data-testid="button-generate-predictions"
+              onClick={() => predictionsMutation.mutate()}
+              disabled={predictionsMutation.isPending || !projects?.length}
+            >
+              {predictionsMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Generate Predictions
             </Button>
+            {predictions && (
+              <div className="mt-3 p-3 rounded-md bg-background border" data-testid="ai-predictions-output">
+                <p className="text-sm">{predictions}</p>
+              </div>
+            )}
           </div>
 
           <div className="p-4 rounded-lg border bg-primary/5">
@@ -99,9 +174,21 @@ export default function Reports() {
             <p className="text-sm text-muted-foreground mb-3">
               Generate executive summaries of project status and team activity
             </p>
-            <Button variant="outline" size="sm" data-testid="button-generate-summary">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              data-testid="button-generate-summary"
+              onClick={() => summaryMutation.mutate()}
+              disabled={summaryMutation.isPending || !projects?.length}
+            >
+              {summaryMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Generate Summary
             </Button>
+            {summary && (
+              <div className="mt-3 p-3 rounded-md bg-background border" data-testid="ai-summary-output">
+                <p className="text-sm">{summary}</p>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

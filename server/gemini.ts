@@ -68,8 +68,14 @@ Respond with JSON in this format:
     } else {
       throw new Error("Empty response from model");
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error predicting deadline:", error);
+    
+    // Check if it's an API overload error
+    if (error.message?.includes('overloaded') || error.status === 503) {
+      throw new Error("AI service is temporarily overloaded. Please try again in a moment.");
+    }
+    
     return {
       prediction: "unknown",
       confidence: 0,
