@@ -12,7 +12,8 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
-### October 9, 2025 - Critical Bug Fixes
+### October 9, 2025 - Critical Bug Fixes & Task Creation Enhancement
+
 **Fixed sidebar "New Project" button:**
 - Added missing onClick handler to navigate to /projects page
 - Uses SPA navigation (setLocation) to preserve app state
@@ -27,8 +28,15 @@ Preferred communication style: Simple, everyday language.
 - Resolves silent form validation failures due to missing projectId
 - Task creation now works correctly when navigating to /kanban directly
 
-**Comprehensive E2E test passed:**
-- Verified all major features: Dashboard, Projects, Kanban, Gantt, Calendar, List, Portfolio, Reports, Team
+**Enhanced Task Creation Across All Views:**
+- **Gantt Page:** Added "New Task" button to header for creating tasks in current project
+- **Projects Page:** Added "Add Task" button to each project card for quick task creation
+- **Cache Invalidation:** Fixed query invalidation to refresh all views (Gantt, Kanban, List, Calendar) immediately after task creation
+- Tasks created from any view now appear instantly in all other views without page refresh
+
+**Comprehensive E2E tests passed:**
+- All major features verified: Dashboard, Projects, Kanban, Gantt, Calendar, List, Portfolio, Reports, Team
+- Task creation tested across all views with proper cache invalidation
 - All buttons, features, and functions are fully working and functional
 
 ## System Architecture
