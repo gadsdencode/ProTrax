@@ -7,6 +7,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
+import { PageTransition } from "@/components/page-transition";
 import { useAuth } from "@/hooks/useAuth";
 import Landing from "@/pages/landing";
 import Dashboard from "@/pages/dashboard";
@@ -84,7 +85,9 @@ function AppContent() {
                 <ThemeToggle />
               </header>
               <main className="flex-1 overflow-auto">
-                <Router />
+                <PageTransition>
+                  <Router />
+                </PageTransition>
               </main>
             </div>
           </div>

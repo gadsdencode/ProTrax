@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { StaggeredList, StaggeredItem } from "@/components/staggered-list";
 import type { Project, InsertProject, InsertTask } from "@shared/schema";
 import { ProjectForm } from "@/components/project-form";
 import { TaskForm } from "@/components/task-form";
@@ -134,14 +135,14 @@ export default function Projects() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <StaggeredList className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {filteredProjects.map(project => (
-            <Card
-              key={project.id}
-              className="hover-elevate transition-all cursor-pointer"
-              onClick={() => window.location.href = `/projects/${project.id}/gantt`}
-              data-testid={`project-card-${project.id}`}
-            >
+            <StaggeredItem key={project.id}>
+              <Card
+                className="hover-elevate transition-all cursor-pointer h-full"
+                onClick={() => window.location.href = `/projects/${project.id}/gantt`}
+                data-testid={`project-card-${project.id}`}
+              >
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div className="flex-1 min-w-0">
@@ -189,8 +190,9 @@ export default function Projects() {
                 </div>
               </CardContent>
             </Card>
+            </StaggeredItem>
           ))}
-        </div>
+        </StaggeredList>
       )}
 
       {/* Task Creation Dialog */}
