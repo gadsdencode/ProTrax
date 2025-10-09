@@ -14,12 +14,15 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { Project, InsertProject } from "@shared/schema";
+import type { Project, InsertProject, InsertTask } from "@shared/schema";
 import { ProjectForm } from "@/components/project-form";
+import { TaskForm } from "@/components/task-form";
 
 export default function Projects() {
   const [searchQuery, setSearchQuery] = useState("");
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [taskDialogOpen, setTaskDialogOpen] = useState(false);
+  const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
   const { toast } = useToast();
 
   const { data: projects, isLoading } = useQuery<Project[]>({
@@ -36,6 +39,31 @@ export default function Projects() {
       toast({
         title: "Success",
         description: "Project created successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const createTaskMutation = useMutation({
+    mutationFn: async (data: InsertTask) => {
+      return await apiRequest("POST", "/api/tasks", data);
+    },
+    onSuccess: () => {
+      // Invalidate both global and project-scoped task queries
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+      if (selectedProjectId) {
+        queryClient.invalidateQueries({ queryKey: ["/api/tasks", { projectId: selectedProjectId }] });
+      }
+      setTaskDialogOpen(false);
+      toast({
+        title: "Success",
+        description: "Task created successfully",
       });
     },
     onError: (error: Error) => {
@@ -144,11 +172,40 @@ export default function Projects() {
                     Budget: ${parseFloat(project.budget).toLocaleString()}
                   </div>
                 )}
+                <div className="mt-4 pt-3 border-t flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedProjectId(project.id);
+                      setTaskDialogOpen(true);
+                    }}
+                    data-testid={`button-add-task-${project.id}`}
+                  >
+                    <Plus className="h-3 w-3 mr-1" />
+                    Add Task
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           ))}
         </div>
       )}
+
+      {/* Task Creation Dialog */}
+      <Dialog open={taskDialogOpen} onOpenChange={setTaskDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Create New Task</DialogTitle>
+          </DialogHeader>
+          <TaskForm
+            projectId={selectedProjectId || undefined}
+            onSubmit={(data) => createTaskMutation.mutate(data)}
+            isLoading={createTaskMutation.isPending}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
