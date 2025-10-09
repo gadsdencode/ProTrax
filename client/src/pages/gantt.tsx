@@ -1,19 +1,27 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { ChevronRight, Download, ZoomIn, ZoomOut } from "lucide-react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { ChevronRight, Download, ZoomIn, ZoomOut, Plus } from "lucide-react";
 import { useParams } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
-import type { Task, Project } from "@shared/schema";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { TaskForm } from "@/components/task-form";
+import type { Task, Project, InsertTask } from "@shared/schema";
 
 export default function Gantt() {
   const params = useParams();
   const projectIdFromUrl = params.id ? parseInt(params.id) : null;
   const [zoom, setZoom] = useState(1);
   const [selectedProject, setSelectedProject] = useState<number | null>(projectIdFromUrl);
+  const [taskDialogOpen, setTaskDialogOpen] = useState(false);
   const { toast } = useToast();
 
   const { data: project } = useQuery<Project>({
@@ -23,6 +31,28 @@ export default function Gantt() {
 
   const { data: tasks, isLoading } = useQuery<Task[]>({
     queryKey: ["/api/tasks", { projectId: selectedProject }],
+  });
+
+  const createTaskMutation = useMutation({
+    mutationFn: async (data: InsertTask) => {
+      return await apiRequest("POST", "/api/tasks", data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks", { projectId: selectedProject }] });
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+      setTaskDialogOpen(false);
+      toast({
+        title: "Success",
+        description: "Task created successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
   });
 
   const handleExport = async () => {
@@ -86,6 +116,15 @@ export default function Gantt() {
             )}
           </div>
           <div className="flex items-center gap-2">
+            {selectedProject && (
+              <Button
+                onClick={() => setTaskDialogOpen(true)}
+                data-testid="button-new-task"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                New Task
+              </Button>
+            )}
             <Button
               variant="outline"
               size="sm"
@@ -166,6 +205,20 @@ export default function Gantt() {
           </div>
         )}
       </div>
+
+      {/* Task Creation Dialog */}
+      <Dialog open={taskDialogOpen} onOpenChange={setTaskDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Create New Task</DialogTitle>
+          </DialogHeader>
+          <TaskForm
+            projectId={selectedProject || undefined}
+            onSubmit={(data) => createTaskMutation.mutate(data)}
+            isLoading={createTaskMutation.isPending}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
