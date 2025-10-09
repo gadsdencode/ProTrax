@@ -628,6 +628,88 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ============= EMAIL ROUTES =============
+  
+  app.post('/api/email/send-report', isAuthenticated, async (req, res) => {
+    try {
+      const { sendProjectReport } = await import('./outlook');
+      const { projectId, reportType, recipients } = req.body;
+      
+      if (!projectId || !reportType || !recipients || !Array.isArray(recipients) || recipients.length === 0) {
+        return res.status(400).json({ 
+          message: "projectId, reportType, and recipients array are required" 
+        });
+      }
+
+      // Fetch project data
+      const project = await storage.getProject(projectId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+
+      // Fetch tasks for the project
+      const tasks = await storage.getTasks(projectId);
+      
+      // Prepare report data based on type
+      let reportData: any = {};
+      
+      if (reportType === 'summary') {
+        const totalTasks = tasks.length;
+        const completedTasks = tasks.filter(t => t.status === 'done').length;
+        const inProgressTasks = tasks.filter(t => t.status === 'in_progress').length;
+        
+        reportData = {
+          description: project.description,
+          status: project.status,
+          manager: project.managerId,
+          startDate: project.startDate,
+          endDate: project.endDate,
+          budget: project.budget,
+          totalTasks,
+          completedTasks,
+          inProgressTasks,
+          tasks
+        };
+      } else if (reportType === 'status') {
+        const totalTasks = tasks.length;
+        const completedTasks = tasks.filter(t => t.status === 'done').length;
+        const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+        
+        // Get risks
+        const risks = await storage.getRisks(projectId);
+        
+        reportData = {
+          overallStatus: progress >= 80 ? 'on_track' : progress >= 50 ? 'at_risk' : 'delayed',
+          progress,
+          accomplishments: tasks
+            .filter(t => t.status === 'done')
+            .slice(0, 5)
+            .map(t => t.title),
+          upcoming: tasks
+            .filter(t => t.status === 'todo' || t.status === 'in_progress')
+            .slice(0, 5)
+            .map(t => t.title),
+          risks: risks.slice(0, 5)
+        };
+      } else {
+        // For gantt/kanban reports, just send tasks
+        reportData = tasks;
+      }
+
+      await sendProjectReport(project.name, reportType, reportData, recipients);
+      
+      res.json({ 
+        message: "Report sent successfully",
+        recipientCount: recipients.length 
+      });
+    } catch (error: any) {
+      console.error("Error sending email report:", error);
+      res.status(500).json({ 
+        message: error.message || "Failed to send email report" 
+      });
+    }
+  });
+
   // ============= WEBSOCKET SERVER =============
   
   const httpServer = createServer(app);
