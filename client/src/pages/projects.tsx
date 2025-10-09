@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,6 +21,7 @@ import { ProjectForm } from "@/components/project-form";
 import { TaskForm } from "@/components/task-form";
 
 export default function Projects() {
+  const [, setLocation] = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
@@ -140,7 +142,7 @@ export default function Projects() {
             <StaggeredItem key={project.id}>
               <Card
                 className="hover-elevate transition-all cursor-pointer h-full"
-                onClick={() => window.location.href = `/projects/${project.id}/gantt`}
+                onClick={() => setLocation(`/projects/${project.id}/gantt`)}
                 data-testid={`project-card-${project.id}`}
               >
               <CardHeader>
