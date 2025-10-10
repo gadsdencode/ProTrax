@@ -17,6 +17,7 @@ import {
   projectTemplates,
   kanbanColumns,
   notifications,
+  projectStakeholders,
   type User,
   type UpsertUser,
   type Project,
@@ -47,6 +48,8 @@ import {
   type ProjectTemplate,
   type InsertKanbanColumn,
   type KanbanColumn,
+  type InsertProjectStakeholder,
+  type ProjectStakeholder,
   type InsertNotification,
   type Notification,
 } from "@shared/schema";
@@ -123,6 +126,12 @@ export interface IStorage {
   // Kanban column operations
   getKanbanColumns(projectId: number): Promise<KanbanColumn[]>;
   createKanbanColumn(column: InsertKanbanColumn): Promise<KanbanColumn>;
+  
+  // Project stakeholder operations
+  getProjectStakeholders(projectId: number): Promise<ProjectStakeholder[]>;
+  addProjectStakeholder(stakeholder: InsertProjectStakeholder): Promise<ProjectStakeholder>;
+  removeProjectStakeholder(projectId: number, userId: string): Promise<void>;
+  updateProjectStakeholder(id: number, updates: Partial<InsertProjectStakeholder>): Promise<ProjectStakeholder>;
   
   // Notification operations
   getNotifications(userId: string): Promise<Notification[]>;
@@ -359,6 +368,34 @@ export class DatabaseStorage implements IStorage {
   async createKanbanColumn(columnData: InsertKanbanColumn): Promise<KanbanColumn> {
     const [column] = await db.insert(kanbanColumns).values(columnData).returning();
     return column;
+  }
+
+  // Project stakeholder operations
+  async getProjectStakeholders(projectId: number): Promise<ProjectStakeholder[]> {
+    return await db.select().from(projectStakeholders).where(eq(projectStakeholders.projectId, projectId));
+  }
+
+  async addProjectStakeholder(stakeholderData: InsertProjectStakeholder): Promise<ProjectStakeholder> {
+    const [stakeholder] = await db.insert(projectStakeholders).values(stakeholderData).returning();
+    return stakeholder;
+  }
+
+  async removeProjectStakeholder(projectId: number, userId: string): Promise<void> {
+    await db.delete(projectStakeholders).where(
+      and(
+        eq(projectStakeholders.projectId, projectId),
+        eq(projectStakeholders.userId, userId)
+      )
+    );
+  }
+
+  async updateProjectStakeholder(id: number, updates: Partial<InsertProjectStakeholder>): Promise<ProjectStakeholder> {
+    const [stakeholder] = await db
+      .update(projectStakeholders)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(projectStakeholders.id, id))
+      .returning();
+    return stakeholder;
   }
 
   // Notification operations
