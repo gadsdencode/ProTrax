@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { File, FileText, FileImage, FileVideo, FileAudio, Download, Trash2, ExternalLink } from "lucide-react";
 import { format } from "date-fns";
-import type { FileAttachment } from "@shared/schema";
+import type { FileAttachment, Project } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
@@ -18,6 +18,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useAuth } from "@/hooks/useAuth";
 
 interface FileAttachmentListProps {
   projectId?: number;
@@ -34,6 +35,7 @@ export function FileAttachmentList({
 }: FileAttachmentListProps) {
   const [deleteFileId, setDeleteFileId] = useState<number | null>(null);
   const { toast } = useToast();
+  const { user } = useAuth();
 
   // Build query params
   const queryParams: Record<string, number> = {};
@@ -44,6 +46,12 @@ export function FileAttachmentList({
   const { data: attachments, isLoading } = useQuery<FileAttachment[]>({
     queryKey: ['/api/file-attachments', queryParams],
     enabled: !!(projectId || taskId),
+  });
+
+  // Fetch project if projectId is provided to check if user is project manager
+  const { data: project } = useQuery<Project>({
+    queryKey: [`/api/projects/${projectId}`],
+    enabled: !!projectId,
   });
 
   // Delete mutation
@@ -157,6 +165,12 @@ export function FileAttachmentList({
             const FileIcon = getFileIcon(attachment.mimeType);
             const isImage = attachment.mimeType?.startsWith('image/');
             
+            // Check if user can delete this file
+            const userCanDelete = canDelete && user && (
+              attachment.userId === user.id || // User is the uploader
+              (project && project.managerId === user.id) // User is the project manager
+            );
+            
             return (
               <Card key={attachment.id} className="p-3" data-testid={`file-attachment-${attachment.id}`}>
                 <div className="flex items-center gap-3">
@@ -212,7 +226,7 @@ export function FileAttachmentList({
                       <Download className="h-4 w-4" />
                     </Button>
                     
-                    {canDelete && (
+                    {userCanDelete && (
                       <Button
                         variant="ghost"
                         size="icon"
