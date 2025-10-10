@@ -60,7 +60,10 @@ export function FileAttachmentList({
       await apiRequest('DELETE', `/api/file-attachments/${fileId}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/file-attachments'] });
+      // Invalidate with the specific query params to refresh the list
+      queryClient.invalidateQueries({ 
+        queryKey: ['/api/file-attachments', queryParams] 
+      });
       toast({
         title: "File deleted",
         description: "The file has been removed successfully",

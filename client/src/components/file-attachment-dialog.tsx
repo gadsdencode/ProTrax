@@ -28,7 +28,10 @@ export function FileAttachmentDialog({
 
   const handleUploadComplete = () => {
     // Invalidate the file attachments query to refresh the list
-    queryClient.invalidateQueries({ queryKey: ['/api/file-attachments'] });
+    // Need to invalidate with the specific query params
+    queryClient.invalidateQueries({ 
+      queryKey: ['/api/file-attachments', { projectId }] 
+    });
     // Switch to files tab to show the newly uploaded file
     setActiveTab("files");
   };

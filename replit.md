@@ -12,6 +12,17 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+### October 10, 2025 - File Upload and Attachment System
+
+**Implemented comprehensive file attachment functionality:**
+- Integrated Replit object storage for secure file persistence
+- Files can be uploaded to projects with drag-and-drop or click-to-browse interface
+- Support for files up to 10MB with real-time upload progress tracking
+- Download files with single-click from the file attachment list
+- Permission-based deletion: only file uploader or project manager can delete files
+- Files stored in object storage with metadata tracked in database
+- Automatic UI refresh after upload/delete operations
+
 ### October 10, 2025 - Project Stakeholder Management System
 
 **Implemented comprehensive stakeholder management:**

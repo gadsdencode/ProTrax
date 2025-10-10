@@ -4,6 +4,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import multer from "multer";
 import path from "path";
 import fs from "fs/promises";
+import { Client } from "@replit/object-storage";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import {
@@ -307,7 +308,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.claims.sub;
       const { projectId, taskId } = req.body;
       
-      // Generate unique filename
+      // Generate unique filename with folder structure
       const timestamp = Date.now();
       const uniqueId = Math.random().toString(36).substring(7);
       const fileExt = path.extname(req.file.originalname);
@@ -315,16 +316,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Determine storage path based on whether file should be private or public
       const isPrivate = req.body.isPrivate === 'true';
-      const privateDir = process.env.PRIVATE_OBJECT_DIR || '/replit-objstore-39c30c57-bb4e-47f1-bb5d-8592d96a2a10/.private';
-      const publicDir = process.env.PUBLIC_OBJECT_SEARCH_PATHS?.split(',')[0] || '/replit-objstore-39c30c57-bb4e-47f1-bb5d-8592d96a2a10/public';
-      
-      const storagePath = isPrivate 
-        ? `${privateDir}/${fileName}`
-        : `${publicDir}/attachments/${fileName}`;
+      const folder = isPrivate ? '.private' : 'public/attachments';
+      const objectKey = `${folder}/${fileName}`;
 
-      // Write file to object storage
-      await fs.mkdir(path.dirname(storagePath), { recursive: true });
-      await fs.writeFile(storagePath, req.file.buffer);
+      // Initialize object storage client with the bucket ID
+      const bucketId = process.env.DEFAULT_OBJECT_STORAGE_BUCKET_ID;
+      const client = new Client({ bucketId });
+      
+      // Upload file to object storage using the client
+      const uploadResult = await client.uploadFromBytes(objectKey, req.file.buffer);
+      
+      if (!uploadResult.ok) {
+        throw new Error(uploadResult.error?.message || "Failed to upload to object storage");
+      }
       
       // Save file metadata to database
       const attachmentData = {
@@ -334,7 +338,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         fileName: req.file.originalname,
         fileSize: req.file.size,
         mimeType: req.file.mimetype,
-        storageUrl: fileName, // Store just the filename, we'll construct the full path when serving
+        storageUrl: objectKey, // Store the full object key
         version: 1,
       };
       
@@ -366,26 +370,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Note: In a production app, you'd want to check if user is a stakeholder
       }
       
-      // Try private path first, then public
-      const privateDir = process.env.PRIVATE_OBJECT_DIR || '/replit-objstore-39c30c57-bb4e-47f1-bb5d-8592d96a2a10/.private';
-      const publicDir = process.env.PUBLIC_OBJECT_SEARCH_PATHS?.split(',')[0] || '/replit-objstore-39c30c57-bb4e-47f1-bb5d-8592d96a2a10/public';
+      // Initialize object storage client with the bucket ID
+      const bucketId = process.env.DEFAULT_OBJECT_STORAGE_BUCKET_ID;
+      const client = new Client({ bucketId });
       
-      const privatePath = `${privateDir}/${attachment.storageUrl}`;
-      const publicPath = `${publicDir}/attachments/${attachment.storageUrl}`;
+      // Download file from object storage
+      const downloadResult = await client.downloadAsBytes(attachment.storageUrl);
       
-      let filePath = privatePath;
-      try {
-        await fs.access(privatePath);
-      } catch {
-        filePath = publicPath;
-        try {
-          await fs.access(publicPath);
-        } catch {
-          return res.status(404).json({ message: "File not found in storage" });
-        }
+      if (!downloadResult.ok) {
+        console.error("Error fetching from object storage:", downloadResult.error);
+        return res.status(404).json({ message: "File not found in storage" });
       }
       
-      const fileBuffer = await fs.readFile(filePath);
+      // The value is already a Buffer
+      const fileBuffer = downloadResult.value;
       
       // Set appropriate headers
       res.set({
@@ -424,21 +422,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
-      // Delete from storage
-      const privateDir = process.env.PRIVATE_OBJECT_DIR || '/replit-objstore-39c30c57-bb4e-47f1-bb5d-8592d96a2a10/.private';
-      const publicDir = process.env.PUBLIC_OBJECT_SEARCH_PATHS?.split(',')[0] || '/replit-objstore-39c30c57-bb4e-47f1-bb5d-8592d96a2a10/public';
+      // Initialize object storage client with the bucket ID
+      const bucketId = process.env.DEFAULT_OBJECT_STORAGE_BUCKET_ID;
+      const client = new Client({ bucketId });
       
-      const privatePath = `${privateDir}/${attachment.storageUrl}`;
-      const publicPath = `${publicDir}/attachments/${attachment.storageUrl}`;
+      // Delete from object storage
+      const deleteResult = await client.delete(attachment.storageUrl);
       
-      try {
-        await fs.unlink(privatePath);
-      } catch {
-        try {
-          await fs.unlink(publicPath);
-        } catch {
-          console.warn("File not found in storage, continuing with database deletion");
-        }
+      if (!deleteResult.ok) {
+        console.warn("Error deleting from storage:", deleteResult.error, "- continuing with database deletion");
       }
       
       // Delete from database
