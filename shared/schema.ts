@@ -29,6 +29,7 @@ export const recurrenceTypeEnum = pgEnum('recurrence_type', ['daily', 'weekly', 
 export const widgetTypeEnum = pgEnum('widget_type', ['my_tasks', 'budget_vs_actual', 'team_workload', 'burndown', 'project_health', 'upcoming_milestones']);
 export const automationTriggerEnum = pgEnum('automation_trigger', ['task_created', 'task_status_changed', 'task_assigned', 'due_date_approaching']);
 export const automationActionEnum = pgEnum('automation_action', ['change_status', 'assign_user', 'send_notification', 'create_task']);
+export const stakeholderRoleEnum = pgEnum('stakeholder_role', ['sponsor', 'reviewer', 'observer', 'team_member', 'client', 'vendor']);
 
 // ============= AUTH TABLES (Required for Replit Auth) =============
 
@@ -251,6 +252,18 @@ export const kanbanColumns = pgTable("kanban_columns", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const projectStakeholders = pgTable("project_stakeholders", {
+  id: serial("id").primaryKey(),
+  projectId: integer("project_id").references(() => projects.id, { onDelete: 'cascade' }).notNull(),
+  userId: varchar("user_id").references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  role: stakeholderRoleEnum("role").default('team_member'),
+  receiveEmailReports: boolean("receive_email_reports").default(true),
+  canEditProject: boolean("can_edit_project").default(false),
+  addedBy: varchar("added_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 export const notifications = pgTable("notifications", {
   id: serial("id").primaryKey(),
   userId: varchar("user_id").references(() => users.id, { onDelete: 'cascade' }).notNull(),
@@ -274,6 +287,7 @@ export const projectsRelations = relations(projects, ({ one, many }) => ({
   automationRules: many(automationRules),
   kanbanColumns: many(kanbanColumns),
   fileAttachments: many(fileAttachments),
+  stakeholders: many(projectStakeholders),
 }));
 
 export const tasksRelations = relations(tasks, ({ one, many }) => ({
@@ -306,6 +320,13 @@ export const usersRelations = relations(users, ({ many }) => ({
   dashboardWidgets: many(dashboardWidgets),
   createdTemplates: many(projectTemplates),
   notifications: many(notifications),
+  stakeholderProjects: many(projectStakeholders),
+}));
+
+export const projectStakeholdersRelations = relations(projectStakeholders, ({ one }) => ({
+  project: one(projects, { fields: [projectStakeholders.projectId], references: [projects.id] }),
+  user: one(users, { fields: [projectStakeholders.userId], references: [users.id] }),
+  addedByUser: one(users, { fields: [projectStakeholders.addedBy], references: [users.id] }),
 }));
 
 // ============= INSERT SCHEMAS =============
@@ -337,6 +358,7 @@ export const insertAutomationRuleSchema = createInsertSchema(automationRules).om
 export const insertDashboardWidgetSchema = createInsertSchema(dashboardWidgets).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertProjectTemplateSchema = createInsertSchema(projectTemplates).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertKanbanColumnSchema = createInsertSchema(kanbanColumns).omit({ id: true, createdAt: true });
+export const insertProjectStakeholderSchema = createInsertSchema(projectStakeholders).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertNotificationSchema = createInsertSchema(notifications).omit({ id: true, createdAt: true });
 
 // ============= TYPES =============
@@ -382,6 +404,9 @@ export type ProjectTemplate = typeof projectTemplates.$inferSelect;
 
 export type InsertKanbanColumn = z.infer<typeof insertKanbanColumnSchema>;
 export type KanbanColumn = typeof kanbanColumns.$inferSelect;
+
+export type InsertProjectStakeholder = z.infer<typeof insertProjectStakeholderSchema>;
+export type ProjectStakeholder = typeof projectStakeholders.$inferSelect;
 
 export type InsertNotification = z.infer<typeof insertNotificationSchema>;
 export type Notification = typeof notifications.$inferSelect;
