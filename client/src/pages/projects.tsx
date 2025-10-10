@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { Plus, Search } from "lucide-react";
+import { Plus, Search, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -19,6 +19,7 @@ import { StaggeredList, StaggeredItem } from "@/components/staggered-list";
 import type { Project, InsertProject, InsertTask } from "@shared/schema";
 import { ProjectForm } from "@/components/project-form";
 import { TaskForm } from "@/components/task-form";
+import { StakeholderDialog } from "@/components/stakeholder-dialog";
 
 export default function Projects() {
   const [, setLocation] = useLocation();
@@ -26,6 +27,8 @@ export default function Projects() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
+  const [stakeholderDialogOpen, setStakeholderDialogOpen] = useState(false);
+  const [selectedProjectForStakeholders, setSelectedProjectForStakeholders] = useState<{ id: number; name: string } | null>(null);
   const { toast } = useToast();
 
   const { data: projects, isLoading } = useQuery<Project[]>({
@@ -189,6 +192,19 @@ export default function Projects() {
                     <Plus className="h-3 w-3 mr-1" />
                     Add Task
                   </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedProjectForStakeholders({ id: project.id, name: project.name });
+                      setStakeholderDialogOpen(true);
+                    }}
+                    data-testid={`button-manage-stakeholders-${project.id}`}
+                  >
+                    <Users className="h-3 w-3 mr-1" />
+                    Stakeholders
+                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -210,6 +226,16 @@ export default function Projects() {
           />
         </DialogContent>
       </Dialog>
+
+      {/* Stakeholder Management Dialog */}
+      {selectedProjectForStakeholders && (
+        <StakeholderDialog
+          projectId={selectedProjectForStakeholders.id}
+          projectName={selectedProjectForStakeholders.name}
+          open={stakeholderDialogOpen}
+          onOpenChange={setStakeholderDialogOpen}
+        />
+      )}
     </div>
   );
 }
