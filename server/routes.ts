@@ -18,6 +18,7 @@ import {
   insertDashboardWidgetSchema,
   insertProjectTemplateSchema,
   insertKanbanColumnSchema,
+  insertProjectStakeholderSchema,
   insertNotificationSchema,
 } from "@shared/schema";
 
@@ -503,6 +504,69 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Error creating kanban column:", error);
       res.status(400).json({ message: error.message || "Failed to create kanban column" });
+    }
+  });
+
+  // ============= PROJECT STAKEHOLDER ROUTES =============
+  
+  app.get('/api/projects/:id/stakeholders', isAuthenticated, async (req, res) => {
+    try {
+      const projectId = parseInt(req.params.id);
+      const stakeholders = await storage.getProjectStakeholders(projectId);
+      res.json(stakeholders);
+    } catch (error) {
+      console.error("Error fetching project stakeholders:", error);
+      res.status(500).json({ message: "Failed to fetch project stakeholders" });
+    }
+  });
+
+  app.post('/api/projects/:id/stakeholders', isAuthenticated, async (req: any, res) => {
+    try {
+      const projectId = parseInt(req.params.id);
+      const userId = req.user.claims.sub;
+      
+      // Validate input
+      const data = insertProjectStakeholderSchema.parse({
+        ...req.body,
+        projectId,
+        addedBy: userId
+      });
+      
+      // Check if stakeholder already exists
+      const existing = await storage.getProjectStakeholders(projectId);
+      if (existing.some(s => s.userId === data.userId)) {
+        return res.status(400).json({ message: "User is already a stakeholder" });
+      }
+      
+      const stakeholder = await storage.addProjectStakeholder(data);
+      res.status(201).json(stakeholder);
+    } catch (error: any) {
+      console.error("Error adding project stakeholder:", error);
+      res.status(400).json({ message: error.message || "Failed to add project stakeholder" });
+    }
+  });
+
+  app.delete('/api/projects/:id/stakeholders/:userId', isAuthenticated, async (req, res) => {
+    try {
+      const projectId = parseInt(req.params.id);
+      const userId = req.params.userId;
+      await storage.removeProjectStakeholder(projectId, userId);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error removing project stakeholder:", error);
+      res.status(500).json({ message: "Failed to remove project stakeholder" });
+    }
+  });
+
+  app.patch('/api/stakeholders/:id', isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const updates = req.body;
+      const stakeholder = await storage.updateProjectStakeholder(id, updates);
+      res.json(stakeholder);
+    } catch (error: any) {
+      console.error("Error updating project stakeholder:", error);
+      res.status(400).json({ message: error.message || "Failed to update project stakeholder" });
     }
   });
 
