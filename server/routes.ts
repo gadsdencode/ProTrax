@@ -417,8 +417,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         'Cache-Control': 'private, max-age=3600',
       });
       
-      // Use res.end() to send raw binary data
-      res.end(fileBuffer, 'binary');
+      // Send the buffer directly - Express will handle it correctly
+      res.send(fileBuffer);
     } catch (error: any) {
       console.error("Error downloading file:", error);
       res.status(500).json({ message: error.message || "Failed to download file" });
