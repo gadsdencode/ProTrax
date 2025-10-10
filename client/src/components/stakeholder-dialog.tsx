@@ -210,7 +210,7 @@ export function StakeholderDialog({
                 <div className="space-y-2">
                   <Label htmlFor="role">Role</Label>
                   <Select
-                    value={selectedRole}
+                    value={selectedRole || undefined}
                     onValueChange={(value) => setSelectedRole(value as InsertProjectStakeholder["role"])}
                   >
                     <SelectTrigger id="role" data-testid="select-stakeholder-role">
