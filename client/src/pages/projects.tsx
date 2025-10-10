@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { Plus, Search, Users } from "lucide-react";
+import { Plus, Search, Users, Paperclip } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -20,6 +20,7 @@ import type { Project, InsertProject, InsertTask } from "@shared/schema";
 import { ProjectForm } from "@/components/project-form";
 import { TaskForm } from "@/components/task-form";
 import { StakeholderDialog } from "@/components/stakeholder-dialog";
+import { FileAttachmentDialog } from "@/components/file-attachment-dialog";
 
 export default function Projects() {
   const [, setLocation] = useLocation();
@@ -29,6 +30,8 @@ export default function Projects() {
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
   const [stakeholderDialogOpen, setStakeholderDialogOpen] = useState(false);
   const [selectedProjectForStakeholders, setSelectedProjectForStakeholders] = useState<{ id: number; name: string } | null>(null);
+  const [fileAttachmentDialogOpen, setFileAttachmentDialogOpen] = useState(false);
+  const [selectedProjectForFiles, setSelectedProjectForFiles] = useState<{ id: number; name: string } | null>(null);
   const { toast } = useToast();
 
   const { data: projects, isLoading } = useQuery<Project[]>({
@@ -178,7 +181,7 @@ export default function Projects() {
                     Budget: ${parseFloat(project.budget).toLocaleString()}
                   </div>
                 )}
-                <div className="mt-4 pt-3 border-t flex gap-2">
+                <div className="mt-4 pt-3 border-t flex gap-2 flex-wrap">
                   <Button
                     size="sm"
                     variant="outline"
@@ -204,6 +207,19 @@ export default function Projects() {
                   >
                     <Users className="h-3 w-3 mr-1" />
                     Stakeholders
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedProjectForFiles({ id: project.id, name: project.name });
+                      setFileAttachmentDialogOpen(true);
+                    }}
+                    data-testid={`button-manage-files-${project.id}`}
+                  >
+                    <Paperclip className="h-3 w-3 mr-1" />
+                    Files
                   </Button>
                 </div>
               </CardContent>
@@ -234,6 +250,16 @@ export default function Projects() {
           projectName={selectedProjectForStakeholders.name}
           open={stakeholderDialogOpen}
           onOpenChange={setStakeholderDialogOpen}
+        />
+      )}
+
+      {/* File Attachment Management Dialog */}
+      {selectedProjectForFiles && (
+        <FileAttachmentDialog
+          projectId={selectedProjectForFiles.id}
+          projectName={selectedProjectForFiles.name}
+          open={fileAttachmentDialogOpen}
+          onOpenChange={setFileAttachmentDialogOpen}
         />
       )}
     </div>
