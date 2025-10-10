@@ -11,7 +11,9 @@ import {
   File,
   Maximize2,
   Minimize2,
-  Eye
+  Eye,
+  FileSpreadsheet,
+  FileX
 } from "lucide-react";
 import {
   Dialog,
@@ -22,9 +24,11 @@ import {
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import type { FileAttachment } from "@shared/schema";
 import { cn } from "@/lib/utils";
+import * as mammoth from "mammoth";
 import { Light as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import javascript from 'react-syntax-highlighter/dist/esm/languages/prism/javascript';
@@ -38,6 +42,7 @@ import sql from 'react-syntax-highlighter/dist/esm/languages/prism/sql';
 import markdown from 'react-syntax-highlighter/dist/esm/languages/prism/markdown';
 import yaml from 'react-syntax-highlighter/dist/esm/languages/prism/yaml';
 import bash from 'react-syntax-highlighter/dist/esm/languages/prism/bash';
+import markup from 'react-syntax-highlighter/dist/esm/languages/prism/markup';
 
 // Register only the languages we need to avoid bundle size issues
 SyntaxHighlighter.registerLanguage('javascript', javascript);
@@ -51,6 +56,8 @@ SyntaxHighlighter.registerLanguage('sql', sql);
 SyntaxHighlighter.registerLanguage('markdown', markdown);
 SyntaxHighlighter.registerLanguage('yaml', yaml);
 SyntaxHighlighter.registerLanguage('bash', bash);
+SyntaxHighlighter.registerLanguage('html', markup);
+SyntaxHighlighter.registerLanguage('xml', markup);
 
 interface FilePreviewDialogProps {
   open: boolean;
@@ -67,6 +74,7 @@ export function FilePreviewDialog({
 }: FilePreviewDialogProps) {
   const [currentAttachment, setCurrentAttachment] = useState(attachment);
   const [previewContent, setPreviewContent] = useState<string | null>(null);
+  const [htmlContent, setHtmlContent] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -86,10 +94,75 @@ export function FilePreviewDialog({
     setIsLoading(true);
     setError(null);
     setPreviewContent(null);
+    setHtmlContent(null);
 
     try {
+      const mimeType = file.mimeType || '';
+      
+      // For Word documents (.docx)
+      if (mimeType.includes('wordprocessingml') || 
+          mimeType.includes('msword') || 
+          file.fileName.toLowerCase().endsWith('.docx')) {
+        const response = await fetch(`/api/file-attachments/${file.id}/download`, {
+          credentials: 'include',
+          headers: {
+            'Accept': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document, application/octet-stream',
+          }
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to load file');
+        }
+        
+        // Ensure we get the raw binary data
+        const blob = await response.blob();
+        const arrayBuffer = await blob.arrayBuffer();
+        
+        // Try to convert Word document to HTML using mammoth
+        try {
+          const result = await mammoth.convertToHtml({ arrayBuffer });
+          
+          if (result.value) {
+            setHtmlContent(result.value);
+          } else {
+            // If no content was extracted, try as plain text
+            const decoder = new TextDecoder();
+            const text = decoder.decode(arrayBuffer);
+            
+            // Check if it might be plain text masquerading as docx
+            if (text && !text.includes('\x00') && text.length < 10000) {
+              setPreviewContent(text);
+            } else {
+              throw new Error('Could not extract content from Word document');
+            }
+          }
+          
+          if (result.messages && result.messages.length > 0) {
+            console.warn('Word conversion warnings:', result.messages);
+          }
+        } catch (mammothError: any) {
+          console.error('Mammoth conversion error:', mammothError);
+          
+          // Try to read as plain text if it's a small file
+          if (arrayBuffer.byteLength < 100000) {
+            const decoder = new TextDecoder();
+            const text = decoder.decode(arrayBuffer);
+            
+            // Check if it's readable text
+            if (text && !text.includes('\x00') && text.match(/[a-zA-Z]/)) {
+              console.log('Falling back to text preview for invalid docx file');
+              setPreviewContent(text);
+              // Don't set htmlContent so it shows as text, not Word doc
+            } else {
+              throw new Error('Invalid Word document format. Please ensure the file is a valid .docx file.');
+            }
+          } else {
+            throw new Error('Invalid Word document format. Please ensure the file is a valid .docx file.');
+          }
+        }
+      }
       // For text-based files, fetch the content
-      if (isTextFile(file.mimeType)) {
+      else if (isTextFile(file.mimeType) || file.mimeType?.includes('html')) {
         const response = await fetch(`/api/file-attachments/${file.id}/download`, {
           credentials: 'include',
         });
@@ -98,8 +171,21 @@ export function FilePreviewDialog({
           throw new Error('Failed to load file');
         }
         
-        const text = await response.text();
-        setPreviewContent(text);
+        // Get the blob and convert to text properly
+        const blob = await response.blob();
+        const text = await blob.text();
+        
+        // Check if it's HTML content
+        if (file.mimeType?.includes('html')) {
+          setHtmlContent(text);
+        } else {
+          setPreviewContent(text);
+        }
+      }
+      // For old .doc files (not .docx)
+      else if (file.fileName.toLowerCase().endsWith('.doc') && 
+               !file.fileName.toLowerCase().endsWith('.docx')) {
+        setError('Classic .doc files require conversion. Please save as .docx format for preview.');
       }
     } catch (err: any) {
       setError(err.message || 'Failed to load preview');
@@ -197,13 +283,52 @@ export function FilePreviewDialog({
     return 'text'; // Default fallback
   };
 
-  const getFileIcon = (mimeType?: string | null) => {
-    if (!mimeType) return File;
-    if (mimeType.startsWith('image/')) return FileImage;
-    if (mimeType.startsWith('video/')) return FileVideo;
-    if (mimeType.startsWith('audio/')) return FileAudio;
-    if (mimeType.includes('pdf') || mimeType.includes('document')) return FileText;
+  const getFileIcon = (mimeType?: string | null, fileName?: string) => {
+    if (!mimeType && !fileName) return File;
+    
+    // Check by MIME type
+    if (mimeType) {
+      if (mimeType.startsWith('image/')) return FileImage;
+      if (mimeType.startsWith('video/')) return FileVideo;
+      if (mimeType.startsWith('audio/')) return FileAudio;
+      if (mimeType.includes('pdf')) return FileText;
+      if (mimeType.includes('word') || mimeType.includes('document')) return FileText;
+      if (mimeType.includes('sheet') || mimeType.includes('excel')) return FileSpreadsheet;
+      if (mimeType.includes('presentation') || mimeType.includes('powerpoint')) return FileText;
+    }
+    
+    // Check by file extension
+    if (fileName) {
+      const ext = fileName.toLowerCase().split('.').pop();
+      if (['doc', 'docx', 'odt', 'rtf'].includes(ext || '')) return FileText;
+      if (['xls', 'xlsx', 'ods', 'csv'].includes(ext || '')) return FileSpreadsheet;
+      if (['ppt', 'pptx', 'odp'].includes(ext || '')) return FileText;
+      if (['pdf'].includes(ext || '')) return FileText;
+    }
+    
     return File;
+  };
+
+  const isOfficeDocument = (mimeType?: string | null, fileName?: string) => {
+    if (!mimeType && !fileName) return false;
+    
+    const officeTypes = [
+      'application/vnd.openxmlformats-officedocument',
+      'application/vnd.ms-',
+      'application/msword',
+      'application/vnd.oasis.opendocument'
+    ];
+    
+    if (mimeType && officeTypes.some(type => mimeType.includes(type))) {
+      return true;
+    }
+    
+    if (fileName) {
+      const ext = fileName.toLowerCase().split('.').pop();
+      return ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'odt', 'ods', 'odp'].includes(ext || '');
+    }
+    
+    return false;
   };
 
   const handleDownload = async () => {
@@ -370,6 +495,78 @@ export function FilePreviewDialog({
       );
     }
 
+    // Word document preview (converted to HTML)
+    if (htmlContent && (mimeType.includes('word') || currentAttachment.fileName.toLowerCase().endsWith('.docx'))) {
+      return (
+        <ScrollArea className={cn(
+          "w-full bg-white dark:bg-gray-950",
+          isFullscreen ? "h-full" : "h-[60vh]"
+        )}>
+          <div className="p-8">
+            <Badge className="mb-4" variant="secondary">
+              Word Document
+            </Badge>
+            <div 
+              className="prose prose-sm dark:prose-invert max-w-none"
+              dangerouslySetInnerHTML={{ __html: htmlContent }}
+            />
+          </div>
+        </ScrollArea>
+      );
+    }
+
+    // Fallback for invalid Word documents showing as plain text
+    if (previewContent && currentAttachment.fileName.toLowerCase().match(/\.(docx?|rtf)$/)) {
+      return (
+        <ScrollArea className={cn(
+          "w-full",
+          isFullscreen ? "h-full" : "h-[60vh]"
+        )}>
+          <div className="p-4">
+            <div className="flex items-center gap-2 mb-4">
+              <Badge variant="outline">Document (Text Fallback)</Badge>
+              <span className="text-xs text-muted-foreground">
+                Unable to parse as Word format, showing as text
+              </span>
+            </div>
+            <pre className="text-sm font-mono whitespace-pre-wrap break-words bg-muted p-4 rounded-md">
+              {previewContent}
+            </pre>
+          </div>
+        </ScrollArea>
+      );
+    }
+
+    // HTML preview
+    if (htmlContent && mimeType?.includes('html')) {
+      return (
+        <ScrollArea className={cn(
+          "w-full",
+          isFullscreen ? "h-full" : "h-[60vh]"
+        )}>
+          <div className="relative">
+            <Badge className="absolute top-2 right-2 z-10" variant="secondary">
+              HTML
+            </Badge>
+            <SyntaxHighlighter
+              language="html"
+              style={oneDark}
+              customStyle={{
+                margin: 0,
+                padding: '1rem',
+                fontSize: '0.875rem',
+                borderRadius: '0.375rem',
+              }}
+              showLineNumbers
+              wrapLines
+            >
+              {htmlContent}
+            </SyntaxHighlighter>
+          </div>
+        </ScrollArea>
+      );
+    }
+
     // Text/Code preview
     if (isTextFile(mimeType) && previewContent !== null) {
       const language = getLanguageFromFile(currentAttachment.fileName, mimeType);
@@ -407,11 +604,55 @@ export function FilePreviewDialog({
       );
     }
 
-    // Default fallback for unsupported file types
+    // Excel, PowerPoint and other office files
+    if (isOfficeDocument(mimeType, currentAttachment.fileName)) {
+      const isExcel = mimeType?.includes('sheet') || currentAttachment.fileName.match(/\.(xls|xlsx|ods|csv)$/i);
+      const isPowerPoint = mimeType?.includes('presentation') || currentAttachment.fileName.match(/\.(ppt|pptx|odp)$/i);
+      
+      let fileType = 'Office Document';
+      if (isExcel) fileType = 'Spreadsheet';
+      else if (isPowerPoint) fileType = 'Presentation';
+      else if (currentAttachment.fileName.match(/\.doc$/i)) fileType = 'Word Document (Legacy)';
+      
+      return (
+        <div className="flex items-center justify-center h-96">
+          <div className="text-center space-y-4">
+            {createElement(getFileIcon(mimeType, currentAttachment.fileName), {
+              className: "h-16 w-16 mx-auto text-muted-foreground"
+            })}
+            <div className="space-y-1">
+              <Badge variant="outline">{fileType}</Badge>
+              <p className="font-medium mt-2">{currentAttachment.fileName}</p>
+              <p className="text-sm text-muted-foreground">
+                {formatFileSize(currentAttachment.fileSize)}
+              </p>
+            </div>
+            <div className="space-y-2">
+              {currentAttachment.fileName.match(/\.doc$/i) && (
+                <p className="text-sm text-muted-foreground">
+                  Legacy .doc format. Save as .docx for preview support.
+                </p>
+              )}
+              {(isExcel || isPowerPoint) && (
+                <p className="text-sm text-muted-foreground">
+                  Direct preview coming soon. Download to view.
+                </p>
+              )}
+              <Button onClick={handleDownload} variant="default">
+                <Download className="h-4 w-4 mr-2" />
+                Download {fileType}
+              </Button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Default fallback for other unsupported file types
     return (
       <div className="flex items-center justify-center h-96">
         <div className="text-center space-y-4">
-          {createElement(getFileIcon(mimeType), {
+          {createElement(getFileIcon(mimeType, currentAttachment.fileName), {
             className: "h-16 w-16 mx-auto text-muted-foreground"
           })}
           <div className="space-y-1">
@@ -421,7 +662,7 @@ export function FilePreviewDialog({
             </p>
           </div>
           <p className="text-sm text-muted-foreground">
-            Preview not available for this file type
+            Binary file - download to view
           </p>
           <Button onClick={handleDownload} variant="outline">
             <Download className="h-4 w-4 mr-2" />

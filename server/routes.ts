@@ -382,17 +382,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "File not found in storage" });
       }
       
-      // The value is already a Buffer
-      const fileBuffer = downloadResult.value;
+      // Ensure we have a proper Buffer
+      let fileBuffer = downloadResult.value;
+      
+      // Convert to Buffer if it's not already one
+      if (!Buffer.isBuffer(fileBuffer)) {
+        if (fileBuffer && typeof fileBuffer === 'object' && fileBuffer.type === 'Buffer' && Array.isArray(fileBuffer.data)) {
+          // It's a JSON-encoded Buffer, convert it back
+          fileBuffer = Buffer.from(fileBuffer.data);
+        } else if (Array.isArray(fileBuffer)) {
+          // It's an array of bytes
+          fileBuffer = Buffer.from(fileBuffer);
+        } else {
+          console.error("Unexpected buffer type:", typeof fileBuffer);
+          throw new Error("Invalid file data from storage");
+        }
+      }
       
       // Set appropriate headers
+      // Use 'inline' for preview-capable files, 'attachment' for others
+      const disposition = attachment.mimeType && (
+        attachment.mimeType.startsWith('image/') ||
+        attachment.mimeType.startsWith('video/') ||
+        attachment.mimeType.startsWith('audio/') ||
+        attachment.mimeType.includes('pdf') ||
+        attachment.mimeType.includes('text') ||
+        attachment.mimeType.includes('html')
+      ) ? 'inline' : 'attachment';
+      
       res.set({
         'Content-Type': attachment.mimeType || 'application/octet-stream',
-        'Content-Disposition': `attachment; filename="${attachment.fileName}"`,
-        'Content-Length': attachment.fileSize?.toString() || fileBuffer.length.toString(),
+        'Content-Disposition': `${disposition}; filename="${attachment.fileName}"`,
+        'Content-Length': fileBuffer.length.toString(),
+        'Cache-Control': 'private, max-age=3600',
       });
       
-      res.send(fileBuffer);
+      // Use res.end() to send raw binary data
+      res.end(fileBuffer, 'binary');
     } catch (error: any) {
       console.error("Error downloading file:", error);
       res.status(500).json({ message: error.message || "Failed to download file" });
