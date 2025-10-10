@@ -36,6 +36,8 @@ const roleLabels = {
   reviewer: "Reviewer",
   observer: "Observer",
   team_member: "Team Member",
+  client: "Client",
+  vendor: "Vendor",
 };
 
 const roleIcons = {
@@ -43,6 +45,8 @@ const roleIcons = {
   reviewer: Eye,
   observer: Eye,
   team_member: UserPlus,
+  client: Users,
+  vendor: Users,
 };
 
 export function StakeholderDialog({
@@ -54,7 +58,7 @@ export function StakeholderDialog({
   const { toast } = useToast();
   const [selectedUserId, setSelectedUserId] = useState("");
   const [selectedRole, setSelectedRole] = useState<InsertProjectStakeholder["role"]>("observer");
-  const [receiveReports, setReceiveReports] = useState(true);
+  const [receiveEmailReports, setReceiveEmailReports] = useState(true);
 
   // Fetch all users
   const { data: users = [], isLoading: usersLoading } = useQuery<User[]>({
@@ -77,7 +81,7 @@ export function StakeholderDialog({
       queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}/stakeholders`] });
       setSelectedUserId("");
       setSelectedRole("observer");
-      setReceiveReports(true);
+      setReceiveEmailReports(true);
       toast({
         title: "Success",
         description: "Stakeholder added successfully",
@@ -161,7 +165,7 @@ export function StakeholderDialog({
     addMutation.mutate({
       userId: selectedUserId,
       role: selectedRole,
-      receiveReports,
+      receiveEmailReports,
     });
   };
 
@@ -194,7 +198,9 @@ export function StakeholderDialog({
                     <SelectContent>
                       {availableUsers.map(user => (
                         <SelectItem key={user.id} value={user.id}>
-                          {user.name || user.email}
+                          {user.firstName && user.lastName 
+                            ? `${user.firstName} ${user.lastName}` 
+                            : user.email || user.id}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -229,8 +235,8 @@ export function StakeholderDialog({
                   </div>
                   <Switch
                     id="reports"
-                    checked={receiveReports}
-                    onCheckedChange={setReceiveReports}
+                    checked={receiveEmailReports}
+                    onCheckedChange={setReceiveEmailReports}
                     data-testid="switch-receive-reports"
                   />
                 </div>
@@ -269,7 +275,13 @@ export function StakeholderDialog({
             ) : (
               <div className="space-y-2">
                 {stakeholderWithDetails.map(stakeholder => {
-                  const RoleIcon = roleIcons[stakeholder.role];
+                  const RoleIcon = stakeholder.role ? roleIcons[stakeholder.role] : Users;
+                  const userName = stakeholder.user
+                    ? (stakeholder.user.firstName && stakeholder.user.lastName 
+                      ? `${stakeholder.user.firstName} ${stakeholder.user.lastName}` 
+                      : stakeholder.user.email || stakeholder.userId)
+                    : stakeholder.userId;
+                  
                   return (
                     <Card key={stakeholder.id} data-testid={`stakeholder-card-${stakeholder.id}`}>
                       <CardContent className="p-4">
@@ -277,14 +289,16 @@ export function StakeholderDialog({
                           <div className="flex items-center gap-3">
                             <div className="flex-1">
                               <div className="font-medium">
-                                {stakeholder.user?.name || stakeholder.user?.email || stakeholder.userId}
+                                {userName}
                               </div>
                               <div className="flex items-center gap-2 mt-1">
-                                <Badge variant="secondary" className="text-xs">
-                                  <RoleIcon className="h-3 w-3 mr-1" />
-                                  {roleLabels[stakeholder.role]}
-                                </Badge>
-                                {stakeholder.receiveReports && (
+                                {stakeholder.role && (
+                                  <Badge variant="secondary" className="text-xs">
+                                    <RoleIcon className="h-3 w-3 mr-1" />
+                                    {roleLabels[stakeholder.role]}
+                                  </Badge>
+                                )}
+                                {stakeholder.receiveEmailReports && (
                                   <Badge variant="outline" className="text-xs">
                                     <Mail className="h-3 w-3 mr-1" />
                                     Receives Reports
@@ -295,11 +309,11 @@ export function StakeholderDialog({
                           </div>
                           <div className="flex items-center gap-2">
                             <Switch
-                              checked={stakeholder.receiveReports}
+                              checked={stakeholder.receiveEmailReports || false}
                               onCheckedChange={(checked) => {
                                 updateMutation.mutate({
                                   id: stakeholder.id,
-                                  updates: { receiveReports: checked },
+                                  updates: { receiveEmailReports: checked },
                                 });
                               }}
                               data-testid={`switch-reports-${stakeholder.id}`}

@@ -5,11 +5,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { X, Loader2, Mail } from "lucide-react";
+import { X, Loader2, Mail, Users } from "lucide-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { Project, User } from "@shared/schema";
+import type { Project, User, ProjectStakeholder } from "@shared/schema";
 
 interface EmailReportDialogProps {
   open: boolean;
@@ -42,6 +42,11 @@ export function EmailReportDialog({ open, onOpenChange, projectId, initialReport
   const selectedProject = projectId 
     ? projects?.find(p => p.id === projectId) 
     : projects?.[0];
+
+  const { data: stakeholders } = useQuery<ProjectStakeholder[]>({
+    queryKey: [`/api/projects/${selectedProject?.id}/stakeholders`],
+    enabled: !!selectedProject?.id && open,
+  });
 
   const sendEmailMutation = useMutation({
     mutationFn: async () => {
@@ -117,28 +122,48 @@ export function EmailReportDialog({ open, onOpenChange, projectId, initialReport
   };
 
   const addProjectStakeholders = () => {
-    if (!selectedProject || !users) return;
+    if (!selectedProject || !users || !stakeholders) return;
 
-    const stakeholders: Array<{ email: string; name?: string }> = [];
+    const stakeholdersToAdd: Array<{ email: string; name?: string }> = [];
+    let addedCount = 0;
     
-    // Add project manager
+    // Add project manager first
     const manager = users.find(u => u.id === selectedProject.managerId);
     if (manager?.email) {
       const name = `${manager.firstName || ''} ${manager.lastName || ''}`.trim();
-      stakeholders.push({ email: manager.email, name });
+      if (!recipients.some(r => r.email === manager.email)) {
+        stakeholdersToAdd.push({ email: manager.email, name: name || undefined });
+        addedCount++;
+      }
     }
 
-    // Add all users not already in recipients
-    stakeholders.forEach(stakeholder => {
-      if (!recipients.some(r => r.email === stakeholder.email)) {
-        setRecipients(prev => [...prev, stakeholder]);
-      }
-    });
+    // Add stakeholders who are set to receive email reports
+    stakeholders
+      .filter(s => s.receiveEmailReports)
+      .forEach(stakeholder => {
+        const user = users.find(u => u.id === stakeholder.userId);
+        if (user?.email) {
+          const name = `${user.firstName || ''} ${user.lastName || ''}`.trim();
+          if (!recipients.some(r => r.email === user.email)) {
+            stakeholdersToAdd.push({ email: user.email, name: name || undefined });
+            addedCount++;
+          }
+        }
+      });
 
-    toast({
-      title: "Stakeholders Added",
-      description: `Added ${stakeholders.length} stakeholder(s)`,
-    });
+    // Add all stakeholders to recipients
+    if (stakeholdersToAdd.length > 0) {
+      setRecipients(prev => [...prev, ...stakeholdersToAdd]);
+      toast({
+        title: "Stakeholders Added",
+        description: `Added ${addedCount} stakeholder(s) who receive email reports`,
+      });
+    } else {
+      toast({
+        title: "No Stakeholders to Add",
+        description: "All eligible stakeholders are already in the recipient list",
+      });
+    }
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -186,7 +211,9 @@ export function EmailReportDialog({ open, onOpenChange, projectId, initialReport
                 onClick={addProjectStakeholders}
                 data-testid="button-add-stakeholders"
                 className="h-7 text-xs"
+                disabled={!stakeholders || stakeholders.length === 0}
               >
+                <Users className="h-3 w-3 mr-1" />
                 Add Project Stakeholders
               </Button>
             </div>
