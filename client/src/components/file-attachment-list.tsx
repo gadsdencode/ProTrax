@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { File, FileText, FileImage, FileVideo, FileAudio, Download, Trash2, ExternalLink } from "lucide-react";
+import { File, FileText, FileImage, FileVideo, FileAudio, Download, Trash2, Eye } from "lucide-react";
 import { format } from "date-fns";
 import type { FileAttachment, Project } from "@shared/schema";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/hooks/useAuth";
+import { FilePreviewDialog } from "./file-preview-dialog";
 
 interface FileAttachmentListProps {
   projectId?: number;
@@ -34,6 +35,8 @@ export function FileAttachmentList({
   className 
 }: FileAttachmentListProps) {
   const [deleteFileId, setDeleteFileId] = useState<number | null>(null);
+  const [previewAttachment, setPreviewAttachment] = useState<FileAttachment | null>(null);
+  const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -203,20 +206,19 @@ export function FileAttachmentList({
                   </div>
                   
                   <div className="flex items-center gap-1 shrink-0">
-                    {isImage && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => {
-                          window.open(`/api/file-attachments/${attachment.id}/download`, '_blank');
-                        }}
-                        title="View image"
-                        data-testid={`view-file-${attachment.id}`}
-                      >
-                        <ExternalLink className="h-4 w-4" />
-                      </Button>
-                    )}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => {
+                        setPreviewAttachment(attachment);
+                        setPreviewDialogOpen(true);
+                      }}
+                      title="Preview file"
+                      data-testid={`preview-file-${attachment.id}`}
+                    >
+                      <Eye className="h-4 w-4" />
+                    </Button>
                     
                     <Button
                       variant="ghost"
@@ -270,6 +272,14 @@ export function FileAttachmentList({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* File preview dialog */}
+      <FilePreviewDialog
+        open={previewDialogOpen}
+        onOpenChange={setPreviewDialogOpen}
+        attachment={previewAttachment}
+        attachments={attachments || []}
+      />
     </>
   );
 }
