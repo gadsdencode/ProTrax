@@ -12,6 +12,17 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+### October 10, 2025 - Project Stakeholder Management System
+
+**Implemented comprehensive stakeholder management:**
+- Created new database table (project_stakeholders) with role-based access control
+- Added stakeholder roles: Sponsor, Reviewer, Observer, Team Member, Client, Vendor
+- Built dedicated stakeholder management UI accessible from each project card
+- Stakeholders can be designated to receive email reports (toggle on/off)
+- Email dialog automatically pulls eligible stakeholders (those with receiveEmailReports enabled)
+- Complete CRUD operations for adding, removing, and updating stakeholder settings
+- One-click "Add Project Stakeholders" in email dialog adds all eligible recipients
+
 ### October 9, 2025 - One-Click Email Updates from Dashboard
 
 **Implemented streamlined email functionality:**
