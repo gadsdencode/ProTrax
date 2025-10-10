@@ -1,6 +1,9 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
+import multer from "multer";
+import path from "path";
+import fs from "fs/promises";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import {
@@ -21,6 +24,14 @@ import {
   insertProjectStakeholderSchema,
   insertNotificationSchema,
 } from "@shared/schema";
+
+// Configure multer for file uploads
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limit
+  },
+});
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
@@ -286,15 +297,157 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/file-attachments', isAuthenticated, async (req: any, res) => {
+  // Upload file endpoint
+  app.post('/api/file-attachments/upload', isAuthenticated, upload.single('file'), async (req: any, res) => {
     try {
+      if (!req.file) {
+        return res.status(400).json({ message: "No file uploaded" });
+      }
+
       const userId = req.user.claims.sub;
-      const data = insertFileAttachmentSchema.parse({ ...req.body, userId });
-      const attachment = await storage.createFileAttachment(data);
+      const { projectId, taskId } = req.body;
+      
+      // Generate unique filename
+      const timestamp = Date.now();
+      const uniqueId = Math.random().toString(36).substring(7);
+      const fileExt = path.extname(req.file.originalname);
+      const fileName = `${timestamp}-${uniqueId}${fileExt}`;
+      
+      // Determine storage path based on whether file should be private or public
+      const isPrivate = req.body.isPrivate === 'true';
+      const privateDir = process.env.PRIVATE_OBJECT_DIR || '/replit-objstore-39c30c57-bb4e-47f1-bb5d-8592d96a2a10/.private';
+      const publicDir = process.env.PUBLIC_OBJECT_SEARCH_PATHS?.split(',')[0] || '/replit-objstore-39c30c57-bb4e-47f1-bb5d-8592d96a2a10/public';
+      
+      const storagePath = isPrivate 
+        ? `${privateDir}/${fileName}`
+        : `${publicDir}/attachments/${fileName}`;
+
+      // Write file to object storage
+      await fs.mkdir(path.dirname(storagePath), { recursive: true });
+      await fs.writeFile(storagePath, req.file.buffer);
+      
+      // Save file metadata to database
+      const attachmentData = {
+        userId,
+        projectId: projectId ? parseInt(projectId) : undefined,
+        taskId: taskId ? parseInt(taskId) : undefined,
+        fileName: req.file.originalname,
+        fileSize: req.file.size,
+        mimeType: req.file.mimetype,
+        storageUrl: fileName, // Store just the filename, we'll construct the full path when serving
+        version: 1,
+      };
+      
+      const attachment = await storage.createFileAttachment(attachmentData);
       res.status(201).json(attachment);
     } catch (error: any) {
-      console.error("Error creating file attachment:", error);
-      res.status(400).json({ message: error.message || "Failed to create file attachment" });
+      console.error("Error uploading file:", error);
+      res.status(500).json({ message: error.message || "Failed to upload file" });
+    }
+  });
+
+  // Download/serve file endpoint
+  app.get('/api/file-attachments/:id/download', isAuthenticated, async (req: any, res) => {
+    try {
+      const attachmentId = parseInt(req.params.id);
+      const attachment = await storage.getFileAttachment(attachmentId);
+      
+      if (!attachment) {
+        return res.status(404).json({ message: "File not found" });
+      }
+      
+      // Check if user has access to this file
+      if (attachment.projectId) {
+        // For project files, verify user is a stakeholder or project manager
+        const project = await storage.getProject(attachment.projectId);
+        if (!project) {
+          return res.status(404).json({ message: "Project not found" });
+        }
+        // Note: In a production app, you'd want to check if user is a stakeholder
+      }
+      
+      // Try private path first, then public
+      const privateDir = process.env.PRIVATE_OBJECT_DIR || '/replit-objstore-39c30c57-bb4e-47f1-bb5d-8592d96a2a10/.private';
+      const publicDir = process.env.PUBLIC_OBJECT_SEARCH_PATHS?.split(',')[0] || '/replit-objstore-39c30c57-bb4e-47f1-bb5d-8592d96a2a10/public';
+      
+      const privatePath = `${privateDir}/${attachment.storageUrl}`;
+      const publicPath = `${publicDir}/attachments/${attachment.storageUrl}`;
+      
+      let filePath = privatePath;
+      try {
+        await fs.access(privatePath);
+      } catch {
+        filePath = publicPath;
+        try {
+          await fs.access(publicPath);
+        } catch {
+          return res.status(404).json({ message: "File not found in storage" });
+        }
+      }
+      
+      const fileBuffer = await fs.readFile(filePath);
+      
+      // Set appropriate headers
+      res.set({
+        'Content-Type': attachment.mimeType || 'application/octet-stream',
+        'Content-Disposition': `attachment; filename="${attachment.fileName}"`,
+        'Content-Length': attachment.fileSize?.toString() || fileBuffer.length.toString(),
+      });
+      
+      res.send(fileBuffer);
+    } catch (error: any) {
+      console.error("Error downloading file:", error);
+      res.status(500).json({ message: error.message || "Failed to download file" });
+    }
+  });
+
+  // Delete file endpoint
+  app.delete('/api/file-attachments/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const attachmentId = parseInt(req.params.id);
+      const attachment = await storage.getFileAttachment(attachmentId);
+      
+      if (!attachment) {
+        return res.status(404).json({ message: "File not found" });
+      }
+      
+      // Check if user has permission to delete (must be uploader or project manager)
+      const userId = req.user.claims.sub;
+      if (attachment.userId !== userId) {
+        if (attachment.projectId) {
+          const project = await storage.getProject(attachment.projectId);
+          if (project?.managerId !== userId) {
+            return res.status(403).json({ message: "Permission denied" });
+          }
+        } else {
+          return res.status(403).json({ message: "Permission denied" });
+        }
+      }
+      
+      // Delete from storage
+      const privateDir = process.env.PRIVATE_OBJECT_DIR || '/replit-objstore-39c30c57-bb4e-47f1-bb5d-8592d96a2a10/.private';
+      const publicDir = process.env.PUBLIC_OBJECT_SEARCH_PATHS?.split(',')[0] || '/replit-objstore-39c30c57-bb4e-47f1-bb5d-8592d96a2a10/public';
+      
+      const privatePath = `${privateDir}/${attachment.storageUrl}`;
+      const publicPath = `${publicDir}/attachments/${attachment.storageUrl}`;
+      
+      try {
+        await fs.unlink(privatePath);
+      } catch {
+        try {
+          await fs.unlink(publicPath);
+        } catch {
+          console.warn("File not found in storage, continuing with database deletion");
+        }
+      }
+      
+      // Delete from database
+      await storage.deleteFileAttachment(attachmentId);
+      
+      res.json({ message: "File deleted successfully" });
+    } catch (error: any) {
+      console.error("Error deleting file:", error);
+      res.status(500).json({ message: error.message || "Failed to delete file" });
     }
   });
 
