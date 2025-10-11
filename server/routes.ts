@@ -67,7 +67,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   app.get('/api/projects', isAuthenticated, async (req, res) => {
     try {
-      const projects = await storage.getProjects();
+      const searchQuery = req.query.searchQuery as string | undefined;
+      const projects = await storage.getProjects(searchQuery);
       res.json(projects);
     } catch (error) {
       console.error("Error fetching projects:", error);
@@ -128,7 +129,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/tasks', isAuthenticated, async (req, res) => {
     try {
       const projectId = req.query.projectId ? parseInt(req.query.projectId as string) : undefined;
-      const tasks = await storage.getTasks(projectId);
+      const searchQuery = req.query.searchQuery as string | undefined;
+      const tasks = await storage.getTasks(projectId, searchQuery);
       res.json(tasks);
     } catch (error) {
       console.error("Error fetching tasks:", error);

@@ -35,7 +35,9 @@ export default function Projects() {
   const { toast } = useToast();
 
   const { data: projects, isLoading } = useQuery<Project[]>({
-    queryKey: ["/api/projects"],
+    queryKey: searchQuery 
+      ? ["/api/projects", { searchQuery }] 
+      : ["/api/projects"],
   });
 
   const createMutation = useMutation({
@@ -43,7 +45,7 @@ export default function Projects() {
       return await apiRequest("POST", "/api/projects", data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"], refetchType: 'all' });
       setCreateDialogOpen(false);
       toast({
         title: "Success",
@@ -64,11 +66,8 @@ export default function Projects() {
       return await apiRequest("POST", "/api/tasks", data);
     },
     onSuccess: () => {
-      // Invalidate both global and project-scoped task queries
-      queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
-      if (selectedProjectId) {
-        queryClient.invalidateQueries({ queryKey: ["/api/tasks", { projectId: selectedProjectId }] });
-      }
+      // Invalidate all task queries including those with search params
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks"], refetchType: 'all' });
       setTaskDialogOpen(false);
       toast({
         title: "Success",
@@ -84,10 +83,7 @@ export default function Projects() {
     },
   });
 
-  const filteredProjects = projects?.filter(p =>
-    p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    p.description?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredProjects = projects;
 
   return (
     <div className="p-6 space-y-6">

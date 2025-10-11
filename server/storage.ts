@@ -54,7 +54,7 @@ import {
   type Notification,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, desc, asc } from "drizzle-orm";
+import { eq, and, desc, asc, or, ilike } from "drizzle-orm";
 
 export interface IStorage {
   // User operations (required for Replit Auth)
@@ -63,14 +63,14 @@ export interface IStorage {
   getAllUsers(): Promise<User[]>;
   
   // Project operations
-  getProjects(): Promise<Project[]>;
+  getProjects(searchQuery?: string): Promise<Project[]>;
   getProject(id: number): Promise<Project | undefined>;
   createProject(project: InsertProject): Promise<Project>;
   updateProject(id: number, project: Partial<InsertProject>): Promise<Project>;
   deleteProject(id: number): Promise<void>;
   
   // Task operations
-  getTasks(projectId?: number): Promise<Task[]>;
+  getTasks(projectId?: number, searchQuery?: string): Promise<Task[]>;
   getTask(id: number): Promise<Task | undefined>;
   getMyTasks(userId: string): Promise<Task[]>;
   createTask(task: InsertTask): Promise<Task>;
@@ -168,7 +168,20 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Project operations
-  async getProjects(): Promise<Project[]> {
+  async getProjects(searchQuery?: string): Promise<Project[]> {
+    if (searchQuery) {
+      const searchPattern = `%${searchQuery}%`;
+      return await db
+        .select()
+        .from(projects)
+        .where(
+          or(
+            ilike(projects.name, searchPattern),
+            ilike(projects.description, searchPattern)
+          )
+        )
+        .orderBy(desc(projects.createdAt));
+    }
     return await db.select().from(projects).orderBy(desc(projects.createdAt));
   }
 
@@ -196,10 +209,32 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Task operations
-  async getTasks(projectId?: number): Promise<Task[]> {
+  async getTasks(projectId?: number, searchQuery?: string): Promise<Task[]> {
+    const conditions = [];
+    
     if (projectId) {
-      return await db.select().from(tasks).where(eq(tasks.projectId, projectId)).orderBy(asc(tasks.sortOrder));
+      conditions.push(eq(tasks.projectId, projectId));
     }
+    
+    if (searchQuery) {
+      const searchPattern = `%${searchQuery}%`;
+      conditions.push(
+        or(
+          ilike(tasks.title, searchPattern),
+          ilike(tasks.description, searchPattern)
+        )
+      );
+    }
+    
+    if (conditions.length > 0) {
+      const whereClause = conditions.length === 1 ? conditions[0] : and(...conditions);
+      return await db
+        .select()
+        .from(tasks)
+        .where(whereClause)
+        .orderBy(projectId ? asc(tasks.sortOrder) : desc(tasks.createdAt));
+    }
+    
     return await db.select().from(tasks).orderBy(desc(tasks.createdAt));
   }
 

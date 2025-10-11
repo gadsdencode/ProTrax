@@ -32,27 +32,29 @@ export default function ListView() {
     enabled: !!projectIdFromUrl,
   });
 
+  const queryParams: Record<string, number | string> = {};
+  if (projectIdFromUrl) queryParams.projectId = projectIdFromUrl;
+  if (searchQuery) queryParams.searchQuery = searchQuery;
+
   const { data: tasks, isLoading } = useQuery<Task[]>({
-    queryKey: ["/api/tasks", projectIdFromUrl ? { projectId: projectIdFromUrl } : {}],
+    queryKey: 
+      Object.keys(queryParams).length > 0 
+        ? ["/api/tasks", queryParams]
+        : ["/api/tasks"],
   });
 
-  const filteredAndSortedTasks = tasks
-    ?.filter(task =>
-      task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      task.description?.toLowerCase().includes(searchQuery.toLowerCase())
-    )
-    .sort((a, b) => {
-      const aValue = a[sortField];
-      const bValue = b[sortField];
-      const direction = sortDirection === "asc" ? 1 : -1;
-      
-      if (aValue === null || aValue === undefined) return 1;
-      if (bValue === null || bValue === undefined) return -1;
-      
-      if (aValue < bValue) return -direction;
-      if (aValue > bValue) return direction;
-      return 0;
-    });
+  const filteredAndSortedTasks = tasks?.sort((a, b) => {
+    const aValue = a[sortField];
+    const bValue = b[sortField];
+    const direction = sortDirection === "asc" ? 1 : -1;
+    
+    if (aValue === null || aValue === undefined) return 1;
+    if (bValue === null || bValue === undefined) return -1;
+    
+    if (aValue < bValue) return -direction;
+    if (aValue > bValue) return direction;
+    return 0;
+  });
 
   const toggleSort = (field: keyof Task) => {
     if (sortField === field) {
