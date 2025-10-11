@@ -12,6 +12,26 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+### October 11, 2025 - Code Structure Improvements: Gantt Component Refactoring
+
+**Extracted GanttRow component for better module separation:**
+- Moved GanttRow component from `gantt.tsx` into separate file `client/src/components/gantt-row.tsx`
+- Improved code readability and maintainability
+- Better module separation following component extraction best practices
+- Functionality remains identical - purely organizational refactoring
+
+### October 11, 2025 - Centralized Error Handling System
+
+**Implemented comprehensive backend error handling:**
+- Created `server/errorHandler.ts` with centralized error middleware
+- Handles Zod validation errors (400 with field details)
+- Handles database errors (409 duplicates, 400 constraints, 404 not found)
+- Migrated all 53 Express routes to use `asyncHandler` wrapper
+- Eliminated all try-catch blocks in routes (standardized error propagation)
+- Custom `ApplicationError` class with HTTP status codes
+- Helper functions: `createError.badRequest()`, `createError.notFound()`, etc.
+- Production-ready with safe error messages (no internal details exposed)
+
 ### October 11, 2025 - Enhanced File Preview with Robust Error Handling
 
 **Improved file preview system with better handling of various file types:**
