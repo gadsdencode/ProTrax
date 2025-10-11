@@ -7,6 +7,7 @@ import fs from "fs/promises";
 import { Client } from "@replit/object-storage";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
+import { errorHandler, asyncHandler, createError } from "./errorHandler";
 import {
   insertProjectSchema,
   insertTaskSchema,
@@ -76,53 +77,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/projects/:id', isAuthenticated, async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      const project = await storage.getProject(id);
-      if (!project) {
-        return res.status(404).json({ message: "Project not found" });
-      }
-      res.json(project);
-    } catch (error) {
-      console.error("Error fetching project:", error);
-      res.status(500).json({ message: "Failed to fetch project" });
+  app.get('/api/projects/:id', isAuthenticated, asyncHandler(async (req, res) => {
+    const id = parseInt(req.params.id);
+    const project = await storage.getProject(id);
+    if (!project) {
+      throw createError.notFound("Project not found");
     }
-  });
+    res.json(project);
+  }));
 
-  app.post('/api/projects', isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.claims.sub;
-      const data = insertProjectSchema.parse({ ...req.body, managerId: userId });
-      const project = await storage.createProject(data);
-      res.status(201).json(project);
-    } catch (error: any) {
-      console.error("Error creating project:", error);
-      res.status(400).json({ message: error.message || "Failed to create project" });
-    }
-  });
+  app.post('/api/projects', isAuthenticated, asyncHandler(async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const data = insertProjectSchema.parse({ ...req.body, managerId: userId });
+    const project = await storage.createProject(data);
+    res.status(201).json(project);
+  }));
 
-  app.patch('/api/projects/:id', isAuthenticated, async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      const project = await storage.updateProject(id, req.body);
-      res.json(project);
-    } catch (error: any) {
-      console.error("Error updating project:", error);
-      res.status(400).json({ message: error.message || "Failed to update project" });
-    }
-  });
+  app.patch('/api/projects/:id', isAuthenticated, asyncHandler(async (req, res) => {
+    const id = parseInt(req.params.id);
+    const project = await storage.updateProject(id, req.body);
+    res.json(project);
+  }));
 
-  app.delete('/api/projects/:id', isAuthenticated, async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      await storage.deleteProject(id);
-      res.status(204).send();
-    } catch (error) {
-      console.error("Error deleting project:", error);
-      res.status(500).json({ message: "Failed to delete project" });
-    }
-  });
+  app.delete('/api/projects/:id', isAuthenticated, asyncHandler(async (req, res) => {
+    const id = parseInt(req.params.id);
+    await storage.deleteProject(id);
+    res.status(204).send();
+  }));
 
   // ============= TASK ROUTES =============
   
@@ -163,38 +144,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/tasks', isAuthenticated, async (req, res) => {
-    try {
-      const data = insertTaskSchema.parse(req.body);
-      const task = await storage.createTask(data);
-      res.status(201).json(task);
-    } catch (error: any) {
-      console.error("Error creating task:", error);
-      res.status(400).json({ message: error.message || "Failed to create task" });
-    }
-  });
+  app.post('/api/tasks', isAuthenticated, asyncHandler(async (req, res) => {
+    const data = insertTaskSchema.parse(req.body);
+    const task = await storage.createTask(data);
+    res.status(201).json(task);
+  }));
 
-  app.patch('/api/tasks/:id', isAuthenticated, async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      const task = await storage.updateTask(id, req.body);
-      res.json(task);
-    } catch (error: any) {
-      console.error("Error updating task:", error);
-      res.status(400).json({ message: error.message || "Failed to update task" });
-    }
-  });
+  app.patch('/api/tasks/:id', isAuthenticated, asyncHandler(async (req, res) => {
+    const id = parseInt(req.params.id);
+    const task = await storage.updateTask(id, req.body);
+    res.json(task);
+  }));
 
-  app.delete('/api/tasks/:id', isAuthenticated, async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      await storage.deleteTask(id);
-      res.status(204).send();
-    } catch (error) {
-      console.error("Error deleting task:", error);
-      res.status(500).json({ message: "Failed to delete task" });
-    }
-  });
+  app.delete('/api/tasks/:id', isAuthenticated, asyncHandler(async (req, res) => {
+    const id = parseInt(req.params.id);
+    await storage.deleteTask(id);
+    res.status(204).send();
+  }));
 
   // ============= TASK DEPENDENCY ROUTES =============
   
@@ -946,6 +912,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     }
   });
+
+  // ============= ERROR HANDLING MIDDLEWARE =============
+  // Must be registered AFTER all routes
+  app.use(errorHandler);
 
   // ============= WEBSOCKET SERVER =============
   
