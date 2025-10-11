@@ -98,97 +98,91 @@ export function FilePreviewDialog({
 
     try {
       const mimeType = file.mimeType || '';
+      const fileName = file.fileName.toLowerCase();
       
-      // For Word documents (.docx)
+      // Fetch the file first for all file types
+      const response = await fetch(`/api/file-attachments/${file.id}/download`, {
+        credentials: 'include',
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to load file');
+      }
+      
+      const blob = await response.blob();
+      
+      // For Word documents (.docx) - try to convert them
       if (mimeType.includes('wordprocessingml') || 
           mimeType.includes('msword') || 
-          file.fileName.toLowerCase().endsWith('.docx')) {
-        const response = await fetch(`/api/file-attachments/${file.id}/download`, {
-          credentials: 'include',
-          headers: {
-            'Accept': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document, application/octet-stream',
-          }
-        });
+          fileName.endsWith('.docx')) {
         
-        if (!response.ok) {
-          throw new Error('Failed to load file');
-        }
-        
-        // Ensure we get the raw binary data
-        const blob = await response.blob();
         const arrayBuffer = await blob.arrayBuffer();
         
-        // Try to convert Word document to HTML using mammoth
-        try {
-          const result = await mammoth.convertToHtml({ arrayBuffer });
-          
-          if (result.value) {
-            setHtmlContent(result.value);
-          } else {
-            // If no content was extracted, try as plain text
-            const decoder = new TextDecoder();
-            const text = decoder.decode(arrayBuffer);
+        // Check if it's actually a zip file (real docx)
+        const firstBytes = new Uint8Array(arrayBuffer.slice(0, 4));
+        const isZipFile = firstBytes[0] === 0x50 && firstBytes[1] === 0x4B;
+        
+        if (isZipFile) {
+          // It looks like a real docx file, try mammoth
+          try {
+            const result = await mammoth.convertToHtml({ arrayBuffer });
             
-            // Check if it might be plain text masquerading as docx
-            if (text && !text.includes('\x00') && text.length < 10000) {
-              setPreviewContent(text);
-            } else {
-              throw new Error('Could not extract content from Word document');
+            if (result.value) {
+              setHtmlContent(result.value);
+              return; // Success!
             }
+          } catch (mammothError: any) {
+            console.error('Mammoth conversion error:', mammothError);
+            // Fall through to try as text
           }
-          
-          if (result.messages && result.messages.length > 0) {
-            console.warn('Word conversion warnings:', result.messages);
-          }
-        } catch (mammothError: any) {
-          console.error('Mammoth conversion error:', mammothError);
-          
-          // Try to read as plain text if it's a small file
-          if (arrayBuffer.byteLength < 100000) {
-            const decoder = new TextDecoder();
-            const text = decoder.decode(arrayBuffer);
-            
-            // Check if it's readable text
-            if (text && !text.includes('\x00') && text.match(/[a-zA-Z]/)) {
-              console.log('Falling back to text preview for invalid docx file');
-              setPreviewContent(text);
-              // Don't set htmlContent so it shows as text, not Word doc
-            } else {
-              throw new Error('Invalid Word document format. Please ensure the file is a valid .docx file.');
-            }
-          } else {
-            throw new Error('Invalid Word document format. Please ensure the file is a valid .docx file.');
-          }
+        }
+        
+        // Not a real docx or conversion failed, try as text
+        const decoder = new TextDecoder('utf-8', { fatal: false });
+        const text = decoder.decode(arrayBuffer);
+        
+        if (text && !text.includes('\x00') && text.match(/[a-zA-Z]/) && text.length > 0) {
+          // It's readable text, show it
+          setPreviewContent(text);
+        } else {
+          // It's binary data that can't be previewed
+          setError('This Word document cannot be previewed. Please download it to view.');
         }
       }
-      // For text-based files, fetch the content
-      else if (isTextFile(file.mimeType) || file.mimeType?.includes('html')) {
-        const response = await fetch(`/api/file-attachments/${file.id}/download`, {
-          credentials: 'include',
-        });
+      // For old .doc files (not .docx)
+      else if (fileName.endsWith('.doc') && !fileName.endsWith('.docx')) {
+        setError('Classic .doc files cannot be previewed. Please save as .docx format or download the file.');
+      }
+      // For text-based files and HTML
+      else if (isTextFile(mimeType) || mimeType?.includes('html') || 
+               // Also check common text file extensions
+               fileName.match(/\.(txt|log|md|json|xml|yaml|yml|csv|js|ts|jsx|tsx|py|java|c|cpp|h|hpp|cs|php|rb|go|rs|sh|bash|sql|css|scss|sass|less)$/)) {
         
-        if (!response.ok) {
-          throw new Error('Failed to load file');
-        }
-        
-        // Get the blob and convert to text properly
-        const blob = await response.blob();
         const text = await blob.text();
         
         // Check if it's HTML content
-        if (file.mimeType?.includes('html')) {
+        if (mimeType?.includes('html') || text.trim().match(/^<(!DOCTYPE|html|HTML)/i)) {
           setHtmlContent(text);
         } else {
           setPreviewContent(text);
         }
       }
-      // For old .doc files (not .docx)
-      else if (file.fileName.toLowerCase().endsWith('.doc') && 
-               !file.fileName.toLowerCase().endsWith('.docx')) {
-        setError('Classic .doc files require conversion. Please save as .docx format for preview.');
+      // For files that might be text but have unknown mime types
+      else if (!mimeType || mimeType === 'application/octet-stream') {
+        // Try to read as text
+        const text = await blob.text();
+        
+        // Check if it seems to be text
+        if (text && !text.includes('\x00') && text.match(/[a-zA-Z]/) && text.length > 0) {
+          setPreviewContent(text);
+        } else {
+          // Binary file, can't preview
+          setError('Binary file - preview not available');
+        }
       }
     } catch (err: any) {
-      setError(err.message || 'Failed to load preview');
+      console.error('Preview error:', err);
+      setError(err.message || 'Failed to load preview. You can still download the file.');
     } finally {
       setIsLoading(false);
     }

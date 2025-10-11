@@ -12,7 +12,17 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
-### October 10, 2025 - File Upload and Attachment System
+### October 11, 2025 - Enhanced File Preview with Robust Error Handling
+
+**Improved file preview system with better handling of various file types:**
+- Enhanced Word document detection - checks actual file content not just extension
+- Automatic fallback to text preview for fake/invalid .docx files
+- Smart content type detection using file headers and content analysis
+- Graceful handling of files with incorrect MIME types or extensions
+- Always shows download option even when preview fails
+- Better error messages guiding users on format requirements
+
+### October 10, 2025 - File Upload and Attachment System with Preview
 
 **Implemented comprehensive file attachment functionality:**
 - Integrated Replit object storage for secure file persistence
@@ -22,6 +32,16 @@ Preferred communication style: Simple, everyday language.
 - Permission-based deletion: only file uploader or project manager can delete files
 - Files stored in object storage with metadata tracked in database
 - Automatic UI refresh after upload/delete operations
+- **File Preview Features:**
+  - Images: Direct inline display (jpg, png, gif, svg, webp)
+  - Videos: HTML5 player with controls (mp4, webm, ogv)
+  - Audio: HTML5 audio player (mp3, wav, ogg)
+  - PDFs: Browser-rendered inline viewing
+  - Word Documents: HTML conversion for .docx files with text fallback
+  - Text/Code: Syntax highlighting for 20+ programming languages
+  - HTML: Syntax-highlighted source code display
+  - Office Files: Download option with file type indication
+  - Smart fallback: Binary files show download option when preview unavailable
 
 ### October 10, 2025 - Project Stakeholder Management System
 
