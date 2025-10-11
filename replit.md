@@ -12,6 +12,18 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+### October 11, 2025 - Interactive Gantt Chart: Drag-and-Drop Task Scheduling
+
+**Implemented drag-and-drop interactions for Gantt chart:**
+- Integrated @dnd-kit/core for interactive task bar dragging
+- Users can drag task bars horizontally to adjust start and end dates
+- Visual feedback: cursor changes (grab → grabbing), opacity during drag
+- Automatic date calculation based on pixel movement (dayWidth conversion)
+- Backend PATCH /api/tasks/:id with Zod validation for data integrity
+- Date string to Date object conversion for Drizzle compatibility
+- Success toast notifications and React Query cache invalidation
+- **Status**: Implementation complete, testing in progress
+
 ### October 11, 2025 - Code Structure Improvements: Gantt Component Refactoring
 
 **Extracted GanttRow component for better module separation:**

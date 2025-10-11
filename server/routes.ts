@@ -122,7 +122,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.patch('/api/tasks/:id', isAuthenticated, asyncHandler(async (req, res) => {
     const id = parseInt(req.params.id);
-    const task = await storage.updateTask(id, req.body);
+    
+    // Validate input with partial schema (allows updating only some fields)
+    const validatedData = insertTaskSchema.partial().parse(req.body);
+    
+    // Convert date strings to Date objects if present (after validation)
+    if (validatedData.startDate && typeof validatedData.startDate === 'string') {
+      validatedData.startDate = new Date(validatedData.startDate);
+    }
+    if (validatedData.dueDate && typeof validatedData.dueDate === 'string') {
+      validatedData.dueDate = new Date(validatedData.dueDate);
+    }
+    
+    const task = await storage.updateTask(id, validatedData);
     res.json(task);
   }));
 

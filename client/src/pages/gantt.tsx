@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Download, ZoomIn, ZoomOut, Plus } from "lucide-react";
 import { useParams } from "wouter";
+import { DndContext, DragEndEvent } from "@dnd-kit/core";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent } from "@/components/ui/card";
@@ -55,6 +56,61 @@ export default function Gantt() {
       });
     },
   });
+
+  const updateTaskDatesMutation = useMutation({
+    mutationFn: async ({ taskId, startDate, dueDate }: { taskId: number; startDate: Date; dueDate: Date }) => {
+      return await apiRequest("PATCH", `/api/tasks/${taskId}`, { 
+        startDate: startDate.toISOString(), 
+        dueDate: dueDate.toISOString() 
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks", { projectId: selectedProject }] });
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+      toast({
+        title: "Success",
+        description: "Task dates updated successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, delta } = event;
+    
+    if (!delta.x) return;
+
+    const task = active.data.current?.task as Task;
+    if (!task || !task.startDate || !task.dueDate) return;
+
+    // Calculate how many days the task was moved
+    const daysMoved = Math.round(delta.x / dayWidth);
+    
+    if (daysMoved === 0) return;
+
+    // Calculate new dates
+    const oldStartDate = new Date(task.startDate);
+    const oldDueDate = new Date(task.dueDate);
+    
+    const newStartDate = new Date(oldStartDate);
+    newStartDate.setDate(oldStartDate.getDate() + daysMoved);
+    
+    const newDueDate = new Date(oldDueDate);
+    newDueDate.setDate(oldDueDate.getDate() + daysMoved);
+
+    // Update task dates
+    updateTaskDatesMutation.mutate({
+      taskId: task.id,
+      startDate: newStartDate,
+      dueDate: newDueDate,
+    });
+  };
 
   const handleExport = async () => {
     try {
@@ -193,16 +249,18 @@ export default function Gantt() {
             </div>
 
             {/* Task Rows */}
-            <div>
-              {tasks.map(task => (
-                <GanttRow
-                  key={task.id}
-                  task={task}
-                  dateRange={dateRange}
-                  dayWidth={dayWidth}
-                />
-              ))}
-            </div>
+            <DndContext onDragEnd={handleDragEnd}>
+              <div>
+                {tasks.map(task => (
+                  <GanttRow
+                    key={task.id}
+                    task={task}
+                    dateRange={dateRange}
+                    dayWidth={dayWidth}
+                  />
+                ))}
+              </div>
+            </DndContext>
           </div>
         )}
       </div>
