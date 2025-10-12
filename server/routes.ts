@@ -10,6 +10,7 @@ import { setupAuth, isAuthenticated } from "./replitAuth";
 import { errorHandler, asyncHandler, createError } from "./errorHandler";
 import {
   insertProjectSchema,
+  insertSprintSchema,
   insertTaskSchema,
   insertTaskDependencySchema,
   insertCustomFieldSchema,
@@ -88,6 +89,102 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const id = parseInt(req.params.id);
     await storage.deleteProject(id);
     res.status(204).send();
+  }));
+
+  // ============= SPRINT ROUTES =============
+  
+  app.get('/api/sprints', isAuthenticated, asyncHandler(async (req, res) => {
+    const projectId = parseInt(req.query.projectId as string);
+    const sprints = await storage.getSprints(projectId);
+    res.json(sprints);
+  }));
+
+  app.get('/api/sprints/:id', isAuthenticated, asyncHandler(async (req, res) => {
+    const id = parseInt(req.params.id);
+    const sprint = await storage.getSprint(id);
+    if (!sprint) {
+      throw createError.notFound("Sprint not found");
+    }
+    res.json(sprint);
+  }));
+
+  app.post('/api/sprints', isAuthenticated, asyncHandler(async (req, res) => {
+    const data = insertSprintSchema.parse(req.body);
+    const sprint = await storage.createSprint(data);
+    res.status(201).json(sprint);
+  }));
+
+  app.patch('/api/sprints/:id', isAuthenticated, asyncHandler(async (req, res) => {
+    const id = parseInt(req.params.id);
+    const sprint = await storage.updateSprint(id, req.body);
+    res.json(sprint);
+  }));
+
+  app.delete('/api/sprints/:id', isAuthenticated, asyncHandler(async (req, res) => {
+    const id = parseInt(req.params.id);
+    await storage.deleteSprint(id);
+    res.status(204).send();
+  }));
+
+  // Sprint metrics for agile visualizations
+  app.get('/api/sprints/:id/metrics', isAuthenticated, asyncHandler(async (req, res) => {
+    const sprintId = parseInt(req.params.id);
+    const sprint = await storage.getSprint(sprintId);
+    
+    if (!sprint) {
+      throw createError.notFound("Sprint not found");
+    }
+    
+    const tasks = await storage.getTasks(sprint.projectId);
+    const sprintTasks = tasks.filter(t => t.sprintId === sprintId);
+    
+    // Calculate burndown data
+    const totalStoryPoints = sprintTasks.reduce((sum, t) => sum + (t.storyPoints || 0), 0);
+    const completedStoryPoints = sprintTasks.filter(t => t.status === 'done').reduce((sum, t) => sum + (t.storyPoints || 0), 0);
+    
+    // Generate daily burndown data (mock data for now - in production would track historical changes)
+    const startDate = new Date(sprint.startDate);
+    const endDate = new Date(sprint.endDate);
+    const days = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+    const burndownData = [];
+    
+    for (let i = 0; i <= days; i++) {
+      const date = new Date(startDate);
+      date.setDate(date.getDate() + i);
+      const ideal = totalStoryPoints - (totalStoryPoints / days) * i;
+      const actual = i === days ? completedStoryPoints : totalStoryPoints - (Math.random() * completedStoryPoints);
+      
+      burndownData.push({
+        date: date.toISOString().split('T')[0],
+        ideal: Math.max(0, ideal),
+        actual: Math.max(0, actual),
+      });
+    }
+    
+    // Calculate CFD data
+    const cfdData = [];
+    for (let i = 0; i <= days; i++) {
+      const date = new Date(startDate);
+      date.setDate(date.getDate() + i);
+      
+      cfdData.push({
+        date: date.toISOString().split('T')[0],
+        todo: sprintTasks.filter(t => t.status === 'todo').length,
+        inProgress: sprintTasks.filter(t => t.status === 'in_progress').length,
+        review: sprintTasks.filter(t => t.status === 'review').length,
+        done: sprintTasks.filter(t => t.status === 'done').length,
+      });
+    }
+    
+    res.json({
+      sprint,
+      totalStoryPoints,
+      completedStoryPoints,
+      totalTasks: sprintTasks.length,
+      completedTasks: sprintTasks.filter(t => t.status === 'done').length,
+      burndownData,
+      cfdData,
+    });
   }));
 
   // ============= TASK ROUTES =============
