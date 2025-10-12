@@ -734,16 +734,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     
     // Ensure we have a proper Buffer
-    let fileBuffer = downloadResult.value;
+    let fileBuffer: Buffer = downloadResult.value as any;
     
     // Convert to Buffer if it's not already one
     if (!Buffer.isBuffer(fileBuffer)) {
-      if (fileBuffer && typeof fileBuffer === 'object' && fileBuffer.type === 'Buffer' && Array.isArray(fileBuffer.data)) {
+      if (fileBuffer && typeof fileBuffer === 'object' && (fileBuffer as any).type === 'Buffer' && Array.isArray((fileBuffer as any).data)) {
         // It's a JSON-encoded Buffer, convert it back
-        fileBuffer = Buffer.from(fileBuffer.data);
+        fileBuffer = Buffer.from((fileBuffer as any).data);
       } else if (Array.isArray(fileBuffer)) {
         // It's an array of bytes
-        fileBuffer = Buffer.from(fileBuffer);
+        fileBuffer = Buffer.from(fileBuffer as any);
       } else {
         console.error("Unexpected buffer type:", typeof fileBuffer);
         throw new Error("Invalid file data from storage");
