@@ -30,6 +30,7 @@ export const widgetTypeEnum = pgEnum('widget_type', ['my_tasks', 'budget_vs_actu
 export const automationTriggerEnum = pgEnum('automation_trigger', ['task_created', 'task_status_changed', 'task_assigned', 'due_date_approaching']);
 export const automationActionEnum = pgEnum('automation_action', ['change_status', 'assign_user', 'send_notification', 'create_task']);
 export const stakeholderRoleEnum = pgEnum('stakeholder_role', ['sponsor', 'reviewer', 'observer', 'team_member', 'client', 'vendor']);
+export const sprintStatusEnum = pgEnum('sprint_status', ['planned', 'active', 'completed']);
 
 // ============= AUTH TABLES (Required for Replit Auth) =============
 
@@ -74,9 +75,22 @@ export const projects = pgTable("projects", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+export const sprints = pgTable("sprints", {
+  id: serial("id").primaryKey(),
+  projectId: integer("project_id").references(() => projects.id, { onDelete: 'cascade' }).notNull(),
+  name: varchar("name", { length: 255 }).notNull(),
+  goal: text("goal"),
+  status: sprintStatusEnum("status").default('planned'),
+  startDate: timestamp("start_date").notNull(),
+  endDate: timestamp("end_date").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 export const tasks = pgTable("tasks", {
   id: serial("id").primaryKey(),
   projectId: integer("project_id").references(() => projects.id, { onDelete: 'cascade' }).notNull(),
+  sprintId: integer("sprint_id").references(() => sprints.id, { onDelete: 'set null' }),
   parentId: integer("parent_id").references((): any => tasks.id, { onDelete: 'cascade' }), // For subtasks/WBS hierarchy
   title: varchar("title", { length: 500 }).notNull(),
   description: text("description"), // Rich text
@@ -88,6 +102,7 @@ export const tasks = pgTable("tasks", {
   duration: integer("duration"), // in hours
   progress: integer("progress").default(0), // 0-100
   estimatedHours: decimal("estimated_hours", { precision: 8, scale: 2 }),
+  storyPoints: integer("story_points"),
   isMilestone: boolean("is_milestone").default(false),
   isOnCriticalPath: boolean("is_on_critical_path").default(false),
   recurrenceType: recurrenceTypeEnum("recurrence_type"),
@@ -280,6 +295,7 @@ export const notifications = pgTable("notifications", {
 export const projectsRelations = relations(projects, ({ one, many }) => ({
   manager: one(users, { fields: [projects.managerId], references: [users.id] }),
   tasks: many(tasks),
+  sprints: many(sprints),
   customFields: many(customFields),
   risks: many(risks),
   budgetItems: many(budgetItems),
@@ -292,6 +308,7 @@ export const projectsRelations = relations(projects, ({ one, many }) => ({
 
 export const tasksRelations = relations(tasks, ({ one, many }) => ({
   project: one(projects, { fields: [tasks.projectId], references: [projects.id] }),
+  sprint: one(sprints, { fields: [tasks.sprintId], references: [sprints.id] }),
   assignee: one(users, { fields: [tasks.assigneeId], references: [users.id] }),
   parent: one(tasks, { fields: [tasks.parentId], references: [tasks.id] }),
   subtasks: many(tasks),
@@ -301,6 +318,11 @@ export const tasksRelations = relations(tasks, ({ one, many }) => ({
   fileAttachments: many(fileAttachments),
   customFieldValues: many(taskCustomFieldValues),
   timeEntries: many(timeEntries),
+}));
+
+export const sprintsRelations = relations(sprints, ({ one, many }) => ({
+  project: one(projects, { fields: [sprints.projectId], references: [projects.id] }),
+  tasks: many(tasks),
 }));
 
 export const taskDependenciesRelations = relations(taskDependencies, ({ one }) => ({
@@ -336,6 +358,11 @@ export const insertProjectSchema = createInsertSchema(projects).omit({ id: true,
   endDate: z.union([z.string(), z.date()]).transform(val => typeof val === 'string' ? new Date(val) : val).optional(),
 });
 
+export const insertSprintSchema = createInsertSchema(sprints).omit({ id: true, createdAt: true, updatedAt: true }).extend({
+  startDate: z.union([z.string(), z.date()]).transform(val => typeof val === 'string' ? new Date(val) : val),
+  endDate: z.union([z.string(), z.date()]).transform(val => typeof val === 'string' ? new Date(val) : val),
+});
+
 export const insertTaskSchema = createInsertSchema(tasks).omit({ id: true, createdAt: true, updatedAt: true }).extend({
   startDate: z.union([z.string(), z.date()]).transform(val => typeof val === 'string' ? new Date(val) : val).optional(),
   dueDate: z.union([z.string(), z.date()]).transform(val => typeof val === 'string' ? new Date(val) : val).optional(),
@@ -366,6 +393,9 @@ export const insertTaskCustomFieldValueSchema = createInsertSchema(taskCustomFie
 
 export type InsertProject = z.infer<typeof insertProjectSchema>;
 export type Project = typeof projects.$inferSelect;
+
+export type InsertSprint = z.infer<typeof insertSprintSchema>;
+export type Sprint = typeof sprints.$inferSelect;
 
 export type InsertTask = z.infer<typeof insertTaskSchema>;
 export type Task = typeof tasks.$inferSelect;
