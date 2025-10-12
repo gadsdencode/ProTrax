@@ -21,13 +21,17 @@ import { ProjectForm } from "@/components/project-form";
 import { TaskForm } from "@/components/task-form";
 import { StakeholderDialog } from "@/components/stakeholder-dialog";
 import { FileAttachmentDialog } from "@/components/file-attachment-dialog";
+import { useUIStore } from "@/stores/useUIStore";
 
 export default function Projects() {
   const [, setLocation] = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
-  const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
+  
+  // Use the Zustand store instead of local state
+  const { selectedProjectId, setSelectedProjectId } = useUIStore();
+  
   const [stakeholderDialogOpen, setStakeholderDialogOpen] = useState(false);
   const [selectedProjectForStakeholders, setSelectedProjectForStakeholders] = useState<{ id: number; name: string } | null>(null);
   const [fileAttachmentDialogOpen, setFileAttachmentDialogOpen] = useState(false);
