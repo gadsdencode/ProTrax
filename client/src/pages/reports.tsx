@@ -10,10 +10,16 @@ import { EmailReportDialog } from "@/components/email-report-dialog";
 import { AgileMetrics } from "@/components/agile-metrics";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
+interface PredictionResult {
+  prediction: string;
+  confidence: number;
+  riskFactors: string[];
+}
+
 export default function Reports() {
   const { toast } = useToast();
   const [summary, setSummary] = useState<string>("");
-  const [predictions, setPredictions] = useState<string>("");
+  const [predictions, setPredictions] = useState<PredictionResult | null>(null);
   const [emailDialogOpen, setEmailDialogOpen] = useState(false);
 
   const { data: projects } = useQuery<Project[]>({
@@ -54,8 +60,8 @@ export default function Reports() {
       const res = await apiRequest("POST", "/api/ai/predict-deadline", { projectId });
       return res.json();
     },
-    onSuccess: (data: any) => {
-      setPredictions(data.prediction || data.message || "Predictions generated successfully");
+    onSuccess: (data: PredictionResult) => {
+      setPredictions(data);
       toast({
         title: "Predictions Generated",
         description: "AI predictions have been generated",
@@ -202,7 +208,36 @@ export default function Reports() {
             </Button>
             {predictions && (
               <div className="mt-3 p-3 rounded-md bg-background border" data-testid="ai-predictions-output">
-                <p className="text-sm">{predictions}</p>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium">Prediction:</span>
+                    <span className={`text-sm px-2 py-0.5 rounded-md ${
+                      predictions.prediction === 'on-time' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100' :
+                      predictions.prediction === 'at-risk' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100' :
+                      'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100'
+                    }`} data-testid="text-prediction-type">
+                      {predictions.prediction}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium">Confidence:</span>
+                    <span className="text-sm" data-testid="text-prediction-confidence">
+                      {(predictions.confidence * 100).toFixed(1)}%
+                    </span>
+                  </div>
+                  {predictions.riskFactors && predictions.riskFactors.length > 0 && (
+                    <div>
+                      <span className="text-sm font-medium">Risk Factors:</span>
+                      <ul className="mt-1 space-y-1" data-testid="list-risk-factors">
+                        {predictions.riskFactors.map((factor, index) => (
+                          <li key={index} className="text-sm text-muted-foreground ml-4 list-disc">
+                            {factor}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>
