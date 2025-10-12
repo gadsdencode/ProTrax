@@ -27,6 +27,7 @@ import {
   insertKanbanColumnSchema,
   insertProjectStakeholderSchema,
   insertNotificationSchema,
+  type User,
 } from "@shared/schema";
 
 // Configure multer for file uploads
@@ -1076,11 +1077,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ============= EMAIL ROUTES =============
   
   app.post('/api/email/send-report', isAuthenticated, asyncHandler(async (req, res) => {
-    const { sendProjectReport } = await import('./outlook');
+    const { sendProjectReport, sendPortfolioSummary } = await import('./outlook');
     const { projectId, reportType, recipients } = req.body;
     
-    if (!projectId || !reportType || !recipients || !Array.isArray(recipients) || recipients.length === 0) {
-      throw createError.badRequest("projectId, reportType, and recipients array are required");
+    if (!reportType || !recipients || !Array.isArray(recipients) || recipients.length === 0) {
+      throw createError.badRequest("reportType and recipients array are required");
+    }
+
+    // Check if this is a portfolio summary (all active projects)
+    if (reportType === 'summary' && (!projectId || projectId === 'all')) {
+      // Fetch all active projects
+      const allProjects = await storage.getProjects();
+      const activeProjects = allProjects.filter(p => p.status === 'active');
+      
+      if (activeProjects.length === 0) {
+        throw createError.notFound("No active projects found");
+      }
+
+      // Fetch all users to map manager IDs to names
+      const allUsers = await storage.getAllUsers();
+      const userMap = new Map(allUsers.map((u: User) => [u.id, u]));
+
+      // Collect data for each active project
+      const projectsData = await Promise.all(
+        activeProjects.map(async (project) => {
+          const tasks = await storage.getTasks(project.id);
+          const totalTasks = tasks.length;
+          const completedTasks = tasks.filter(t => t.status === 'done').length;
+          const inProgressTasks = tasks.filter(t => t.status === 'in_progress').length;
+          const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+          
+          // Get manager name
+          const manager = project.managerId ? userMap.get(project.managerId) : null;
+          const managerName = manager 
+            ? `${manager.firstName || ''} ${manager.lastName || ''}`.trim() || manager.email || 'N/A'
+            : 'N/A';
+          
+          return {
+            id: project.id,
+            name: project.name,
+            description: project.description,
+            status: project.status,
+            manager: managerName,
+            startDate: project.startDate,
+            endDate: project.endDate,
+            budget: project.budget,
+            totalTasks,
+            completedTasks,
+            inProgressTasks,
+            progress
+          };
+        })
+      );
+
+      await sendPortfolioSummary(projectsData, recipients);
+      
+      res.json({ 
+        message: "Portfolio summary sent successfully",
+        recipientCount: recipients.length,
+        projectCount: activeProjects.length
+      });
+      return;
+    }
+
+    // Single project report (original functionality)
+    if (!projectId) {
+      throw createError.badRequest("projectId is required for non-portfolio reports");
     }
 
     // Fetch project data

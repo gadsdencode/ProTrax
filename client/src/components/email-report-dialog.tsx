@@ -50,7 +50,7 @@ export function EmailReportDialog({ open, onOpenChange, projectId, initialReport
 
   const sendEmailMutation = useMutation({
     mutationFn: async () => {
-      if (!selectedProject) {
+      if (reportType !== 'portfolio_summary' && !selectedProject) {
         throw new Error("No project selected");
       }
       if (recipients.length === 0) {
@@ -58,16 +58,20 @@ export function EmailReportDialog({ open, onOpenChange, projectId, initialReport
       }
 
       const res = await apiRequest("POST", "/api/email/send-report", {
-        projectId: selectedProject.id,
-        reportType,
+        projectId: reportType === 'portfolio_summary' ? 'all' : selectedProject?.id,
+        reportType: reportType === 'portfolio_summary' ? 'summary' : reportType,
         recipients: recipients.map(r => ({ email: r.email, name: r.name }))
       });
       return res.json();
     },
     onSuccess: (data: any) => {
+      const message = data.projectCount 
+        ? `Portfolio summary sent to ${data.recipientCount} recipient(s) with ${data.projectCount} active project(s)`
+        : `Report successfully sent to ${data.recipientCount} recipient(s)`;
+      
       toast({
         title: "Email Sent",
-        description: `Report successfully sent to ${data.recipientCount} recipient(s)`,
+        description: message,
       });
       onOpenChange(false);
       setRecipients([]);
@@ -194,6 +198,7 @@ export function EmailReportDialog({ open, onOpenChange, projectId, initialReport
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="portfolio_summary">Portfolio Summary (All Active Projects)</SelectItem>
                 <SelectItem value="summary">Project Summary</SelectItem>
                 <SelectItem value="status">Status Report</SelectItem>
                 <SelectItem value="gantt">Gantt Chart Data</SelectItem>
@@ -267,14 +272,21 @@ export function EmailReportDialog({ open, onOpenChange, projectId, initialReport
             </div>
           )}
 
-          {selectedProject && (
+          {reportType === 'portfolio_summary' ? (
+            <div className="p-3 rounded-md bg-primary/5 border">
+              <p className="text-sm font-medium">Portfolio Summary</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                This report will include all currently active projects
+              </p>
+            </div>
+          ) : selectedProject ? (
             <div className="p-3 rounded-md bg-primary/5 border">
               <p className="text-sm font-medium">Project: {selectedProject.name}</p>
               <p className="text-xs text-muted-foreground mt-1">
                 {selectedProject.description || "No description"}
               </p>
             </div>
-          )}
+          ) : null}
         </div>
 
         <DialogFooter>
@@ -287,7 +299,7 @@ export function EmailReportDialog({ open, onOpenChange, projectId, initialReport
           </Button>
           <Button
             onClick={() => sendEmailMutation.mutate()}
-            disabled={sendEmailMutation.isPending || recipients.length === 0 || !selectedProject}
+            disabled={sendEmailMutation.isPending || recipients.length === 0 || (reportType !== 'portfolio_summary' && !selectedProject)}
             data-testid="button-send-email"
           >
             {sendEmailMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}

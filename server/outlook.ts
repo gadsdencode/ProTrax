@@ -114,6 +114,20 @@ export async function sendProjectReport(
   });
 }
 
+export async function sendPortfolioSummary(
+  projectsData: any[],
+  recipients: EmailRecipient[]
+) {
+  const reportContent = generatePortfolioSummaryHTML(projectsData);
+
+  await sendEmail({
+    to: recipients,
+    subject: 'Portfolio Summary - All Active Projects',
+    body: reportContent,
+    isHtml: true
+  });
+}
+
 function generateProjectSummaryHTML(projectName: string, data: any): string {
   return `
     <!DOCTYPE html>
@@ -322,6 +336,124 @@ function generateTaskReportHTML(projectName: string, reportType: string, tasks: 
         <p style="color: #6b7280; font-size: 12px;">
           Generated on ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}
         </p>
+      </div>
+    </body>
+    </html>
+  `;
+}
+
+function generatePortfolioSummaryHTML(projectsData: any[]): string {
+  const totalBudget = projectsData.reduce((sum, p) => sum + (parseFloat(p.budget) || 0), 0);
+  const totalTasks = projectsData.reduce((sum, p) => sum + p.totalTasks, 0);
+  const totalCompleted = projectsData.reduce((sum, p) => sum + p.completedTasks, 0);
+  const overallProgress = totalTasks > 0 ? Math.round((totalCompleted / totalTasks) * 100) : 0;
+
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .header { background: #3B82F6; color: white; padding: 30px; border-radius: 8px; margin-bottom: 30px; }
+        .summary-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px; }
+        .stat-card { background: #f9fafb; padding: 20px; border-radius: 8px; border: 1px solid #e5e7eb; }
+        .stat-label { font-size: 12px; color: #6b7280; text-transform: uppercase; margin-bottom: 8px; }
+        .stat-value { font-size: 32px; font-weight: bold; color: #3B82F6; }
+        .project-card { background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+        .project-header { display: flex; justify-content: space-between; align-items: start; margin-bottom: 15px; }
+        .project-name { font-size: 20px; font-weight: 600; color: #111827; margin: 0; }
+        .project-status { display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; background: #dcfce7; color: #166534; }
+        .project-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-top: 15px; }
+        .metric { }
+        .metric-label { font-size: 11px; color: #6b7280; text-transform: uppercase; }
+        .metric-value { font-size: 18px; font-weight: 600; color: #3B82F6; }
+        .progress-bar { background: #e5e7eb; border-radius: 4px; height: 8px; margin-top: 10px; overflow: hidden; }
+        .progress-fill { background: #3B82F6; height: 100%; transition: width 0.3s; }
+        .footer { margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb; color: #6b7280; font-size: 12px; }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <h1 style="margin: 0 0 10px 0;">Portfolio Summary</h1>
+        <p style="margin: 0; opacity: 0.9;">Active Projects Overview</p>
+      </div>
+
+      <div class="summary-stats">
+        <div class="stat-card">
+          <div class="stat-label">Active Projects</div>
+          <div class="stat-value">${projectsData.length}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Total Budget</div>
+          <div class="stat-value">$${totalBudget.toLocaleString()}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Total Tasks</div>
+          <div class="stat-value">${totalTasks}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Overall Progress</div>
+          <div class="stat-value">${overallProgress}%</div>
+        </div>
+      </div>
+
+      <h2 style="margin-top: 40px; margin-bottom: 20px;">Project Details</h2>
+
+      ${projectsData.map(project => `
+        <div class="project-card">
+          <div class="project-header">
+            <div>
+              <h3 class="project-name">${project.name}</h3>
+              <p style="color: #6b7280; margin: 5px 0;">${project.description || 'No description'}</p>
+              ${project.manager ? `<p style="color: #6b7280; margin: 5px 0; font-size: 12px;"><strong>Manager:</strong> ${project.manager}</p>` : ''}
+            </div>
+            <span class="project-status">${project.status}</span>
+          </div>
+
+          <div class="project-metrics">
+            <div class="metric">
+              <div class="metric-label">Budget</div>
+              <div class="metric-value">$${parseFloat(project.budget || 0).toLocaleString()}</div>
+            </div>
+            <div class="metric">
+              <div class="metric-label">Total Tasks</div>
+              <div class="metric-value">${project.totalTasks}</div>
+            </div>
+            <div class="metric">
+              <div class="metric-label">Completed</div>
+              <div class="metric-value">${project.completedTasks}</div>
+            </div>
+            <div class="metric">
+              <div class="metric-label">In Progress</div>
+              <div class="metric-value">${project.inProgressTasks}</div>
+            </div>
+          </div>
+
+          <div style="margin-top: 15px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+              <span style="font-size: 12px; color: #6b7280;">Progress</span>
+              <span style="font-size: 14px; font-weight: 600; color: #3B82F6;">${project.progress}%</span>
+            </div>
+            <div class="progress-bar">
+              <div class="progress-fill" style="width: ${project.progress}%;"></div>
+            </div>
+          </div>
+
+          ${project.startDate || project.endDate ? `
+            <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #e5e7eb;">
+              <span style="font-size: 12px; color: #6b7280;">
+                ${project.startDate ? `Start: ${new Date(project.startDate).toLocaleDateString()}` : ''}
+                ${project.startDate && project.endDate ? ' | ' : ''}
+                ${project.endDate ? `End: ${new Date(project.endDate).toLocaleDateString()}` : ''}
+              </span>
+            </div>
+          ` : ''}
+        </div>
+      `).join('')}
+
+      <div class="footer">
+        <p>Generated on ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}</p>
+        <p style="margin-top: 5px;">This report includes all currently active projects in the portfolio.</p>
       </div>
     </body>
     </html>
