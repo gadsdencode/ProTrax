@@ -7,6 +7,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
 import type { Project } from "@shared/schema";
 import { EmailReportDialog } from "@/components/email-report-dialog";
+import { AgileMetrics } from "@/components/agile-metrics";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function Reports() {
   const { toast } = useToast();
@@ -105,9 +107,9 @@ export default function Reports() {
     <div className="p-6 space-y-6">
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-semibold mb-2" data-testid="text-reports-title">Reports & Exports</h1>
+          <h1 className="text-2xl font-semibold mb-2" data-testid="text-reports-title">Reports & Analytics</h1>
           <p className="text-muted-foreground">
-            Generate comprehensive reports and export data to Excel
+            View agile metrics, generate reports, and export data
           </p>
         </div>
         <Button
@@ -120,41 +122,65 @@ export default function Reports() {
         </Button>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        {reports.map((report, index) => (
-          <Card key={index} className="hover-elevate transition-all">
-            <CardHeader>
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2">
-                    <report.icon className="h-5 w-5 text-primary" />
-                    <CardTitle className="text-base">{report.title}</CardTitle>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    {report.description}
-                  </p>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-muted-foreground">{report.format}</span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  data-testid={`button-export-${report.title.toLowerCase().replace(/\s+/g, '-')}`}
-                >
-                  <Download className="h-4 w-4 mr-2" />
-                  Export
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <Tabs defaultValue="metrics" className="space-y-6">
+        <TabsList>
+          <TabsTrigger value="metrics" data-testid="tab-agile-metrics">Agile Metrics</TabsTrigger>
+          <TabsTrigger value="exports" data-testid="tab-exports">Exports</TabsTrigger>
+          <TabsTrigger value="ai" data-testid="tab-ai-insights">AI Insights</TabsTrigger>
+        </TabsList>
 
-      {/* AI-Powered Reports */}
-      <Card>
+        <TabsContent value="metrics" className="space-y-6">
+          {projects && projects.length > 0 ? (
+            <AgileMetrics projectId={projects[0].id} />
+          ) : (
+            <Card>
+              <CardContent className="p-6">
+                <p className="text-muted-foreground text-center">
+                  No projects found. Create a project to view agile metrics.
+                </p>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        <TabsContent value="exports" className="space-y-6">
+
+          <div className="grid gap-4 md:grid-cols-2">
+            {reports.map((report, index) => (
+              <Card key={index} className="hover-elevate transition-all">
+                <CardHeader>
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        <report.icon className="h-5 w-5 text-primary" />
+                        <CardTitle className="text-base">{report.title}</CardTitle>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        {report.description}
+                      </p>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">{report.format}</span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      data-testid={`button-export-${report.title.toLowerCase().replace(/\s+/g, '-')}`}
+                    >
+                      <Download className="h-4 w-4 mr-2" />
+                      Export
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="ai" className="space-y-6">
+          <Card>
         <CardHeader>
           <CardTitle>AI-Powered Insights</CardTitle>
         </CardHeader>
@@ -202,8 +228,10 @@ export default function Reports() {
               </div>
             )}
           </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+        </TabsContent>
+      </Tabs>
 
       <EmailReportDialog 
         open={emailDialogOpen} 
