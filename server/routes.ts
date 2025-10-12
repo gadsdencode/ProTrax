@@ -10,7 +10,8 @@ import { setupAuth, isAuthenticated } from "./replitAuth";
 import { errorHandler, asyncHandler, createError } from "./errorHandler";
 import { SchedulingEngine } from "./scheduling";
 import * as mammoth from "mammoth";
-const pdfParse = require("pdf-parse");
+import * as pdfParseModule from "pdf-parse";
+const pdfParse = (pdfParseModule as any).default || pdfParseModule;
 import { extractProjectDataFromSOW } from "./gemini";
 import {
   insertProjectSchema,
