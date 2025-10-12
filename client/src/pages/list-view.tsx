@@ -53,8 +53,9 @@ export default function ListView() {
   const createTaskMutation = useMutation({
     mutationFn: async (data: InsertTask) => {
       const response = await apiRequest("POST", "/api/tasks", data);
-      console.log('API response for task creation:', response);
-      return response as Task;
+      const taskData = await response.json();
+      console.log('API response for task creation:', taskData);
+      return taskData as Task;
     },
     onSuccess: (createdTask) => {
       queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });

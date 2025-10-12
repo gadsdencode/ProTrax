@@ -113,6 +113,7 @@ export interface IStorage {
   // Task custom field value operations
   getTaskCustomFieldValues(taskId: number): Promise<TaskCustomFieldValue[]>;
   setTaskCustomFieldValue(taskId: number, customFieldId: number, value: string | null): Promise<TaskCustomFieldValue>;
+  setTaskCustomFieldValuesBatch(taskId: number, values: Array<{ customFieldId: number, value: string | null }>): Promise<TaskCustomFieldValue[]>;
   
   // Comment operations
   getComments(taskId: number): Promise<Comment[]>;
@@ -460,6 +461,60 @@ export class DatabaseStorage implements IStorage {
         .returning();
       return created;
     }
+  }
+
+  async setTaskCustomFieldValuesBatch(taskId: number, values: Array<{ customFieldId: number, value: string | null }>): Promise<TaskCustomFieldValue[]> {
+    // Get all existing values for this task
+    const existingValues = await db
+      .select()
+      .from(taskCustomFieldValues)
+      .where(eq(taskCustomFieldValues.taskId, taskId));
+
+    const existingMap = new Map(
+      existingValues.map(v => [`${v.taskId}-${v.customFieldId}`, v])
+    );
+
+    const results: TaskCustomFieldValue[] = [];
+    const toUpdate: Array<{ id: number, value: string | null }> = [];
+    const toInsert: Array<{ taskId: number, customFieldId: number, value: string | null }> = [];
+
+    // Categorize values into updates and inserts
+    for (const { customFieldId, value } of values) {
+      const key = `${taskId}-${customFieldId}`;
+      const existing = existingMap.get(key);
+
+      if (existing) {
+        toUpdate.push({ id: existing.id, value });
+      } else {
+        toInsert.push({ taskId, customFieldId, value });
+      }
+    }
+
+    // Perform batch updates
+    if (toUpdate.length > 0) {
+      // Use a transaction to update multiple values efficiently
+      await db.transaction(async (tx) => {
+        for (const { id, value } of toUpdate) {
+          const [updated] = await tx
+            .update(taskCustomFieldValues)
+            .set({ value })
+            .where(eq(taskCustomFieldValues.id, id))
+            .returning();
+          results.push(updated);
+        }
+      });
+    }
+
+    // Perform batch insert
+    if (toInsert.length > 0) {
+      const inserted = await db
+        .insert(taskCustomFieldValues)
+        .values(toInsert)
+        .returning();
+      results.push(...inserted);
+    }
+
+    return results;
   }
 
   // Comment operations

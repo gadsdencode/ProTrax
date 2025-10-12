@@ -49,14 +49,14 @@ export function TaskForm({ onSubmit, isLoading, defaultValues, projectId, parent
     enabled: !!projectId,
   });
 
-  // Create mutation for updating custom field values
-  const updateCustomFieldValueMutation = useMutation({
-    mutationFn: async ({ taskId, fieldId, value }: { taskId: number; fieldId: number; value: string }) => {
-      return await apiRequest("PUT", `/api/tasks/${taskId}/custom-field-values/${fieldId}`, { value });
+  // Create mutation for updating custom field values in batch
+  const updateCustomFieldValuesBatchMutation = useMutation({
+    mutationFn: async ({ taskId, values }: { taskId: number; values: Array<{ customFieldId: string; value: string }> }) => {
+      return await apiRequest("PUT", `/api/tasks/${taskId}/custom-field-values/batch`, { values });
     },
     onError: (error: Error) => {
       toast({
-        title: "Error saving custom field",
+        title: "Error saving custom fields",
         description: error.message,
         variant: "destructive",
       });
@@ -69,26 +69,29 @@ export function TaskForm({ onSubmit, isLoading, defaultValues, projectId, parent
     try {
       // First create the task - this should return the created task with ID
       const createdTask = await onSubmit(data) as unknown as Task;
-      console.log('Created task:', createdTask);
+      console.log('Created task response:', createdTask);
+      console.log('Created task ID:', createdTask?.id);
+      console.log('Created task type:', typeof createdTask);
       console.log('Custom field values to save:', customFieldValues);
       console.log('Custom fields:', customFields);
       
       // If we have custom field values and task was created, save them
       if (createdTask?.id && customFields && customFields.length > 0) {
-        const promises = Object.entries(customFieldValues)
+        const valuesToSave = Object.entries(customFieldValues)
           .filter(([_, value]) => value) // Only save non-empty values
-          .map(([fieldId, value]) => {
-            console.log(`Saving custom field ${fieldId} with value ${value} for task ${createdTask.id}`);
-            return updateCustomFieldValueMutation.mutateAsync({ 
-              taskId: createdTask.id, 
-              fieldId: parseInt(fieldId), 
-              value 
-            });
-          });
+          .map(([fieldId, value]) => ({
+            customFieldId: fieldId,
+            value
+          }));
         
-        if (promises.length > 0) {
-          await Promise.all(promises);
-          console.log('Custom field values saved successfully');
+        if (valuesToSave.length > 0) {
+          console.log(`Saving ${valuesToSave.length} custom field values for task ${createdTask.id} in batch`);
+          console.log('Values being sent to batch endpoint:', valuesToSave);
+          await updateCustomFieldValuesBatchMutation.mutateAsync({
+            taskId: createdTask.id,
+            values: valuesToSave
+          });
+          console.log('Custom field values saved successfully in batch');
         } else {
           console.log('No custom field values to save');
         }

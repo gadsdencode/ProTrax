@@ -588,6 +588,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(result);
   }));
 
+  app.put('/api/tasks/:taskId/custom-field-values/batch', isAuthenticated, asyncHandler(async (req, res) => {
+    const taskId = parseInt(req.params.taskId);
+    const { values } = req.body;
+    
+    console.log('Batch endpoint received:', JSON.stringify(req.body));
+    console.log('Values array:', JSON.stringify(values));
+    
+    if (!Array.isArray(values)) {
+      throw createError.badRequest("Values must be an array");
+    }
+    
+    const formattedValues = values.map((v, index) => {
+      console.log(`Processing value[${index}]:`, JSON.stringify(v));
+      const fieldId = parseInt(v.customFieldId);
+      console.log(`Parsed customFieldId "${v.customFieldId}" as ${fieldId}`);
+      
+      if (isNaN(fieldId)) {
+        console.error(`Failed to parse customFieldId at index ${index}:`, v.customFieldId);
+        throw createError.badRequest(`Invalid customFieldId at index ${index}: "${v.customFieldId}" (type: ${typeof v.customFieldId})`);
+      }
+      return {
+        customFieldId: fieldId,
+        value: v.value
+      };
+    });
+    
+    console.log('Formatted values for storage:', JSON.stringify(formattedValues));
+    const results = await storage.setTaskCustomFieldValuesBatch(taskId, formattedValues);
+    res.json(results);
+  }));
+
   // ============= COMMENT ROUTES =============
   
   app.get('/api/comments', isAuthenticated, asyncHandler(async (req, res) => {

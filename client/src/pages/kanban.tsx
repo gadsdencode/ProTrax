@@ -58,11 +58,14 @@ export default function Kanban() {
 
   const createTaskMutation = useMutation({
     mutationFn: async (data: InsertTask) => {
-      return await apiRequest("POST", "/api/tasks", data);
+      const response = await apiRequest("POST", "/api/tasks", data);
+      return await response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/tasks", { projectId: selectedProject }] });
       queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+      // Also invalidate custom field values queries
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks/"] }); 
       setCreateDialogOpen(false);
       toast({
         title: "Success",
@@ -194,7 +197,10 @@ export default function Kanban() {
             <DialogTitle>Create New Task</DialogTitle>
           </DialogHeader>
           <TaskForm
-            onSubmit={(data) => createTaskMutation.mutate(data)}
+            onSubmit={async (data) => {
+              const result = await createTaskMutation.mutateAsync(data);
+              return result;
+            }}
             isLoading={createTaskMutation.isPending}
             projectId={selectedProject || undefined}
             presetStatus={createTaskStatus}

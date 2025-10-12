@@ -37,7 +37,8 @@ export default function Gantt() {
 
   const createTaskMutation = useMutation({
     mutationFn: async (data: InsertTask) => {
-      return await apiRequest("POST", "/api/tasks", data);
+      const response = await apiRequest("POST", "/api/tasks", data);
+      return await response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/tasks", { projectId: selectedProject }] });
@@ -286,7 +287,10 @@ export default function Gantt() {
           </DialogHeader>
           <TaskForm
             projectId={selectedProject || undefined}
-            onSubmit={(data) => createTaskMutation.mutate(data)}
+            onSubmit={async (data) => {
+              const result = await createTaskMutation.mutateAsync(data);
+              return result;
+            }}
             isLoading={createTaskMutation.isPending}
           />
         </DialogContent>
