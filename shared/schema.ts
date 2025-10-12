@@ -113,6 +113,22 @@ export const tasks = pgTable("tasks", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Track all task changes for accurate burndown/CFD metrics
+export const taskHistory = pgTable("task_history", {
+  id: serial("id").primaryKey(),
+  taskId: integer("task_id").references(() => tasks.id, { onDelete: 'cascade' }).notNull(),
+  projectId: integer("project_id").references(() => projects.id, { onDelete: 'cascade' }).notNull(),
+  sprintId: integer("sprint_id").references(() => sprints.id, { onDelete: 'cascade' }),
+  fieldName: varchar("field_name", { length: 100 }).notNull(), // e.g., 'status', 'storyPoints', 'sprintId'
+  oldValue: text("old_value"), // JSON stringified for complex values
+  newValue: text("new_value"), // JSON stringified for complex values
+  changedBy: varchar("changed_by").references(() => users.id).notNull(),
+  changedAt: timestamp("changed_at").defaultNow().notNull(),
+  // Denormalized fields for quick queries
+  status: taskStatusEnum("status"), // Current status after change
+  storyPoints: integer("story_points"), // Current story points after change
+});
+
 export const taskDependencies = pgTable("task_dependencies", {
   id: serial("id").primaryKey(),
   predecessorId: integer("predecessor_id").references(() => tasks.id, { onDelete: 'cascade' }).notNull(),
@@ -318,6 +334,14 @@ export const tasksRelations = relations(tasks, ({ one, many }) => ({
   fileAttachments: many(fileAttachments),
   customFieldValues: many(taskCustomFieldValues),
   timeEntries: many(timeEntries),
+  history: many(taskHistory),
+}));
+
+export const taskHistoryRelations = relations(taskHistory, ({ one }) => ({
+  task: one(tasks, { fields: [taskHistory.taskId], references: [tasks.id] }),
+  project: one(projects, { fields: [taskHistory.projectId], references: [projects.id] }),
+  sprint: one(sprints, { fields: [taskHistory.sprintId], references: [sprints.id] }),
+  changedByUser: one(users, { fields: [taskHistory.changedBy], references: [users.id] }),
 }));
 
 export const sprintsRelations = relations(sprints, ({ one, many }) => ({
@@ -369,6 +393,7 @@ export const insertTaskSchema = createInsertSchema(tasks).omit({ id: true, creat
   recurrenceEndDate: z.union([z.string(), z.date()]).transform(val => typeof val === 'string' ? new Date(val) : val).optional(),
   estimatedHours: z.union([z.string(), z.number()]).transform(val => typeof val === 'number' ? val.toString() : val).optional(),
 });
+export const insertTaskHistorySchema = createInsertSchema(taskHistory).omit({ id: true, changedAt: true });
 export const insertTaskDependencySchema = createInsertSchema(taskDependencies).omit({ id: true, createdAt: true });
 export const insertCustomFieldSchema = createInsertSchema(customFields).omit({ id: true, createdAt: true });
 export const insertCommentSchema = createInsertSchema(comments).omit({ id: true, createdAt: true, updatedAt: true });
@@ -399,6 +424,9 @@ export type Sprint = typeof sprints.$inferSelect;
 
 export type InsertTask = z.infer<typeof insertTaskSchema>;
 export type Task = typeof tasks.$inferSelect;
+
+export type InsertTaskHistory = z.infer<typeof insertTaskHistorySchema>;
+export type TaskHistory = typeof taskHistory.$inferSelect;
 
 export type InsertTaskDependency = z.infer<typeof insertTaskDependencySchema>;
 export type TaskDependency = typeof taskDependencies.$inferSelect;

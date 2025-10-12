@@ -3,6 +3,7 @@ import {
   projects,
   sprints,
   tasks,
+  taskHistory,
   taskDependencies,
   customFields,
   taskCustomFieldValues,
@@ -27,6 +28,8 @@ import {
   type InsertSprint,
   type Task,
   type InsertTask,
+  type TaskHistory,
+  type InsertTaskHistory,
   type InsertTaskDependency,
   type TaskDependency,
   type InsertCustomField,
@@ -59,7 +62,7 @@ import {
   type Notification,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, desc, asc, or, ilike } from "drizzle-orm";
+import { eq, and, desc, asc, or, ilike, gte, lte } from "drizzle-orm";
 
 export interface IStorage {
   // User operations (required for Replit Auth)
@@ -87,8 +90,13 @@ export interface IStorage {
   getMyTasks(userId: string): Promise<Task[]>;
   getSubtasks(parentId: number): Promise<Task[]>;
   createTask(task: InsertTask): Promise<Task>;
-  updateTask(id: number, task: Partial<InsertTask>): Promise<Task>;
+  updateTask(id: number, task: Partial<InsertTask>, userId: string): Promise<Task>;
   deleteTask(id: number): Promise<void>;
+  
+  // Task history operations
+  createTaskHistory(history: InsertTaskHistory): Promise<TaskHistory>;
+  getTaskHistory(taskId: number): Promise<TaskHistory[]>;
+  getSprintHistory(sprintId: number, startDate?: Date, endDate?: Date): Promise<TaskHistory[]>;
   
   // Task dependency operations
   getTaskDependencies(taskId: number): Promise<TaskDependency[]>;
@@ -304,13 +312,39 @@ export class DatabaseStorage implements IStorage {
     return task;
   }
 
-  async updateTask(id: number, taskData: Partial<InsertTask>): Promise<Task> {
-    const [task] = await db
+  async updateTask(id: number, taskData: Partial<InsertTask>, userId: string): Promise<Task> {
+    // Get the existing task to compare changes
+    const existingTask = await this.getTask(id);
+    if (!existingTask) {
+      throw new Error(`Task with id ${id} not found`);
+    }
+
+    // Update the task
+    const [updatedTask] = await db
       .update(tasks)
       .set({ ...taskData, updatedAt: new Date() })
       .where(eq(tasks.id, id))
       .returning();
-    return task;
+
+    // Track changes in history
+    const fieldsToTrack = ['status', 'storyPoints', 'sprintId', 'assigneeId', 'progress'];
+    for (const field of fieldsToTrack) {
+      if (field in taskData && taskData[field as keyof typeof taskData] !== existingTask[field as keyof typeof existingTask]) {
+        await this.createTaskHistory({
+          taskId: id,
+          projectId: existingTask.projectId,
+          sprintId: updatedTask.sprintId,
+          fieldName: field,
+          oldValue: JSON.stringify(existingTask[field as keyof typeof existingTask]),
+          newValue: JSON.stringify(taskData[field as keyof typeof taskData]),
+          changedBy: userId,
+          status: updatedTask.status,
+          storyPoints: updatedTask.storyPoints,
+        });
+      }
+    }
+
+    return updatedTask;
   }
 
   async deleteTask(id: number): Promise<void> {
@@ -592,6 +626,41 @@ export class DatabaseStorage implements IStorage {
 
   async markNotificationRead(id: number): Promise<void> {
     await db.update(notifications).set({ isRead: true }).where(eq(notifications.id, id));
+  }
+
+  // Task history operations
+  async createTaskHistory(historyData: InsertTaskHistory): Promise<TaskHistory> {
+    const [history] = await db.insert(taskHistory).values(historyData).returning();
+    return history;
+  }
+
+  async getTaskHistory(taskId: number): Promise<TaskHistory[]> {
+    return await db
+      .select()
+      .from(taskHistory)
+      .where(eq(taskHistory.taskId, taskId))
+      .orderBy(desc(taskHistory.changedAt));
+  }
+
+  async getSprintHistory(sprintId: number, startDate?: Date, endDate?: Date): Promise<TaskHistory[]> {
+    let query = db
+      .select()
+      .from(taskHistory)
+      .where(eq(taskHistory.sprintId, sprintId));
+
+    if (startDate && endDate) {
+      const conditions = [
+        eq(taskHistory.sprintId, sprintId),
+        gte(taskHistory.changedAt, startDate),
+        lte(taskHistory.changedAt, endDate),
+      ];
+      query = db
+        .select()
+        .from(taskHistory)
+        .where(and(...conditions));
+    }
+
+    return await query.orderBy(asc(taskHistory.changedAt));
   }
 }
 
