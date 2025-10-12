@@ -138,41 +138,84 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const tasks = await storage.getTasks(sprint.projectId);
     const sprintTasks = tasks.filter(t => t.sprintId === sprintId);
     
-    // Calculate burndown data
+    // Calculate current metrics
     const totalStoryPoints = sprintTasks.reduce((sum, t) => sum + (t.storyPoints || 0), 0);
     const completedStoryPoints = sprintTasks.filter(t => t.status === 'done').reduce((sum, t) => sum + (t.storyPoints || 0), 0);
+    const remainingStoryPoints = totalStoryPoints - completedStoryPoints;
     
-    // Generate daily burndown data (mock data for now - in production would track historical changes)
+    // Calculate sprint duration
     const startDate = new Date(sprint.startDate);
     const endDate = new Date(sprint.endDate);
-    const days = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+    const durationMs = endDate.getTime() - startDate.getTime();
+    const days = Math.max(1, Math.ceil(durationMs / (1000 * 60 * 60 * 24)));
+    
+    // Guard against invalid sprint duration
+    if (durationMs <= 0) {
+      throw createError.badRequest("Sprint end date must be after start date");
+    }
+    
+    // Generate deterministic burndown data
+    // In a production system, this would query historical task state changes
+    // For now, we simulate realistic progress based on current completion
     const burndownData = [];
+    const completionRatio = totalStoryPoints > 0 ? completedStoryPoints / totalStoryPoints : 0;
     
     for (let i = 0; i <= days; i++) {
       const date = new Date(startDate);
       date.setDate(date.getDate() + i);
-      const ideal = totalStoryPoints - (totalStoryPoints / days) * i;
-      const actual = i === days ? completedStoryPoints : totalStoryPoints - (Math.random() * completedStoryPoints);
+      const progress = i / days;
+      
+      // Ideal burndown is linear
+      const ideal = totalStoryPoints * (1 - progress);
+      
+      // Actual burndown simulates realistic velocity
+      // Starts slower, accelerates in middle, levels off at end
+      let actual;
+      if (i === 0) {
+        actual = totalStoryPoints;
+      } else if (i === days) {
+        actual = remainingStoryPoints;
+      } else {
+        // Simulate S-curve velocity with current completion as target
+        const velocityCurve = 1 - Math.pow(1 - progress, 1.5);
+        actual = totalStoryPoints * (1 - (completionRatio * velocityCurve));
+      }
       
       burndownData.push({
         date: date.toISOString().split('T')[0],
-        ideal: Math.max(0, ideal),
-        actual: Math.max(0, actual),
+        ideal: Math.max(0, Math.round(ideal * 10) / 10),
+        actual: Math.max(0, Math.round(actual * 10) / 10),
       });
     }
     
-    // Calculate CFD data
+    // Generate deterministic CFD data
+    // Simulate realistic workflow progression based on current task distribution
     const cfdData = [];
+    const currentCounts = {
+      todo: sprintTasks.filter(t => t.status === 'todo').length,
+      inProgress: sprintTasks.filter(t => t.status === 'in_progress').length,
+      review: sprintTasks.filter(t => t.status === 'review').length,
+      done: sprintTasks.filter(t => t.status === 'done').length,
+    };
+    const totalTasks = sprintTasks.length;
+    
     for (let i = 0; i <= days; i++) {
       const date = new Date(startDate);
       date.setDate(date.getDate() + i);
+      const progress = i / days;
+      
+      // Simulate tasks flowing through the workflow
+      const done = Math.round(currentCounts.done * Math.min(1, progress / completionRatio || progress));
+      const review = Math.round(currentCounts.review * Math.max(0, 1 - Math.abs(progress - 0.7) / 0.3));
+      const inProgress = Math.round(currentCounts.inProgress * Math.max(0, 1 - Math.abs(progress - 0.5) / 0.5));
+      const todo = Math.max(0, totalTasks - done - review - inProgress);
       
       cfdData.push({
         date: date.toISOString().split('T')[0],
-        todo: sprintTasks.filter(t => t.status === 'todo').length,
-        inProgress: sprintTasks.filter(t => t.status === 'in_progress').length,
-        review: sprintTasks.filter(t => t.status === 'review').length,
-        done: sprintTasks.filter(t => t.status === 'done').length,
+        todo,
+        inProgress,
+        review,
+        done,
       });
     }
     
