@@ -9,6 +9,8 @@ import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { errorHandler, asyncHandler, createError } from "./errorHandler";
 import { SchedulingEngine } from "./scheduling";
+import * as mammoth from "mammoth";
+import { extractProjectDataFromSOW } from "./gemini";
 import {
   insertProjectSchema,
   insertSprintSchema,
@@ -91,6 +93,66 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const id = parseInt(req.params.id);
     await storage.deleteProject(id);
     res.status(204).send();
+  }));
+
+  // Create project from SOW document
+  app.post('/api/projects/create-from-sow', isAuthenticated, upload.single('file'), asyncHandler(async (req: any, res) => {
+    if (!req.file) {
+      throw createError.badRequest("No file uploaded");
+    }
+
+    // Extract text from the document
+    let text = "";
+    const mimeType = req.file.mimetype;
+    
+    if (mimeType === "application/pdf") {
+      // PDF files need special handling - we'll use the buffer as text for now
+      // In a production app, you'd use a PDF parsing library like pdf-parse
+      throw createError.badRequest("PDF parsing not implemented. Please upload a Word document (.docx)");
+    } else if (
+      mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+      mimeType === "application/msword"
+    ) {
+      // Word document (.docx or .doc)
+      try {
+        const result = await mammoth.extractRawText({
+          buffer: req.file.buffer,
+        });
+        text = result.value;
+      } catch (error) {
+        console.error("Error extracting text from Word document:", error);
+        throw createError.badRequest("Failed to extract text from Word document");
+      }
+    } else if (mimeType === "text/plain") {
+      // Plain text file
+      text = req.file.buffer.toString('utf-8');
+    } else {
+      throw createError.badRequest(`Unsupported file type: ${mimeType}. Please upload a Word document (.docx) or text file.`);
+    }
+
+    if (!text || text.trim().length === 0) {
+      throw createError.badRequest("The uploaded document appears to be empty");
+    }
+
+    // Extract project data from the SOW using Gemini
+    let projectData;
+    try {
+      projectData = await extractProjectDataFromSOW(text);
+    } catch (error: any) {
+      console.error("Error extracting project data:", error);
+      throw createError.badRequest(error.message || "Failed to extract project data from the SOW document");
+    }
+
+    // Create the project with the extracted data
+    const userId = req.user.claims.sub;
+    const data = insertProjectSchema.parse({ 
+      ...projectData, 
+      managerId: userId,
+      status: 'planning' // Set initial status
+    });
+    
+    const project = await storage.createProject(data);
+    res.status(201).json(project);
   }));
 
   // ============= SPRINT ROUTES =============

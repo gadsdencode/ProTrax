@@ -327,3 +327,99 @@ Respond with JSON in this format:
     };
   }
 }
+
+export async function extractProjectDataFromSOW(
+  sowText: string
+): Promise<{
+  name: string;
+  description?: string;
+  charter?: string;
+  startDate?: string;
+  endDate?: string;
+  budget?: string;
+}> {
+  try {
+    const systemPrompt = `You are an expert at analyzing Statement of Work (SOW) documents and extracting project information.
+Extract the project details from the provided SOW text and return them as a structured JSON object.
+
+Instructions:
+1. Extract a clear project name (max 255 characters)
+2. Create a comprehensive description summarizing the project scope and objectives
+3. Generate a project charter that includes: project goals, scope, deliverables, and success criteria
+4. Extract start and end dates if mentioned (format: YYYY-MM-DD)
+5. Extract the budget if mentioned (as a decimal number, without currency symbols)
+6. If any information is not found in the SOW, omit that field from the response
+
+Respond with JSON in this format:
+{
+  "name": string (required),
+  "description": string (optional),
+  "charter": string (optional, rich text),
+  "startDate": string (optional, YYYY-MM-DD format),
+  "endDate": string (optional, YYYY-MM-DD format),
+  "budget": string (optional, decimal number as string)
+}`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-pro",
+      config: {
+        systemInstruction: systemPrompt,
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: "object",
+          properties: {
+            name: { type: "string" },
+            description: { type: "string" },
+            charter: { type: "string" },
+            startDate: { type: "string" },
+            endDate: { type: "string" },
+            budget: { type: "string" },
+          },
+          required: ["name"],
+        },
+      },
+      contents: sowText,
+    });
+
+    const rawJson = response.text;
+    if (rawJson) {
+      const parsedData = JSON.parse(rawJson);
+      
+      // Validate and format dates if present
+      if (parsedData.startDate) {
+        const startDate = new Date(parsedData.startDate);
+        if (!isNaN(startDate.getTime())) {
+          parsedData.startDate = startDate.toISOString().split('T')[0];
+        } else {
+          delete parsedData.startDate;
+        }
+      }
+      
+      if (parsedData.endDate) {
+        const endDate = new Date(parsedData.endDate);
+        if (!isNaN(endDate.getTime())) {
+          parsedData.endDate = endDate.toISOString().split('T')[0];
+        } else {
+          delete parsedData.endDate;
+        }
+      }
+      
+      // Ensure budget is a valid decimal string if present
+      if (parsedData.budget) {
+        const budgetNum = parseFloat(parsedData.budget.replace(/[^0-9.-]/g, ''));
+        if (!isNaN(budgetNum)) {
+          parsedData.budget = budgetNum.toFixed(2);
+        } else {
+          delete parsedData.budget;
+        }
+      }
+      
+      return parsedData;
+    } else {
+      throw new Error("Empty response from model");
+    }
+  } catch (error) {
+    console.error("Error extracting project data from SOW:", error);
+    throw new Error("Unable to extract project data from SOW. Please ensure the document contains valid project information.");
+  }
+}

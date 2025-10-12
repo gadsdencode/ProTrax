@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { Plus, Search, Users, Paperclip, Settings } from "lucide-react";
+import { Plus, Search, Users, Paperclip, Settings, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -21,12 +21,14 @@ import { ProjectForm } from "@/components/project-form";
 import { TaskForm } from "@/components/task-form";
 import { StakeholderDialog } from "@/components/stakeholder-dialog";
 import { FileAttachmentDialog } from "@/components/file-attachment-dialog";
+import { SOWFileUpload } from "@/components/sow-file-upload";
 import { useUIStore } from "@/stores/useUIStore";
 
 export default function Projects() {
   const [, setLocation] = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [sowDialogOpen, setSowDialogOpen] = useState(false);
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
   
   // Use the Zustand store instead of local state
@@ -96,23 +98,57 @@ export default function Projects() {
           <h1 className="text-2xl font-semibold" data-testid="text-projects-title">Projects</h1>
           <p className="text-muted-foreground">Manage your project portfolio</p>
         </div>
-        <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-          <DialogTrigger asChild>
-            <Button data-testid="button-create-project">
-              <Plus className="h-4 w-4 mr-2" />
-              New Project
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Create New Project</DialogTitle>
-            </DialogHeader>
-            <ProjectForm
-              onSubmit={(data) => createMutation.mutate(data)}
-              isLoading={createMutation.isPending}
-            />
-          </DialogContent>
-        </Dialog>
+        <div className="flex gap-2">
+          <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+            <DialogTrigger asChild>
+              <Button data-testid="button-create-project">
+                <Plus className="h-4 w-4 mr-2" />
+                New Project
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>Create New Project</DialogTitle>
+              </DialogHeader>
+              <ProjectForm
+                onSubmit={(data) => createMutation.mutate(data)}
+                isLoading={createMutation.isPending}
+              />
+            </DialogContent>
+          </Dialog>
+          <Dialog open={sowDialogOpen} onOpenChange={setSowDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" data-testid="button-create-from-sow">
+                <FileText className="h-4 w-4 mr-2" />
+                Create from SOW
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>Create Project from SOW</DialogTitle>
+              </DialogHeader>
+              <SOWFileUpload
+                onUploadComplete={(project) => {
+                  queryClient.invalidateQueries({ queryKey: ["/api/projects"], refetchType: 'all' });
+                  setSowDialogOpen(false);
+                  toast({
+                    title: "Success",
+                    description: `Project "${project.name}" has been created from your SOW`,
+                  });
+                  // Navigate to the new project
+                  setLocation(`/projects/${project.id}/gantt`);
+                }}
+                onUploadError={(error) => {
+                  toast({
+                    title: "Error",
+                    description: error,
+                    variant: "destructive",
+                  });
+                }}
+              />
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       {/* Search */}
