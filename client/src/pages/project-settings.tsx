@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
-import { ArrowLeft, Save, Settings as SettingsIcon } from "lucide-react";
+import { ArrowLeft, Save, Settings as SettingsIcon, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Tabs,
@@ -9,6 +9,18 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -39,6 +51,28 @@ export default function ProjectSettings() {
         title: "Project updated",
         description: "Project settings have been saved successfully",
       });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteProjectMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest("DELETE", `/api/projects/${projectId}`, {});
+    },
+    onSuccess: () => {
+      toast({
+        title: "Project deleted",
+        description: "The project has been deleted successfully",
+      });
+      // Invalidate and redirect
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      setLocation("/projects");
     },
     onError: (error: Error) => {
       toast({
@@ -121,12 +155,15 @@ export default function ProjectSettings() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid w-full max-w-md grid-cols-2">
+        <TabsList className="grid w-full max-w-md grid-cols-3">
           <TabsTrigger value="general" data-testid="tab-general">
             General
           </TabsTrigger>
           <TabsTrigger value="custom-fields" data-testid="tab-custom-fields">
             Custom Fields
+          </TabsTrigger>
+          <TabsTrigger value="danger-zone" data-testid="tab-danger-zone">
+            Danger Zone
           </TabsTrigger>
         </TabsList>
 
@@ -158,6 +195,80 @@ export default function ProjectSettings() {
               These fields will appear in all tasks within this project.
             </p>
             <CustomFieldsSettings projectId={projectId} />
+          </div>
+        </TabsContent>
+
+        <TabsContent value="danger-zone" className="space-y-4">
+          <div className="max-w-2xl">
+            <h2 className="text-xl font-semibold mb-4 text-destructive">Danger Zone</h2>
+            
+            <Card className="border-destructive">
+              <CardHeader>
+                <CardTitle className="text-destructive flex items-center gap-2">
+                  <Trash2 className="h-5 w-5" />
+                  Delete Project
+                </CardTitle>
+                <CardDescription>
+                  Once you delete a project, there is no going back. This action cannot be undone.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    This will permanently delete:
+                  </p>
+                  <ul className="text-sm text-muted-foreground list-disc list-inside space-y-1">
+                    <li>All project settings and configurations</li>
+                    <li>All tasks, subtasks, and their attachments</li>
+                    <li>All sprints and sprint data</li>
+                    <li>All custom fields and their values</li>
+                    <li>All comments and activity history</li>
+                    <li>All time entries and expense records</li>
+                    <li>All automation rules</li>
+                    <li>All project-related data</li>
+                  </ul>
+                </div>
+              </CardContent>
+              <CardFooter>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button 
+                      variant="destructive" 
+                      data-testid="button-delete-project"
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete This Project
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                      <AlertDialogDescription className="space-y-3">
+                        <p>
+                          This action cannot be undone. This will permanently delete the project
+                          <span className="font-semibold"> {project.name} </span>
+                          and all of its associated data.
+                        </p>
+                        <p className="text-destructive font-semibold">
+                          Type the project name to confirm: {project.name}
+                        </p>
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel data-testid="button-cancel-delete">Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        className="bg-destructive hover:bg-destructive/90"
+                        onClick={() => deleteProjectMutation.mutate()}
+                        disabled={deleteProjectMutation.isPending}
+                        data-testid="button-confirm-delete"
+                      >
+                        {deleteProjectMutation.isPending ? "Deleting..." : "Delete Project"}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </CardFooter>
+            </Card>
           </div>
         </TabsContent>
       </Tabs>
