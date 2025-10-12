@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Search, Filter, Download, ArrowUpDown, Plus } from "lucide-react";
 import { useParams } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -15,8 +15,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { TaskForm } from "@/components/task-form";
-import type { Task, Project } from "@shared/schema";
+import { TaskDetail } from "@/components/task-detail";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import type { Task, Project, InsertTask } from "@shared/schema";
 
 export default function ListView() {
   const params = useParams();
@@ -26,6 +30,8 @@ export default function ListView() {
   const [sortField, setSortField] = useState<keyof Task>("dueDate");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [taskFormOpen, setTaskFormOpen] = useState(false);
+  const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
+  const { toast } = useToast();
 
   const { data: project } = useQuery<Project>({
     queryKey: [`/api/projects/${projectIdFromUrl}`],
@@ -41,6 +47,31 @@ export default function ListView() {
       Object.keys(queryParams).length > 0 
         ? ["/api/tasks", queryParams]
         : ["/api/tasks"],
+  });
+
+  // Create task mutation
+  const createTaskMutation = useMutation({
+    mutationFn: async (data: InsertTask) => {
+      const response = await apiRequest("POST", "/api/tasks", data);
+      console.log('API response for task creation:', response);
+      return response as Task;
+    },
+    onSuccess: (createdTask) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/tasks/${createdTask.id}`] });
+      setTaskFormOpen(false);
+      toast({
+        title: "Task created",
+        description: "Task has been created successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error creating task",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
   });
 
   const filteredAndSortedTasks = tasks?.sort((a, b) => {
@@ -211,8 +242,23 @@ export default function ListView() {
             </TableHeader>
             <TableBody>
               {filteredAndSortedTasks.map(task => (
-                <TableRow key={task.id} data-testid={`task-row-${task.id}`}>
-                  <TableCell>
+                <TableRow 
+                  key={task.id} 
+                  data-testid={`task-row-${task.id}`}
+                  className="cursor-pointer hover-elevate"
+                  onClick={(e) => {
+                    console.log('Row clicked, task id:', task.id);
+                    // Only open task detail if not clicking on checkbox
+                    const target = e.target as HTMLElement;
+                    const isCheckbox = target.closest('input[type="checkbox"]') || target.closest('[data-testid*="checkbox"]');
+                    console.log('Is checkbox click:', !!isCheckbox);
+                    if (!isCheckbox) {
+                      console.log('Setting selected task id to:', task.id);
+                      setSelectedTaskId(task.id);
+                    }
+                  }}
+                >
+                  <TableCell onClick={(e) => e.stopPropagation()}>
                     <Checkbox
                       checked={selectedTasks.includes(task.id)}
                       onCheckedChange={() => toggleTaskSelection(task.id)}
@@ -272,10 +318,35 @@ export default function ListView() {
       )}
 
       {/* Task Form Dialog */}
-      <TaskForm
-        open={taskFormOpen}
-        onOpenChange={setTaskFormOpen}
-        projectId={projectIdFromUrl}
+      <Dialog open={taskFormOpen} onOpenChange={setTaskFormOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Create New Task</DialogTitle>
+          </DialogHeader>
+          <TaskForm
+            projectId={projectIdFromUrl || undefined}
+            onSubmit={async (data) => {
+              try {
+                const result = await createTaskMutation.mutateAsync(data);
+                console.log('CreateTaskMutation result:', result);
+                return result;
+              } catch (error) {
+                console.error('Error in onSubmit:', error);
+                throw error;
+              }
+            }}
+            isLoading={createTaskMutation.isPending}
+          />
+        </DialogContent>
+      </Dialog>
+
+      {/* Task Detail Sheet */}
+      <TaskDetail
+        task={filteredAndSortedTasks?.find(t => t.id === selectedTaskId) || null}
+        open={!!selectedTaskId}
+        onOpenChange={(open) => {
+          if (!open) setSelectedTaskId(null);
+        }}
       />
     </div>
   );

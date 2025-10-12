@@ -360,6 +360,7 @@ export const insertProjectTemplateSchema = createInsertSchema(projectTemplates).
 export const insertKanbanColumnSchema = createInsertSchema(kanbanColumns).omit({ id: true, createdAt: true });
 export const insertProjectStakeholderSchema = createInsertSchema(projectStakeholders).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertNotificationSchema = createInsertSchema(notifications).omit({ id: true, createdAt: true });
+export const insertTaskCustomFieldValueSchema = createInsertSchema(taskCustomFieldValues).omit({ id: true, createdAt: true });
 
 // ============= TYPES =============
 
@@ -410,3 +411,6 @@ export type ProjectStakeholder = typeof projectStakeholders.$inferSelect;
 
 export type InsertNotification = z.infer<typeof insertNotificationSchema>;
 export type Notification = typeof notifications.$inferSelect;
+
+export type InsertTaskCustomFieldValue = z.infer<typeof insertTaskCustomFieldValueSchema>;
+export type TaskCustomFieldValue = typeof taskCustomFieldValues.$inferSelect;

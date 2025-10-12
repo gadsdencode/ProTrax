@@ -1,7 +1,10 @@
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useQuery } from "@tanstack/react-query";
-import { insertTaskSchema, type InsertTask, type User } from "@shared/schema";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { insertTaskSchema, type InsertTask, type User, type CustomField, type Task } from "@shared/schema";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -26,14 +29,78 @@ interface TaskFormProps {
   isLoading?: boolean;
   defaultValues?: Partial<InsertTask>;
   projectId?: number;
+  parentId?: number;
   presetStatus?: string;
 }
 
-export function TaskForm({ onSubmit, isLoading, defaultValues, projectId, presetStatus }: TaskFormProps) {
+export function TaskForm({ onSubmit, isLoading, defaultValues, projectId, parentId, presetStatus }: TaskFormProps) {
+  const [customFieldValues, setCustomFieldValues] = useState<Record<number, string>>({});
+  const [isProcessing, setIsProcessing] = useState(false);
+  const { toast } = useToast();
+  
   // Fetch users for assignee selection
   const { data: users } = useQuery<User[]>({
     queryKey: ["/api/users"],
   });
+
+  // Fetch custom fields for the project
+  const { data: customFields } = useQuery<CustomField[]>({
+    queryKey: [`/api/projects/${projectId}/custom-fields`],
+    enabled: !!projectId,
+  });
+
+  // Create mutation for updating custom field values
+  const updateCustomFieldValueMutation = useMutation({
+    mutationFn: async ({ taskId, fieldId, value }: { taskId: number; fieldId: number; value: string }) => {
+      return await apiRequest("PUT", `/api/tasks/${taskId}/custom-field-values/${fieldId}`, { value });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error saving custom field",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Wrapped submit handler to also save custom field values
+  const handleSubmit = async (data: InsertTask) => {
+    setIsProcessing(true);
+    try {
+      // First create the task - this should return the created task with ID
+      const createdTask = await onSubmit(data) as unknown as Task;
+      console.log('Created task:', createdTask);
+      console.log('Custom field values to save:', customFieldValues);
+      console.log('Custom fields:', customFields);
+      
+      // If we have custom field values and task was created, save them
+      if (createdTask?.id && customFields && customFields.length > 0) {
+        const promises = Object.entries(customFieldValues)
+          .filter(([_, value]) => value) // Only save non-empty values
+          .map(([fieldId, value]) => {
+            console.log(`Saving custom field ${fieldId} with value ${value} for task ${createdTask.id}`);
+            return updateCustomFieldValueMutation.mutateAsync({ 
+              taskId: createdTask.id, 
+              fieldId: parseInt(fieldId), 
+              value 
+            });
+          });
+        
+        if (promises.length > 0) {
+          await Promise.all(promises);
+          console.log('Custom field values saved successfully');
+        } else {
+          console.log('No custom field values to save');
+        }
+      } else {
+        console.log('Skipping custom fields - task ID:', createdTask?.id, 'customFields:', customFields?.length);
+      }
+    } catch (error) {
+      console.error("Error creating task:", error);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
   const form = useForm<InsertTask>({
     resolver: zodResolver(insertTaskSchema),
@@ -43,6 +110,7 @@ export function TaskForm({ onSubmit, isLoading, defaultValues, projectId, preset
       status: (presetStatus || "todo") as any,
       priority: "medium",
       projectId: projectId,
+      parentId: parentId,
       assigneeId: undefined,
       startDate: undefined,
       dueDate: undefined,
@@ -52,7 +120,7 @@ export function TaskForm({ onSubmit, isLoading, defaultValues, projectId, preset
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
         <FormField
           control={form.control}
           name="title"
@@ -236,13 +304,76 @@ export function TaskForm({ onSubmit, isLoading, defaultValues, projectId, preset
           )}
         />
 
+        {/* Custom Fields */}
+        {customFields && customFields.length > 0 && (
+          <div className="space-y-4 pt-4 border-t">
+            <h4 className="font-medium">Custom Fields</h4>
+            {customFields.map(field => (
+              <div key={field.id} data-testid={`custom-field-${field.id}`}>
+                <label className="text-sm font-medium">{field.name}</label>
+                {field.type === 'text' && (
+                  <Input
+                    value={customFieldValues[field.id] || ""}
+                    onChange={(e) => setCustomFieldValues({
+                      ...customFieldValues,
+                      [field.id]: e.target.value
+                    })}
+                    className="mt-1"
+                    data-testid={`custom-field-input-${field.id}`}
+                  />
+                )}
+                {field.type === 'number' && (
+                  <Input
+                    type="number"
+                    value={customFieldValues[field.id] || ""}
+                    onChange={(e) => setCustomFieldValues({
+                      ...customFieldValues,
+                      [field.id]: e.target.value
+                    })}
+                    className="mt-1"
+                    data-testid={`custom-field-input-${field.id}`}
+                  />
+                )}
+                {field.type === 'dropdown' && field.options && (
+                  <select
+                    value={customFieldValues[field.id] || ""}
+                    onChange={(e) => setCustomFieldValues({
+                      ...customFieldValues,
+                      [field.id]: e.target.value
+                    })}
+                    className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    data-testid={`custom-field-select-${field.id}`}
+                  >
+                    <option value="">Select...</option>
+                    {field.options.map(option => (
+                      <option key={option} value={option}>{option}</option>
+                    ))}
+                  </select>
+                )}
+                {field.type === 'date' && (
+                  <Input
+                    type="date"
+                    value={customFieldValues[field.id] || ""}
+                    onChange={(e) => setCustomFieldValues({
+                      ...customFieldValues,
+                      [field.id]: e.target.value
+                    })}
+                    className="mt-1"
+                    data-testid={`custom-field-input-${field.id}`}
+                  />
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
         <div className="flex justify-end gap-2 pt-4">
           <Button
             type="submit"
-            disabled={isLoading}
+            disabled={isLoading || isProcessing}
             data-testid="button-submit-task"
           >
-            {isLoading ? "Saving..." : "Create Task"}
+            {isLoading || isProcessing ? "Saving..." : "Create Task"}
           </Button>
         </div>
       </form>

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { Calendar, Clock, User, MessageSquare, Paperclip, MoreVertical } from "lucide-react";
+import { Calendar, Clock, User, MessageSquare, Paperclip, MoreVertical, Plus, ListTree, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -13,9 +13,18 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Card } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { Task, Comment, InsertComment, User as UserType } from "@shared/schema";
+import type { Task, Comment, InsertComment, InsertTask, User as UserType, CustomField, TaskCustomFieldValue } from "@shared/schema";
+import { TaskForm } from "./task-form";
 
 interface TaskDetailProps {
   task: Task | null;
@@ -25,6 +34,8 @@ interface TaskDetailProps {
 
 export function TaskDetail({ task, open, onOpenChange }: TaskDetailProps) {
   const [commentText, setCommentText] = useState("");
+  const [showSubtaskDialog, setShowSubtaskDialog] = useState(false);
+  const [quickSubtaskTitle, setQuickSubtaskTitle] = useState("");
   const { toast } = useToast();
 
   const { data: comments } = useQuery<Comment[]>({
@@ -34,6 +45,21 @@ export function TaskDetail({ task, open, onOpenChange }: TaskDetailProps) {
 
   const { data: users } = useQuery<UserType[]>({
     queryKey: ["/api/users"],
+  });
+
+  const { data: subtasks } = useQuery<Task[]>({
+    queryKey: [`/api/tasks/${task?.id}/subtasks`],
+    enabled: !!task?.id && open,
+  });
+
+  const { data: customFields } = useQuery<CustomField[]>({
+    queryKey: [`/api/projects/${task?.projectId}/custom-fields`],
+    enabled: !!task?.projectId && open,
+  });
+
+  const { data: customFieldValues } = useQuery<TaskCustomFieldValue[]>({
+    queryKey: [`/api/tasks/${task?.id}/custom-field-values`],
+    enabled: !!task?.id && open,
   });
 
   const createCommentMutation = useMutation({
@@ -46,6 +72,53 @@ export function TaskDetail({ task, open, onOpenChange }: TaskDetailProps) {
       toast({
         title: "Comment added",
         description: "Your comment has been posted",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const createSubtaskMutation = useMutation({
+    mutationFn: async (data: InsertTask) => {
+      const result = await apiRequest("POST", "/api/tasks", data);
+      console.log('Created subtask:', result);
+      return result;
+    },
+    onSuccess: () => {
+      // Invalidate both the subtasks query and the parent task query
+      queryClient.invalidateQueries({ queryKey: [`/api/tasks/${task?.id}/subtasks`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/tasks/${task?.id}`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+      setShowSubtaskDialog(false);
+      setQuickSubtaskTitle("");
+      toast({
+        title: "Subtask created",
+        description: "The subtask has been added successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateCustomFieldValueMutation = useMutation({
+    mutationFn: async ({ fieldId, value }: { fieldId: number; value: string }) => {
+      return await apiRequest("PUT", `/api/tasks/${task?.id}/custom-field-values/${fieldId}`, { value });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/tasks/${task?.id}/custom-field-values`] });
+      toast({
+        title: "Field updated",
+        description: "Custom field value has been updated",
       });
     },
     onError: (error: Error) => {
@@ -71,12 +144,33 @@ export function TaskDetail({ task, open, onOpenChange }: TaskDetailProps) {
     } as any);
   };
 
+  const handleQuickAddSubtask = async () => {
+    if (!quickSubtaskTitle.trim()) return;
+    await createSubtaskMutation.mutateAsync({
+      title: quickSubtaskTitle,
+      projectId: task.projectId,
+      parentId: task.id,
+      status: "todo",
+      priority: "medium"
+    } as InsertTask);
+  };
+
+
+  const getCustomFieldValue = (fieldId: number) => {
+    return customFieldValues?.find(v => v.customFieldId === fieldId)?.value || "";
+  };
+
+  const handleCustomFieldChange = (fieldId: number, value: string) => {
+    updateCustomFieldValueMutation.mutate({ fieldId, value });
+  };
+
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="sm:max-w-2xl overflow-y-auto" data-testid="task-detail-sheet">
-        <SheetHeader>
-          <SheetTitle className="text-xl">{task.title}</SheetTitle>
-        </SheetHeader>
+    <>
+      <Sheet open={open} onOpenChange={onOpenChange}>
+        <SheetContent className="sm:max-w-2xl overflow-y-auto" data-testid="task-detail-sheet">
+          <SheetHeader>
+            <SheetTitle className="text-xl">{task.title}</SheetTitle>
+          </SheetHeader>
 
         <div className="space-y-6 py-6">
           {/* Status & Priority */}
@@ -134,6 +228,146 @@ export function TaskDetail({ task, open, onOpenChange }: TaskDetailProps) {
 
           <Separator />
 
+          {/* Subtasks */}
+          <div>
+            <h4 className="font-medium mb-3 flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <ListTree className="h-4 w-4" />
+                Subtasks ({subtasks?.length || 0})
+              </span>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setShowSubtaskDialog(true)}
+                data-testid="button-add-subtask-dialog"
+              >
+                <Plus className="h-3 w-3 mr-1" />
+                Add Subtask
+              </Button>
+            </h4>
+
+            {/* Quick add subtask */}
+            <div className="flex gap-2 mb-4">
+              <Input
+                value={quickSubtaskTitle}
+                onChange={(e) => setQuickSubtaskTitle(e.target.value)}
+                placeholder="Quick add subtask..."
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleQuickAddSubtask();
+                  }
+                }}
+                data-testid="input-quick-subtask"
+              />
+              <Button
+                onClick={handleQuickAddSubtask}
+                disabled={!quickSubtaskTitle.trim() || createSubtaskMutation.isPending}
+                data-testid="button-quick-add-subtask"
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
+
+            {/* Subtask list */}
+            <div className="space-y-2">
+              {subtasks?.map(subtask => {
+                const subtaskAssignee = users?.find(u => u.id === subtask.assigneeId);
+                return (
+                  <Card key={subtask.id} className="p-3" data-testid={`subtask-${subtask.id}`}>
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <ChevronRight className="h-3 w-3 text-muted-foreground" />
+                          <span className="text-sm font-medium">{subtask.title}</span>
+                        </div>
+                        {subtask.description && (
+                          <p className="text-xs text-muted-foreground mt-1 ml-5">
+                            {subtask.description}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant={subtask.status === 'done' ? 'default' : 'secondary'} className="text-xs">
+                          {subtask.status?.replace('_', ' ')}
+                        </Badge>
+                        {subtaskAssignee && (
+                          <Avatar className="h-5 w-5">
+                            <AvatarImage src={subtaskAssignee.profileImageUrl || undefined} />
+                            <AvatarFallback className="text-xs">
+                              {subtaskAssignee.email?.[0]}
+                            </AvatarFallback>
+                          </Avatar>
+                        )}
+                      </div>
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
+          </div>
+
+          <Separator />
+
+          {/* Custom Fields */}
+          {customFields && customFields.length > 0 && (
+            <>
+              <div>
+                <h4 className="font-medium mb-3">Custom Fields</h4>
+                <div className="space-y-3">
+                  {customFields.map(field => {
+                    const currentValue = getCustomFieldValue(field.id);
+                    return (
+                      <div key={field.id} data-testid={`custom-field-${field.id}`}>
+                        <label className="text-sm font-medium">{field.name}</label>
+                        {field.type === 'text' && (
+                          <Input
+                            value={currentValue}
+                            onChange={(e) => handleCustomFieldChange(field.id, e.target.value)}
+                            className="mt-1"
+                            data-testid={`custom-field-input-${field.id}`}
+                          />
+                        )}
+                        {field.type === 'number' && (
+                          <Input
+                            type="number"
+                            value={currentValue}
+                            onChange={(e) => handleCustomFieldChange(field.id, e.target.value)}
+                            className="mt-1"
+                            data-testid={`custom-field-input-${field.id}`}
+                          />
+                        )}
+                        {field.type === 'dropdown' && field.options && (
+                          <select
+                            value={currentValue}
+                            onChange={(e) => handleCustomFieldChange(field.id, e.target.value)}
+                            className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                            data-testid={`custom-field-select-${field.id}`}
+                          >
+                            <option value="">Select...</option>
+                            {field.options.map(option => (
+                              <option key={option} value={option}>{option}</option>
+                            ))}
+                          </select>
+                        )}
+                        {field.type === 'date' && (
+                          <Input
+                            type="date"
+                            value={currentValue}
+                            onChange={(e) => handleCustomFieldChange(field.id, e.target.value)}
+                            className="mt-1"
+                            data-testid={`custom-field-input-${field.id}`}
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              <Separator />
+            </>
+          )}
+
           {/* Comments */}
           <div>
             <h4 className="font-medium mb-4 flex items-center gap-2">
@@ -190,5 +424,27 @@ export function TaskDetail({ task, open, onOpenChange }: TaskDetailProps) {
         </div>
       </SheetContent>
     </Sheet>
+
+    {/* Subtask Dialog */}
+    <Dialog open={showSubtaskDialog} onOpenChange={setShowSubtaskDialog}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Add Subtask</DialogTitle>
+        </DialogHeader>
+        <TaskForm
+          onSubmit={async (data) => {
+            const result = await createSubtaskMutation.mutateAsync({
+              ...data,
+              parentId: task.id,
+              projectId: task.projectId
+            });
+            return result;
+          }}
+          isLoading={createSubtaskMutation.isPending}
+          projectId={task?.projectId}
+        />
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }

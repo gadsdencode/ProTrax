@@ -99,6 +99,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(tasks);
   }));
 
+  app.get('/api/tasks/:id/subtasks', isAuthenticated, asyncHandler(async (req, res) => {
+    const parentId = parseInt(req.params.id);
+    const subtasks = await storage.getSubtasks(parentId);
+    res.json(subtasks);
+  }));
+
   app.get('/api/tasks/my-tasks', isAuthenticated, asyncHandler(async (req: any, res) => {
     const userId = req.user.claims.sub;
     const tasks = await storage.getMyTasks(userId);
@@ -170,6 +176,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const data = insertCustomFieldSchema.parse(req.body);
     const field = await storage.createCustomField(data);
     res.status(201).json(field);
+  }));
+
+  app.delete('/api/custom-fields/:id', isAuthenticated, asyncHandler(async (req, res) => {
+    const id = parseInt(req.params.id);
+    await storage.deleteCustomField(id);
+    res.status(204).send();
+  }));
+
+  // ============= TASK CUSTOM FIELD VALUE ROUTES =============
+
+  app.get('/api/tasks/:taskId/custom-field-values', isAuthenticated, asyncHandler(async (req, res) => {
+    const taskId = parseInt(req.params.taskId);
+    const values = await storage.getTaskCustomFieldValues(taskId);
+    res.json(values);
+  }));
+
+  app.put('/api/tasks/:taskId/custom-field-values/:fieldId', isAuthenticated, asyncHandler(async (req, res) => {
+    const taskId = parseInt(req.params.taskId);
+    const customFieldId = parseInt(req.params.fieldId);
+    const { value } = req.body;
+    const result = await storage.setTaskCustomFieldValue(taskId, customFieldId, value);
+    res.json(result);
   }));
 
   // ============= COMMENT ROUTES =============

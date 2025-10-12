@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { Plus, Search, Users, Paperclip } from "lucide-react";
+import { Plus, Search, Users, Paperclip, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -216,6 +216,18 @@ export default function Projects() {
                   >
                     <Paperclip className="h-3 w-3 mr-1" />
                     Files
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setLocation(`/projects/${project.id}/settings`);
+                    }}
+                    data-testid={`button-settings-${project.id}`}
+                  >
+                    <Settings className="h-3 w-3 mr-1" />
+                    Settings
                   </Button>
                 </div>
               </CardContent>

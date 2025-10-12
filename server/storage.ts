@@ -28,6 +28,8 @@ import {
   type TaskDependency,
   type InsertCustomField,
   type CustomField,
+  type InsertTaskCustomFieldValue,
+  type TaskCustomFieldValue,
   type InsertComment,
   type Comment,
   type InsertFileAttachment,
@@ -73,6 +75,7 @@ export interface IStorage {
   getTasks(projectId?: number, searchQuery?: string): Promise<Task[]>;
   getTask(id: number): Promise<Task | undefined>;
   getMyTasks(userId: string): Promise<Task[]>;
+  getSubtasks(parentId: number): Promise<Task[]>;
   createTask(task: InsertTask): Promise<Task>;
   updateTask(id: number, task: Partial<InsertTask>): Promise<Task>;
   deleteTask(id: number): Promise<void>;
@@ -85,6 +88,11 @@ export interface IStorage {
   // Custom field operations
   getCustomFields(projectId: number): Promise<CustomField[]>;
   createCustomField(field: InsertCustomField): Promise<CustomField>;
+  deleteCustomField(id: number): Promise<void>;
+  
+  // Task custom field value operations
+  getTaskCustomFieldValues(taskId: number): Promise<TaskCustomFieldValue[]>;
+  setTaskCustomFieldValue(taskId: number, customFieldId: number, value: string | null): Promise<TaskCustomFieldValue>;
   
   // Comment operations
   getComments(taskId: number): Promise<Comment[]>;
@@ -247,6 +255,10 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(tasks).where(eq(tasks.assigneeId, userId)).orderBy(asc(tasks.dueDate));
   }
 
+  async getSubtasks(parentId: number): Promise<Task[]> {
+    return await db.select().from(tasks).where(eq(tasks.parentId, parentId)).orderBy(asc(tasks.sortOrder));
+  }
+
   async createTask(taskData: InsertTask): Promise<Task> {
     const [task] = await db.insert(tasks).values(taskData).returning();
     return task;
@@ -290,6 +302,49 @@ export class DatabaseStorage implements IStorage {
   async createCustomField(fieldData: InsertCustomField): Promise<CustomField> {
     const [field] = await db.insert(customFields).values(fieldData).returning();
     return field;
+  }
+
+  async deleteCustomField(id: number): Promise<void> {
+    await db.delete(customFields).where(eq(customFields.id, id));
+  }
+
+  // Task custom field value operations
+  async getTaskCustomFieldValues(taskId: number): Promise<TaskCustomFieldValue[]> {
+    return await db.select().from(taskCustomFieldValues).where(eq(taskCustomFieldValues.taskId, taskId));
+  }
+
+  async setTaskCustomFieldValue(taskId: number, customFieldId: number, value: string | null): Promise<TaskCustomFieldValue> {
+    // Check if value already exists
+    const [existing] = await db
+      .select()
+      .from(taskCustomFieldValues)
+      .where(
+        and(
+          eq(taskCustomFieldValues.taskId, taskId),
+          eq(taskCustomFieldValues.customFieldId, customFieldId)
+        )
+      );
+
+    if (existing) {
+      // Update existing value
+      const [updated] = await db
+        .update(taskCustomFieldValues)
+        .set({ value })
+        .where(eq(taskCustomFieldValues.id, existing.id))
+        .returning();
+      return updated;
+    } else {
+      // Create new value
+      const [created] = await db
+        .insert(taskCustomFieldValues)
+        .values({
+          taskId,
+          customFieldId,
+          value
+        })
+        .returning();
+      return created;
+    }
   }
 
   // Comment operations

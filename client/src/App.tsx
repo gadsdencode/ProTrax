@@ -12,6 +12,7 @@ import { useAuth } from "@/hooks/useAuth";
 import Landing from "@/pages/landing";
 import Dashboard from "@/pages/dashboard";
 import Projects from "@/pages/projects";
+import ProjectSettings from "@/pages/project-settings";
 import Gantt from "@/pages/gantt";
 import Kanban from "@/pages/kanban";
 import Calendar from "@/pages/calendar";
@@ -48,6 +49,7 @@ function Router() {
     <Switch>
       <Route path="/" component={Dashboard} />
       <Route path="/projects" component={Projects} />
+      <Route path="/projects/:id/settings" component={ProjectSettings} />
       <Route path="/projects/:id/gantt" component={Gantt} />
       <Route path="/projects/:id/kanban" component={Kanban} />
       <Route path="/projects/:id/calendar" component={Calendar} />
