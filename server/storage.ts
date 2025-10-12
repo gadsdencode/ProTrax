@@ -1,6 +1,7 @@
 import {
   users,
   projects,
+  sprints,
   tasks,
   taskDependencies,
   customFields,
@@ -22,6 +23,8 @@ import {
   type UpsertUser,
   type Project,
   type InsertProject,
+  type Sprint,
+  type InsertSprint,
   type Task,
   type InsertTask,
   type InsertTaskDependency,
@@ -70,6 +73,13 @@ export interface IStorage {
   createProject(project: InsertProject): Promise<Project>;
   updateProject(id: number, project: Partial<InsertProject>): Promise<Project>;
   deleteProject(id: number): Promise<void>;
+  
+  // Sprint operations
+  getSprints(projectId: number): Promise<Sprint[]>;
+  getSprint(id: number): Promise<Sprint | undefined>;
+  createSprint(sprint: InsertSprint): Promise<Sprint>;
+  updateSprint(id: number, sprint: Partial<InsertSprint>): Promise<Sprint>;
+  deleteSprint(id: number): Promise<void>;
   
   // Task operations
   getTasks(projectId?: number, searchQuery?: string): Promise<Task[]>;
@@ -214,6 +224,34 @@ export class DatabaseStorage implements IStorage {
 
   async deleteProject(id: number): Promise<void> {
     await db.delete(projects).where(eq(projects.id, id));
+  }
+
+  // Sprint operations
+  async getSprints(projectId: number): Promise<Sprint[]> {
+    return await db.select().from(sprints).where(eq(sprints.projectId, projectId)).orderBy(desc(sprints.startDate));
+  }
+
+  async getSprint(id: number): Promise<Sprint | undefined> {
+    const [sprint] = await db.select().from(sprints).where(eq(sprints.id, id));
+    return sprint;
+  }
+
+  async createSprint(sprintData: InsertSprint): Promise<Sprint> {
+    const [sprint] = await db.insert(sprints).values(sprintData).returning();
+    return sprint;
+  }
+
+  async updateSprint(id: number, sprintData: Partial<InsertSprint>): Promise<Sprint> {
+    const [sprint] = await db
+      .update(sprints)
+      .set({ ...sprintData, updatedAt: new Date() })
+      .where(eq(sprints.id, id))
+      .returning();
+    return sprint;
+  }
+
+  async deleteSprint(id: number): Promise<void> {
+    await db.delete(sprints).where(eq(sprints.id, id));
   }
 
   // Task operations
