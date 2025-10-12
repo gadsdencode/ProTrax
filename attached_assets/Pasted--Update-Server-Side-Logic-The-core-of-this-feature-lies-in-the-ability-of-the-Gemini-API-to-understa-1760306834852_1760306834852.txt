@@ -1,0 +1,134 @@
+ Update Server-Side Logic
+The core of this feature lies in the ability of the Gemini API to understand the structure of the SOW and extract the data in a usable format. To achieve this, we need to update the extractProjectDataFromSOW function in server/gemini.ts with a more detailed prompt and a corresponding JSON schema.
+
+server/gemini.ts
+TypeScript
+
+import { GoogleGenAI } from "@google/genai";
+import { db } from "./db";
+import { tasks, timeEntries, projects, users } from "@shared/schema";
+import { eq, and, sql, desc } from "drizzle-orm";
+
+// ... (existing code)
+
+export async function extractProjectDataFromSOW(
+  sowText: string
+): Promise<any> {
+  const prompt = `
+    Based on the following Statement of Work (SOW), extract the project details and a list of tasks with phases and deliverables. Return the data as a JSON object that conforms to the following schema:
+    {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "startDate": { "type": "string", "format": "date" },
+        "endDate": { "type": "string", "format": "date" },
+        "budget": { "type": "number" },
+        "tasks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "title": { "type": "string" },
+              "description": { "type": "string" },
+              "isMilestone": { "type": "boolean" }
+            },
+            "required": ["title", "description", "isMilestone"]
+          }
+        }
+      },
+      "required": ["name", "description", "startDate", "endDate", "budget", "tasks"]
+    }
+
+    SOW:
+    ${sowText}
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: prompt,
+    });
+
+    if (response.text) {
+      return JSON.parse(response.text);
+    } else {
+      throw new Error("Unable to extract project data from SOW");
+    }
+  } catch (error) {
+    console.error("Error extracting project data from SOW:", error);
+    throw new Error("Unable to extract project data from SOW");
+  }
+}
+server/routes.ts
+Now, update the /api/projects/create-from-sow route in server/routes.ts to handle the creation of the project and its associated tasks.
+
+TypeScript
+
+// server/routes.ts
+import { mammoth } from "mammoth";
+import pdf from "pdf-parse";
+
+// ... (imports)
+
+// Create a new route for creating a project from a SOW
+app.post(
+  "/api/projects/create-from-sow",
+  isAuthenticated,
+  upload.single("file"),
+  asyncHandler(async (req: any, res) => {
+    if (!req.file) {
+      throw createError.badRequest("No file uploaded");
+    }
+
+    // Extract the text from the document
+    let text = "";
+    if (req.file.mimetype === "application/pdf") {
+      const data = await pdf(req.file.buffer);
+      text = data.text;
+    } else if (
+      req.file.mimetype ===
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ) {
+      const result = await mammoth.extractRawText({
+        buffer: req.file.buffer,
+      });
+      text = result.value;
+    } else {
+      throw createError.badRequest("Unsupported file type");
+    }
+
+    // Create a new function to extract the project data from the SOW
+    const projectData = await extractProjectDataFromSOW(text);
+
+    // Create the project
+    const userId = req.user.claims.sub;
+    const data = insertProjectSchema.parse({
+      name: projectData.name,
+      description: projectData.description,
+      startDate: projectData.startDate,
+      endDate: projectData.endDate,
+      budget: projectData.budget,
+      managerId: userId,
+    });
+    const project = await storage.createProject(data);
+
+    // Create the tasks
+    if (projectData.tasks && projectData.tasks.length > 0) {
+      for (const task of projectData.tasks) {
+        await storage.createTask({
+          projectId: project.id,
+          title: task.title,
+          description: task.description,
+          isMilestone: task.isMilestone,
+        });
+      }
+    }
+
+    res.status(201).json(project);
+  })
+);
+2. Client-Side Implementation
+The client-side implementation remains the same as before. The FileUpload component will handle the file upload, and the createFromSowMutation will call the new endpoint.
+
+With these changes, the Gemini API will now extract the project name, description, start and end dates, budget, and a list of tasks from the SOW document. The server will then create the project and all the associated tasks.

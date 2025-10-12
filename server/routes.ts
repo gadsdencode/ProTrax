@@ -10,6 +10,7 @@ import { setupAuth, isAuthenticated } from "./replitAuth";
 import { errorHandler, asyncHandler, createError } from "./errorHandler";
 import { SchedulingEngine } from "./scheduling";
 import * as mammoth from "mammoth";
+import * as pdf from "pdf-parse";
 import { extractProjectDataFromSOW } from "./gemini";
 import {
   insertProjectSchema,
@@ -106,9 +107,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const mimeType = req.file.mimetype;
     
     if (mimeType === "application/pdf") {
-      // PDF files need special handling - we'll use the buffer as text for now
-      // In a production app, you'd use a PDF parsing library like pdf-parse
-      throw createError.badRequest("PDF parsing not implemented. Please upload a Word document (.docx)");
+      // PDF file parsing
+      try {
+        const data = await pdf(req.file.buffer);
+        text = data.text;
+      } catch (error) {
+        console.error("Error extracting text from PDF:", error);
+        throw createError.badRequest("Failed to extract text from PDF document");
+      }
     } else if (
       mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
       mimeType === "application/msword"
@@ -127,7 +133,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Plain text file
       text = req.file.buffer.toString('utf-8');
     } else {
-      throw createError.badRequest(`Unsupported file type: ${mimeType}. Please upload a Word document (.docx) or text file.`);
+      throw createError.badRequest(`Unsupported file type: ${mimeType}. Please upload a PDF, Word document (.docx) or text file.`);
     }
 
     if (!text || text.trim().length === 0) {
@@ -143,15 +149,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
       throw createError.badRequest(error.message || "Failed to extract project data from the SOW document");
     }
 
+    // Extract tasks from the project data (we'll create them separately)
+    const { tasks, ...projectFields } = projectData;
+
     // Create the project with the extracted data
     const userId = req.user.claims.sub;
     const data = insertProjectSchema.parse({ 
-      ...projectData, 
+      ...projectFields, 
       managerId: userId,
       status: 'planning' // Set initial status
     });
     
     const project = await storage.createProject(data);
+
+    // Create tasks if they were extracted from the SOW
+    if (tasks && tasks.length > 0) {
+      for (const task of tasks) {
+        try {
+          const taskData = insertTaskSchema.parse({
+            projectId: project.id,
+            title: task.title,
+            description: task.description,
+            isMilestone: task.isMilestone,
+            status: 'todo', // Default status for new tasks
+          });
+          await storage.createTask(taskData);
+        } catch (error) {
+          console.error(`Error creating task "${task.title}":`, error);
+          // Continue creating other tasks even if one fails
+        }
+      }
+    }
+
     res.status(201).json(project);
   }));
 

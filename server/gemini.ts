@@ -337,10 +337,15 @@ export async function extractProjectDataFromSOW(
   startDate?: string;
   endDate?: string;
   budget?: string;
+  tasks?: Array<{
+    title: string;
+    description: string;
+    isMilestone: boolean;
+  }>;
 }> {
   try {
     const systemPrompt = `You are an expert at analyzing Statement of Work (SOW) documents and extracting project information.
-Extract the project details from the provided SOW text and return them as a structured JSON object.
+Extract the project details and tasks from the provided SOW text and return them as a structured JSON object.
 
 Instructions:
 1. Extract a clear project name (max 255 characters)
@@ -348,7 +353,12 @@ Instructions:
 3. Generate a project charter that includes: project goals, scope, deliverables, and success criteria
 4. Extract start and end dates if mentioned (format: YYYY-MM-DD)
 5. Extract the budget if mentioned (as a decimal number, without currency symbols)
-6. If any information is not found in the SOW, omit that field from the response
+6. Extract a list of tasks, phases, deliverables, and milestones from the SOW:
+   - Each task should have a clear title
+   - Include a description explaining what needs to be done
+   - Mark major deliverables and phase completions as milestones (isMilestone: true)
+   - Regular tasks and activities should not be milestones (isMilestone: false)
+7. If any information is not found in the SOW, omit that field from the response
 
 Respond with JSON in this format:
 {
@@ -357,7 +367,12 @@ Respond with JSON in this format:
   "charter": string (optional, rich text),
   "startDate": string (optional, YYYY-MM-DD format),
   "endDate": string (optional, YYYY-MM-DD format),
-  "budget": string (optional, decimal number as string)
+  "budget": string (optional, decimal number as string),
+  "tasks": array of {
+    "title": string,
+    "description": string,
+    "isMilestone": boolean
+  } (optional)
 }`;
 
     const response = await ai.models.generateContent({
@@ -374,6 +389,18 @@ Respond with JSON in this format:
             startDate: { type: "string" },
             endDate: { type: "string" },
             budget: { type: "string" },
+            tasks: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  title: { type: "string" },
+                  description: { type: "string" },
+                  isMilestone: { type: "boolean" }
+                },
+                required: ["title", "description", "isMilestone"]
+              }
+            }
           },
           required: ["name"],
         },
