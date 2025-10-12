@@ -64,12 +64,25 @@ export default function Gantt() {
         dueDate: dueDate.toISOString() 
       });
     },
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/tasks", { projectId: selectedProject }] });
       queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+      
+      // Check if there were cascaded updates
+      const cascadedCount = data.cascadedUpdates?.length || 0;
+      const criticalPathCount = data.criticalPath?.length || 0;
+      
+      let description = "Task dates updated successfully";
+      if (cascadedCount > 0) {
+        description += `. ${cascadedCount} dependent task${cascadedCount > 1 ? 's' : ''} automatically updated.`;
+      }
+      if (criticalPathCount > 0) {
+        description += ` Critical path recalculated (${criticalPathCount} task${criticalPathCount > 1 ? 's' : ''}).`;
+      }
+      
       toast({
-        title: "Success",
-        description: "Task dates updated successfully",
+        title: "Schedule Updated",
+        description,
       });
     },
     onError: (error: Error) => {

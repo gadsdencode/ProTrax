@@ -8,6 +8,7 @@ import { Client } from "@replit/object-storage";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { errorHandler, asyncHandler, createError } from "./errorHandler";
+import { SchedulingEngine } from "./scheduling";
 import {
   insertProjectSchema,
   insertSprintSchema,
@@ -280,8 +281,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
       validatedData.dueDate = new Date(validatedData.dueDate);
     }
     
-    const task = await storage.updateTask(id, validatedData);
-    res.json(task);
+    // Get the current task to check for date changes
+    const currentTask = await storage.getTask(id);
+    if (!currentTask) {
+      throw createError.notFound("Task not found");
+    }
+    
+    // Check if dates are being updated
+    const datesChanged = (
+      (validatedData.startDate && validatedData.startDate.getTime() !== currentTask.startDate?.getTime()) ||
+      (validatedData.dueDate && validatedData.dueDate.getTime() !== currentTask.dueDate?.getTime())
+    );
+    
+    // Use new dates if provided, otherwise use current task dates
+    const effectiveStartDate = validatedData.startDate || currentTask.startDate;
+    const effectiveDueDate = validatedData.dueDate || currentTask.dueDate;
+    
+    if (datesChanged && currentTask.projectId && effectiveStartDate && effectiveDueDate) {
+      // Get all tasks and dependencies for the project
+      const projectTasks = await storage.getTasks(currentTask.projectId);
+      const dependencies = await storage.getProjectDependencies(currentTask.projectId);
+      
+      // Create scheduling engine
+      const scheduler = new SchedulingEngine(projectTasks, dependencies);
+      
+      // Validate the date change doesn't violate dependencies
+      const violations = scheduler.validateTaskDateChange(id, effectiveStartDate, effectiveDueDate);
+      
+      if (violations.length > 0) {
+        throw createError.badRequest(`Dependency violations: ${violations.map(v => v.message).join('; ')}`);
+      }
+      
+      // Cascade the schedule update to dependent tasks
+      const updatedTasks = scheduler.cascadeScheduleUpdate(id, effectiveStartDate, effectiveDueDate);
+      
+      // Calculate critical path
+      const criticalPath = scheduler.calculateCriticalPath();
+      const allUpdatedTasks = scheduler.getUpdatedTasks();
+      
+      // Update all affected tasks in the database
+      for (const task of allUpdatedTasks) {
+        await storage.updateTask(task.id, {
+          startDate: task.startDate || undefined,
+          dueDate: task.dueDate || undefined,
+          isOnCriticalPath: task.isOnCriticalPath,
+        });
+      }
+      
+      // Return the main updated task with metadata about cascaded updates
+      const mainTask = await storage.getTask(id);
+      res.json({
+        task: mainTask,
+        cascadedUpdates: updatedTasks.filter(t => t.id !== id),
+        criticalPath,
+      });
+    } else {
+      // No date changes, just update normally
+      const task = await storage.updateTask(id, validatedData);
+      res.json({ task });
+    }
   }));
 
   app.delete('/api/tasks/:id', isAuthenticated, asyncHandler(async (req, res) => {
@@ -302,6 +360,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const data = insertTaskDependencySchema.parse(req.body);
     const dependency = await storage.createTaskDependency(data);
     res.status(201).json(dependency);
+  }));
+
+  // Validate task date change against dependencies
+  app.post('/api/tasks/:id/validate-dates', isAuthenticated, asyncHandler(async (req, res) => {
+    const taskId = parseInt(req.params.id);
+    const { startDate: startDateStr, dueDate: dueDateStr } = req.body;
+    
+    if (!startDateStr || !dueDateStr) {
+      throw createError.badRequest("Both startDate and dueDate are required");
+    }
+    
+    const startDate = new Date(startDateStr);
+    const dueDate = new Date(dueDateStr);
+    
+    const task = await storage.getTask(taskId);
+    if (!task) {
+      throw createError.notFound("Task not found");
+    }
+    
+    if (!task.projectId) {
+      return res.json({ valid: true, violations: [] });
+    }
+    
+    // Get all tasks and dependencies for the project
+    const projectTasks = await storage.getTasks(task.projectId);
+    const dependencies = await storage.getProjectDependencies(task.projectId);
+    
+    // Create scheduling engine and validate
+    const scheduler = new SchedulingEngine(projectTasks, dependencies);
+    const violations = scheduler.validateTaskDateChange(taskId, startDate, dueDate);
+    
+    res.json({
+      valid: violations.length === 0,
+      violations,
+    });
+  }));
+
+  // Calculate and return critical path for a project
+  app.get('/api/projects/:projectId/critical-path', isAuthenticated, asyncHandler(async (req, res) => {
+    const projectId = parseInt(req.params.projectId);
+    
+    const tasks = await storage.getTasks(projectId);
+    const dependencies = await storage.getProjectDependencies(projectId);
+    
+    const scheduler = new SchedulingEngine(tasks, dependencies);
+    const criticalPath = scheduler.calculateCriticalPath();
+    const updatedTasks = scheduler.getUpdatedTasks();
+    
+    // Update critical path flags in database
+    for (const task of updatedTasks) {
+      if (task.isOnCriticalPath !== tasks.find(t => t.id === task.id)?.isOnCriticalPath) {
+        await storage.updateTask(task.id, { isOnCriticalPath: task.isOnCriticalPath });
+      }
+    }
+    
+    res.json({
+      criticalPath,
+      criticalTasks: updatedTasks.filter(t => t.isOnCriticalPath),
+    });
   }));
 
   // ============= CUSTOM FIELD ROUTES =============

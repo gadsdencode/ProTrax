@@ -92,6 +92,8 @@ export interface IStorage {
   
   // Task dependency operations
   getTaskDependencies(taskId: number): Promise<TaskDependency[]>;
+  getProjectDependencies(projectId: number): Promise<TaskDependency[]>;
+  getAllDependenciesForTasks(taskIds: number[]): Promise<TaskDependency[]>;
   createTaskDependency(dependency: InsertTaskDependency): Promise<TaskDependency>;
   deleteTaskDependency(id: number): Promise<void>;
   
@@ -321,6 +323,47 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(taskDependencies)
       .where(eq(taskDependencies.successorId, taskId));
+  }
+
+  async getProjectDependencies(projectId: number): Promise<TaskDependency[]> {
+    // Get all tasks for the project first
+    const projectTasks = await this.getTasks(projectId);
+    const taskIds = projectTasks.map(t => t.id);
+    
+    if (taskIds.length === 0) return [];
+    
+    // Get all dependencies where either predecessor or successor is in the project
+    return await db
+      .select()
+      .from(taskDependencies)
+      .where(
+        or(
+          eq(taskDependencies.predecessorId, taskIds[0]),
+          eq(taskDependencies.successorId, taskIds[0]),
+          ...taskIds.slice(1).flatMap(id => [
+            eq(taskDependencies.predecessorId, id),
+            eq(taskDependencies.successorId, id)
+          ])
+        )
+      );
+  }
+
+  async getAllDependenciesForTasks(taskIds: number[]): Promise<TaskDependency[]> {
+    if (taskIds.length === 0) return [];
+    
+    return await db
+      .select()
+      .from(taskDependencies)
+      .where(
+        or(
+          eq(taskDependencies.predecessorId, taskIds[0]),
+          eq(taskDependencies.successorId, taskIds[0]),
+          ...taskIds.slice(1).flatMap(id => [
+            eq(taskDependencies.predecessorId, id),
+            eq(taskDependencies.successorId, id)
+          ])
+        )
+      );
   }
 
   async createTaskDependency(dependencyData: InsertTaskDependency): Promise<TaskDependency> {
