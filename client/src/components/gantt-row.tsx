@@ -30,19 +30,14 @@ export function GanttRow({ task, dateRange, dayWidth }: GanttRowProps) {
     },
   });
 
-  const style = transform
-    ? {
-        left: `${left + transform.x}px`,
-        width: task.isMilestone ? 'auto' : `${width}px`,
-        cursor: isDragging ? 'grabbing' : 'grab',
-        opacity: isDragging ? 0.5 : 1,
-        zIndex: isDragging ? 10 : 1,
-      }
-    : {
-        left: `${left}px`,
-        width: task.isMilestone ? 'auto' : `${width}px`,
-        cursor: 'grab',
-      };
+  const style = {
+    left: `${left}px`,
+    width: task.isMilestone ? 'auto' : `${width}px`,
+    cursor: isDragging ? 'grabbing' : 'grab',
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 10 : 1,
+    transform: CSS.Transform.toString(transform),
+  };
 
   return (
     <div className="flex border-b h-12" data-testid={`gantt-row-${task.id}`}>
