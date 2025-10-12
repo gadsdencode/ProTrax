@@ -1,0 +1,98 @@
+Of course. Zustand is an excellent choice for state management in this application. It's a small, fast, and scalable state management solution that uses a simple, hook-based API. It's a great way to handle client-side UI state that doesn't need to be persisted on the server, helping to reduce prop drilling and simplify component logic.
+
+Here's a step-by-step guide on how you can integrate Zustand into your "ProjectHub" application.
+
+### 1\. Installation
+
+First, you'll need to add Zustand to your project's dependencies.
+
+```bash
+npm install zustand
+```
+
+### 2\. Create a Store
+
+Create a new directory `client/src/stores` to hold your Zustand stores. Inside this directory, create a file named `useUIStore.ts` to manage global UI state.
+
+Here’s a basic store to manage the currently selected project ID, which is currently being handled with local state in several components:
+
+```typescript
+// client/src/stores/useUIStore.ts
+import { create } from 'zustand';
+
+interface UIState {
+  selectedProjectId: number | null;
+  setSelectedProjectId: (projectId: number | null) => void;
+}
+
+export const useUIStore = create<UIState>((set) => ({
+  selectedProjectId: null,
+  setSelectedProjectId: (projectId) => set({ selectedProjectId: projectId }),
+}));
+```
+
+### 3\. Using the Store in Your Components
+
+Now, you can use this store in any component to access and update the `selectedProjectId`. Here’s how you can refactor the `Projects` component to use the new Zustand store instead of its local `useState`.
+
+#### **Before (in `gadsdencode/protrax/ProTrax-aba4c6f92d2b2030ed17d19b4e335241c74296d2/client/src/pages/projects.tsx`)**
+
+```typescript
+export default function Projects() {
+  // ... other state variables
+  const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
+  // ... rest of the component
+}
+```
+
+#### **After (Refactored `gadsdencode/protrax/ProTrax-aba4c6f92d2b2030ed17d19b4e335241c74296d2/client/src/pages/projects.tsx`)**
+
+```typescript
+import { useState } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+// ... other imports
+
+import { useUIStore } from "@/stores/useUIStore"; // Import the Zustand store
+
+export default function Projects() {
+  const [, setLocation] = useLocation();
+  const [searchQuery, setSearchQuery] = useState("");
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [taskDialogOpen, setTaskDialogOpen] = useState(false);
+  
+  // Use the Zustand store instead of local state
+  const { selectedProjectId, setSelectedProjectId } = useUIStore();
+
+  // ... rest of the component logic remains the same
+  // When you need to set the project ID, you'll still call setSelectedProjectId
+  // For example, in the "Add Task" button's onClick handler:
+  
+  // ...
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={(e) => {
+            e.stopPropagation();
+            setSelectedProjectId(project.id); // This now updates the global store
+            setTaskDialogOpen(true);
+          }}
+          data-testid={`button-add-task-${project.id}`}
+        >
+          <Plus className="h-3 w-3 mr-1" />
+          Add Task
+        </Button>
+  // ...
+}
+```
+
+### 4\. Accessing the State in Other Components
+
+The real power of this approach is that you can now access the `selectedProjectId` in any other component without having to pass it down as a prop. For example, your `TaskForm` can now get the `projectId` directly from the store if it's opened from a context where a project is selected.
+
+### Next Steps & Best Practices
+
+  * **Expand the UI Store**: You can add more UI-related state to `useUIStore`, such as the state of the sidebar (collapsed or expanded), the currently selected theme, or any filters that should persist across different views.
+  * **Create Separate Stores for Different Domains**: As your application grows, consider creating separate stores for different logical domains (e.g., `useFilterStore`, `useUserSettingsStore`) to keep your state organized.
+  * **Keep Server State in TanStack Query**: It's a best practice to keep data that's fetched from your server in TanStack Query and use Zustand for client-side UI state. This keeps a clean separation between server cache and client state.
+
+By integrating Zustand, you'll make your frontend state management more robust, scalable, and easier to maintain.
