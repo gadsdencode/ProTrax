@@ -18,6 +18,7 @@ interface UploadingFile {
 }
 
 const ACCEPTED_TYPES = [
+  'application/pdf', // .pdf
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
   'application/msword', // .doc
   'text/plain', // .txt
@@ -41,7 +42,7 @@ export function SOWFileUpload({
     }
     
     if (!ACCEPTED_TYPES.includes(file.type)) {
-      return `Please upload a Word document (.docx or .doc) or text file (.txt)`;
+      return `Please upload a PDF (.pdf), Word document (.docx or .doc) or text file (.txt)`;
     }
     
     return null;
@@ -216,7 +217,7 @@ export function SOWFileUpload({
           ref={fileInputRef}
           type="file"
           onChange={handleFileSelect}
-          accept=".docx,.doc,.txt,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword,text/plain"
+          accept=".pdf,.docx,.doc,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword,text/plain"
           className="hidden"
           data-testid="sow-upload-input"
         />
@@ -226,7 +227,7 @@ export function SOWFileUpload({
           Drop your SOW document here or click to browse
         </p>
         <p className="mt-1 text-xs text-muted-foreground">
-          Accepted formats: Word documents (.docx, .doc) or text files (.txt)
+          Accepted formats: PDF (.pdf), Word documents (.docx, .doc) or text files (.txt)
         </p>
         <p className="mt-1 text-xs text-muted-foreground">
           Maximum file size: 10MB

@@ -10,7 +10,7 @@ import { setupAuth, isAuthenticated } from "./replitAuth";
 import { errorHandler, asyncHandler, createError } from "./errorHandler";
 import { SchedulingEngine } from "./scheduling";
 import * as mammoth from "mammoth";
-import * as pdf from "pdf-parse";
+const pdfParse = require("pdf-parse");
 import { extractProjectDataFromSOW } from "./gemini";
 import {
   insertProjectSchema,
@@ -109,7 +109,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (mimeType === "application/pdf") {
       // PDF file parsing
       try {
-        const data = await pdf(req.file.buffer);
+        const data = await pdfParse(req.file.buffer);
         text = data.text;
       } catch (error) {
         console.error("Error extracting text from PDF:", error);
