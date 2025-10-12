@@ -1,0 +1,188 @@
+implement a new feature that will allow you to use the Gemini API to parse a Statement of Work (SOW) document, extract the relevant data, and create a new project.
+
+1. Server-Side Implementation
+First, you'll need to add a new route to handle the file upload and processing. This will involve updating the server/routes.ts file to include a new endpoint for creating a project from an SOW. You will also need to add a new function to the server/gemini.ts file to handle the parsing of the SOW document.
+
+TypeScript
+
+// server/routes.ts
+import { Configuration, OpenAIApi } from "openai";
+import { mammoth } from "mammoth";
+import pdf from "pdf-parse";
+
+// ... (imports)
+
+// Create a new route for creating a project from a SOW
+app.post(
+  "/api/projects/create-from-sow",
+  isAuthenticated,
+  upload.single("file"),
+  asyncHandler(async (req: any, res) => {
+    if (!req.file) {
+      throw createError.badRequest("No file uploaded");
+    }
+
+    // Extract the text from the document
+    let text = "";
+    if (req.file.mimetype === "application/pdf") {
+      const data = await pdf(req.file.buffer);
+      text = data.text;
+    } else if (
+      req.file.mimetype ===
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ) {
+      const result = await mammoth.extractRawText({
+        buffer: req.file.buffer,
+      });
+      text = result.value;
+    } else {
+      throw createError.badRequest("Unsupported file type");
+    }
+
+    // Create a new function to extract the project data from the SOW
+    const projectData = await extractProjectDataFromSOW(text);
+
+    // Create the project
+    const userId = req.user.claims.sub;
+    const data = insertProjectSchema.parse({ ...projectData, managerId: userId });
+    const project = await storage.createProject(data);
+
+    res.status(201).json(project);
+  })
+);
+TypeScript
+
+// server/gemini.ts
+// ... (imports)
+
+export async function extractProjectDataFromSOW(
+  sowText: string
+): Promise<any> {
+  const prompt = `
+    Based on the following Statement of Work (SOW), extract the project details and return them as a JSON object.
+    The JSON object should have the following fields: "name", "description", "startDate", "endDate", and "budget".
+
+    SOW:
+    ${sowText}
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: prompt,
+    });
+
+    if (response.text) {
+      return JSON.parse(response.text);
+    } else {
+      throw new Error("Unable to extract project data from SOW");
+    }
+  } catch (error) {
+    console.error("Error extracting project data from SOW:", error);
+    throw new Error("Unable to extract project data from SOW");
+  }
+}
+2. Client-Side Implementation
+Next, you'll need to update the client-side to include a new button for creating a project from a SOW. This will involve updating the client/src/pages/projects.tsx file to include a new button and dialog.
+
+TypeScript
+
+// client/src/pages/projects.tsx
+// ... (imports)
+
+export default function Projects() {
+  // ... (state variables)
+  const [sowDialogOpen, setSowDialogOpen] = useState(false);
+
+  // ... (mutations)
+
+  const createFromSowMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await fetch("/api/projects/create-from-sow", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to create project from SOW");
+      }
+
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      setSowDialogOpen(false);
+      toast({
+        title: "Success",
+        description: "Project created successfully from SOW",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  return (
+    <div className="p-6 space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold" data-testid="text-projects-title">
+            Projects
+          </h1>
+          <p className="text-muted-foreground">Manage your project portfolio</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+            <DialogTrigger asChild>
+              <Button data-testid="button-create-project">
+                <Plus className="h-4 w-4 mr-2" />
+                New Project
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>Create New Project</DialogTitle>
+              </DialogHeader>
+              <ProjectForm
+                onSubmit={(data) => createMutation.mutate(data)}
+                isLoading={createMutation.isPending}
+              />
+            </DialogContent>
+          </Dialog>
+          <Dialog open={sowDialogOpen} onOpenChange={setSowDialogOpen}>
+            <DialogTrigger asChild>
+              <Button data-testid="button-create-from-sow">
+                <Plus className="h-4 w-4 mr-2" />
+                Create from SOW
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>Create Project from SOW</DialogTitle>
+              </DialogHeader>
+              <FileUpload
+                onUploadComplete={(file) => createFromSowMutation.mutate(file)}
+                onUploadError={(error) =>
+                  toast({
+                    title: "Error",
+                    description: error,
+                    variant: "destructive",
+                  })
+                }
+              />
+            </DialogContent>
+          </Dialog>
+        </div>
+      </div>
+      // ... (rest of the component)
+    </div>
+  );
+}
+With these changes, you will have a new button on the projects page that allows you to upload a SOW document. When you upload a document, the Gemini API will parse it, extract the project data, and create a new project.
