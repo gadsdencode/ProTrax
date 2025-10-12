@@ -723,9 +723,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       throw createError.badRequest("projectId is required");
     }
     
+    // Fetch project data for context
+    const project = await storage.getProject(projectId);
+    if (!project) {
+      throw createError.notFound("Project not found");
+    }
+    
     // Fetch tasks for the project
     const tasks = await storage.getTasks(projectId);
-    const prediction = await predictProjectDeadline(tasks);
+    
+    // Pass both tasks and project data to get enriched predictions
+    const prediction = await predictProjectDeadline(tasks, project);
     res.json(prediction);
   }));
 

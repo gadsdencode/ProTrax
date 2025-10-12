@@ -1,11 +1,128 @@
 // Gemini AI integration from javascript_gemini blueprint
 import { GoogleGenAI } from "@google/genai";
+import { db } from "./db";
+import { tasks, timeEntries, projects, users } from "@shared/schema";
+import { eq, and, sql, desc } from "drizzle-orm";
 
 // DON'T DELETE THIS COMMENT
 // the newest Gemini model series is "gemini-2.5-flash" or "gemini-2.5-pro"
 // do not change this unless explicitly requested by the user
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
+
+interface UserPerformanceData {
+  userId: string;
+  userName: string;
+  totalTasksCompleted: number;
+  totalTasksAssigned: number;
+  completionRate: number;
+  averageTimeAccuracy: number;
+  totalEstimatedHours: number;
+  totalActualHours: number;
+}
+
+interface PreviousProjectData {
+  projectId: number;
+  projectName: string;
+  status: string;
+  wasOnTime: boolean;
+  tasksCompleted: number;
+  tasksTotal: number;
+  budgetPlanned: string | null;
+  budgetUsed: string | null;
+}
+
+async function getUserPerformanceData(userIds: string[]): Promise<UserPerformanceData[]> {
+  if (userIds.length === 0) return [];
+
+  const performanceData: UserPerformanceData[] = [];
+
+  for (const userId of userIds) {
+    // Get user info
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+
+    if (!user) continue;
+
+    // Get all tasks assigned to this user
+    const userTasks = await db
+      .select()
+      .from(tasks)
+      .where(eq(tasks.assigneeId, userId));
+
+    const completedTasks = userTasks.filter(t => t.status === 'done');
+    const totalEstimated = userTasks.reduce((sum, t) => sum + parseFloat(t.estimatedHours || '0'), 0);
+
+    // Get time entries for this user
+    const userTimeEntries = await db
+      .select()
+      .from(timeEntries)
+      .where(eq(timeEntries.userId, userId));
+
+    const totalActual = userTimeEntries.reduce((sum, t) => sum + parseFloat(t.hours), 0);
+
+    // Calculate time accuracy (how close actual vs estimated)
+    const timeAccuracy = totalEstimated > 0 
+      ? Math.abs(1 - (totalActual / totalEstimated)) 
+      : 0;
+
+    performanceData.push({
+      userId,
+      userName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email || 'Unknown',
+      totalTasksCompleted: completedTasks.length,
+      totalTasksAssigned: userTasks.length,
+      completionRate: userTasks.length > 0 ? completedTasks.length / userTasks.length : 0,
+      averageTimeAccuracy: timeAccuracy,
+      totalEstimatedHours: totalEstimated,
+      totalActualHours: totalActual,
+    });
+  }
+
+  return performanceData;
+}
+
+async function getPreviousProjectsData(): Promise<PreviousProjectData[]> {
+  // Get completed projects
+  const completedProjects = await db
+    .select()
+    .from(projects)
+    .where(eq(projects.status, 'completed'))
+    .orderBy(desc(projects.updatedAt))
+    .limit(5);
+
+  const projectsData: PreviousProjectData[] = [];
+
+  for (const project of completedProjects) {
+    // Get all tasks for this project
+    const projectTasks = await db
+      .select()
+      .from(tasks)
+      .where(eq(tasks.projectId, project.id));
+
+    const completedTasks = projectTasks.filter(t => t.status === 'done');
+
+    // Determine if project was on time
+    const wasOnTime = project.endDate 
+      ? new Date(project.updatedAt!) <= new Date(project.endDate)
+      : false;
+
+    projectsData.push({
+      projectId: project.id,
+      projectName: project.name,
+      status: project.status || 'unknown',
+      wasOnTime,
+      tasksCompleted: completedTasks.length,
+      tasksTotal: projectTasks.length,
+      budgetPlanned: project.budget,
+      budgetUsed: null, // Could be calculated from expenses if needed
+    });
+  }
+
+  return projectsData;
+}
 
 export async function generateProjectSummary(projectData: any): Promise<string> {
   const prompt = `Generate a concise executive summary for this project:
@@ -26,20 +143,67 @@ Provide a 2-3 paragraph summary highlighting key objectives, current status, and
   return response.text || "Unable to generate summary";
 }
 
-export async function predictProjectDeadline(taskData: any[]): Promise<{
+export async function predictProjectDeadline(
+  taskData: any[],
+  projectData?: any
+): Promise<{
   prediction: string;
   confidence: number;
   riskFactors: string[];
 }> {
   try {
-    const systemPrompt = `You are a project management AI analyzing task completion patterns. 
-Based on the provided task data, predict if the project will meet its deadline.
+    // Extract unique assignee IDs from tasks
+    const assigneeIds = Array.from(new Set(taskData.map(t => t.assigneeId).filter(Boolean)));
+    
+    // Gather historical performance data
+    const userPerformance = await getUserPerformanceData(assigneeIds);
+    const previousProjects = await getPreviousProjectsData();
+
+    // Build enriched prompt with historical context
+    const systemPrompt = `You are a project management AI with access to historical performance data.
+Analyze the task data, team performance history, and previous project outcomes to predict if the project will meet its deadline.
+
+Consider:
+- Task complexity, dependencies, and current progress
+- Historical performance of assigned team members
+- Patterns from similar completed projects
+- Resource capacity and allocation
+
 Respond with JSON in this format: 
 {
   'prediction': 'on-time' | 'delayed' | 'at-risk',
   'confidence': number (0-1),
   'riskFactors': string[]
 }`;
+
+    // Build comprehensive context
+    const contextData = {
+      currentProject: projectData || {},
+      tasks: taskData,
+      teamPerformance: userPerformance.map(perf => ({
+        name: perf.userName,
+        completionRate: `${(perf.completionRate * 100).toFixed(1)}%`,
+        tasksCompleted: `${perf.totalTasksCompleted}/${perf.totalTasksAssigned}`,
+        estimatedVsActual: `${perf.totalEstimatedHours.toFixed(1)}h estimated vs ${perf.totalActualHours.toFixed(1)}h actual`,
+        timeAccuracy: `${((1 - perf.averageTimeAccuracy) * 100).toFixed(1)}% accurate`,
+      })),
+      historicalProjects: previousProjects.map(proj => ({
+        name: proj.projectName,
+        outcome: proj.wasOnTime ? 'completed on-time' : 'completed late',
+        taskCompletion: `${proj.tasksCompleted}/${proj.tasksTotal} tasks`,
+        budget: proj.budgetPlanned ? `$${proj.budgetPlanned}` : 'N/A',
+      })),
+      statistics: {
+        totalTasksInProject: taskData.length,
+        completedTasks: taskData.filter(t => t.status === 'done').length,
+        inProgressTasks: taskData.filter(t => t.status === 'in_progress').length,
+        blockedTasks: taskData.filter(t => t.status === 'blocked').length,
+        teamSize: assigneeIds.length,
+        avgTeamCompletionRate: userPerformance.length > 0
+          ? `${(userPerformance.reduce((sum, p) => sum + p.completionRate, 0) / userPerformance.length * 100).toFixed(1)}%`
+          : 'N/A',
+      }
+    };
 
     const response = await ai.models.generateContent({
       model: "gemini-2.5-pro",
@@ -59,7 +223,7 @@ Respond with JSON in this format:
           required: ["prediction", "confidence", "riskFactors"],
         },
       },
-      contents: JSON.stringify(taskData),
+      contents: JSON.stringify(contextData, null, 2),
     });
 
     const rawJson = response.text;
