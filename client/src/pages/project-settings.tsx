@@ -103,7 +103,7 @@ export default function ProjectSettings() {
       <div className="mb-6">
         <Button
           variant="ghost"
-          onClick={() => setLocation(`/projects/${projectId}`)}
+          onClick={() => setLocation(`/projects/${projectId}/gantt`)}
           className="mb-4"
           data-testid="button-back-to-project"
         >
