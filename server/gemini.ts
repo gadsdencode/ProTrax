@@ -344,27 +344,58 @@ export async function extractProjectDataFromSOW(
   }>;
 }> {
   try {
-    const systemPrompt = `You are an expert at analyzing Statement of Work (SOW) documents and extracting project information.
-Extract the project details and tasks from the provided SOW text and return them as a structured JSON object.
+    const systemPrompt = `You are an expert at analyzing Statement of Work (SOW) documents and extracting COMPREHENSIVE project information.
+Your goal is to extract EVERY SINGLE task, activity, deliverable, and milestone from the SOW document. Be THOROUGH and EXHAUSTIVE.
 
-Instructions:
+CRITICAL EXTRACTION RULES:
 1. Extract a clear project name (max 255 characters)
 2. Create a comprehensive description summarizing the project scope and objectives
-3. Generate a project charter that includes: project goals, scope, deliverables, and success criteria
+3. Generate a detailed project charter that includes: project goals, scope, deliverables, assumptions, constraints, and success criteria
 4. Extract start and end dates if mentioned (format: YYYY-MM-DD)
 5. Extract the budget if mentioned (as a decimal number, without currency symbols)
-6. Extract a list of tasks, phases, deliverables, and milestones from the SOW:
-   - Each task should have a clear title
-   - Include a description explaining what needs to be done
-   - Mark major deliverables and phase completions as milestones (isMilestone: true)
-   - Regular tasks and activities should not be milestones (isMilestone: false)
-7. If any information is not found in the SOW, omit that field from the response
+6. MOST IMPORTANT: Extract ALL tasks, activities, and deliverables. Look for:
+   - Every numbered or bulleted item that describes work to be done
+   - All phases, stages, or workstreams mentioned
+   - Each deliverable, output, or outcome described
+   - Any activities, steps, or processes outlined
+   - All milestones, checkpoints, or review points
+   - Any subtasks or sub-activities mentioned
+   - Requirements gathering, analysis, design, development, testing, deployment activities
+   - Documentation tasks, training activities, meetings, reviews
+   - Setup, configuration, or installation tasks
+   - Research, investigation, or discovery activities
+   - Any task that has a verb (create, develop, design, implement, test, review, approve, etc.)
+
+EXTRACTION PATTERNS TO LOOK FOR:
+- Numbered lists (1., 2., 3. or 1.1, 1.2, etc.)
+- Bullet points (•, -, *, etc.)
+- Sections like "Deliverables:", "Tasks:", "Activities:", "Scope:", "Work Breakdown:"
+- Phase descriptions (Phase 1, Stage 2, Sprint 1, etc.)
+- Timeline or schedule sections
+- Responsibility matrices or RACI charts
+- Any sentence starting with action verbs
+
+MILESTONE IDENTIFICATION:
+- Mark as milestone (isMilestone: true) if it's:
+  - A major deliverable completion
+  - End of a phase or stage
+  - Key review or approval point
+  - Critical checkpoint or gate
+  - Major document or report delivery
+- Regular tasks and ongoing activities should be isMilestone: false
+
+OUTPUT REQUIREMENTS:
+- Generate a task for EVERY work item found, even if it seems minor
+- Each task must have a clear, specific title (not generic)
+- Include detailed descriptions explaining what needs to be done
+- When in doubt, extract it as a task - it's better to have too many than too few
+- If the SOW mentions "including but not limited to", generate tasks for the examples given
 
 Respond with JSON in this format:
 {
   "name": string (required),
   "description": string (optional),
-  "charter": string (optional, rich text),
+  "charter": string (optional, rich text with line breaks),
   "startDate": string (optional, YYYY-MM-DD format),
   "endDate": string (optional, YYYY-MM-DD format),
   "budget": string (optional, decimal number as string),
@@ -372,7 +403,7 @@ Respond with JSON in this format:
     "title": string,
     "description": string,
     "isMilestone": boolean
-  } (optional)
+  } (optional but should have many items)
 }`;
 
     const response = await ai.models.generateContent({
@@ -412,6 +443,10 @@ Respond with JSON in this format:
     if (rawJson) {
       const parsedData = JSON.parse(rawJson);
       
+      // Log the extraction results for debugging
+      console.log(`[SOW Extraction] Extracted project: ${parsedData.name}`);
+      console.log(`[SOW Extraction] Number of tasks extracted: ${parsedData.tasks?.length || 0}`);
+      
       // Validate and format dates if present
       if (parsedData.startDate) {
         const startDate = new Date(parsedData.startDate);
@@ -441,12 +476,32 @@ Respond with JSON in this format:
         }
       }
       
+      // Ensure we have at least some basic structure
+      if (!parsedData.name || parsedData.name.trim() === '') {
+        throw new Error("No project name could be extracted from the document");
+      }
+      
+      // Log warning if no tasks were extracted
+      if (!parsedData.tasks || parsedData.tasks.length === 0) {
+        console.warn('[SOW Extraction] WARNING: No tasks were extracted from the SOW document. The document may need better formatting or clearer task definitions.');
+      }
+      
       return parsedData;
     } else {
       throw new Error("Empty response from model");
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error extracting project data from SOW:", error);
-    throw new Error("Unable to extract project data from SOW. Please ensure the document contains valid project information.");
+    
+    // Provide more specific error messages based on the error type
+    if (error.message?.includes('overloaded') || error.status === 503) {
+      throw new Error("The AI service is temporarily overloaded. Please try again in a moment.");
+    } else if (error.message?.includes('API key')) {
+      throw new Error("AI service configuration error. Please contact support.");
+    } else if (error.message?.includes('No project name')) {
+      throw error; // Re-throw our custom error
+    } else {
+      throw new Error("Unable to extract complete project data from the SOW. Please ensure the document contains clear project information with tasks, deliverables, and milestones clearly outlined.");
+    }
   }
 }
