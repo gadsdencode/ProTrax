@@ -1494,6 +1494,174 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   }));
 
+  app.get('/api/debug/portfolio-html-preview', isAuthenticated, asyncHandler(async (req, res) => {
+    // Generate actual portfolio HTML and return it for preview
+    const allProjects = await storage.getProjects();
+    const activeProjects = allProjects.filter(p => p.status === 'active');
+    const allUsers = await storage.getAllUsers();
+    const userMap = new Map(allUsers.map((u: User) => [u.id, u]));
+    
+    const projectsData = await Promise.all(
+      activeProjects.slice(0, 5).map(async (project) => {
+        const tasks = await storage.getTasks(project.id);
+        const enrichedTasks = tasks.map(task => {
+          const assignee = task.assigneeId ? userMap.get(task.assigneeId) : null;
+          const assigneeName = assignee
+            ? `${assignee.firstName || ''} ${assignee.lastName || ''}`.trim() || assignee.email || 'Unassigned'
+            : 'Unassigned';
+          
+          return {
+            ...task,
+            assigneeName,
+            assigneeEmail: assignee?.email || null
+          };
+        });
+        
+        return {
+          id: project.id,
+          name: project.name,
+          description: project.description,
+          status: project.status,
+          manager: 'Test Manager',
+          startDate: project.startDate,
+          endDate: project.endDate,
+          budget: project.budget,
+          totalTasks: tasks.length,
+          completedTasks: tasks.filter(t => t.status === 'done').length,
+          inProgressTasks: tasks.filter(t => t.status === 'in_progress').length,
+          progress: tasks.length > 0 ? Math.round((tasks.filter(t => t.status === 'done').length / tasks.length) * 100) : 0,
+          tasks: enrichedTasks
+        };
+      })
+    );
+    
+    const { generatePortfolioSummaryHTML } = await import('./outlook');
+    const html = generatePortfolioSummaryHTML(projectsData);
+    
+    // Return the HTML directly for preview
+    res.setHeader('Content-Type', 'text/html');
+    res.send(html);
+  }));
+  
+  app.get('/api/debug/portfolio-email-test', isAuthenticated, asyncHandler(async (req, res) => {
+    console.log('[DEBUG PORTFOLIO EMAIL TEST] Starting...');
+    
+    // Simulate exactly what portfolio email does
+    const allProjects = await storage.getProjects();
+    const activeProjects = allProjects.filter(p => p.status === 'active');
+    
+    console.log(`[DEBUG] Found ${activeProjects.length} active projects`);
+    
+    // Take first 3 active projects for testing
+    const testProjects = activeProjects.slice(0, 3);
+    
+    const projectsData = await Promise.all(
+      testProjects.map(async (project) => {
+        console.log(`[DEBUG] Processing project ${project.id}: ${project.name}`);
+        const tasks = await storage.getTasks(project.id);
+        console.log(`[DEBUG]   - Raw tasks fetched: ${tasks.length}`);
+        
+        if (tasks.length > 0) {
+          console.log(`[DEBUG]   - First task: ${tasks[0].title} (id: ${tasks[0].id})`);
+        }
+        
+        const enrichedTasks = tasks.map(task => ({
+          ...task,
+          assigneeName: 'Test User'
+        }));
+        
+        const result = {
+          id: project.id,
+          name: project.name,
+          status: project.status,
+          totalTasks: tasks.length,
+          completedTasks: tasks.filter(t => t.status === 'done').length,
+          tasks: enrichedTasks
+        };
+        
+        console.log(`[DEBUG]   - Result has tasks array: ${!!result.tasks}`);
+        console.log(`[DEBUG]   - Result tasks length: ${result.tasks?.length}`);
+        
+        return result;
+      })
+    );
+    
+    // Check what we're about to send to HTML generation
+    const summary = projectsData.map(p => ({
+      name: p.name,
+      hasTasks: !!p.tasks,
+      tasksLength: p.tasks?.length || 0,
+      firstTaskTitle: p.tasks?.[0]?.title || 'NO TASKS'
+    }));
+    
+    console.log('[DEBUG] Portfolio data summary:', JSON.stringify(summary, null, 2));
+    
+    // Generate HTML to see what happens
+    const { generatePortfolioSummaryHTML } = await import('./outlook');
+    const html = generatePortfolioSummaryHTML(projectsData);
+    
+    // Check HTML content
+    const taskSectionCount = (html.match(/<h4[^>]*>Tasks<\/h4>/g) || []).length;
+    const noTasksMessageCount = (html.match(/No tasks found for this project/g) || []).length;
+    const taskRowCount = (html.match(/<tr style="border-bottom: 1px solid #e5e7eb;">/g) || []).length;
+    
+    res.json({
+      projectCount: testProjects.length,
+      projectsData: summary,
+      htmlStats: {
+        length: html.length,
+        taskSections: taskSectionCount,
+        noTasksMessages: noTasksMessageCount,
+        taskRows: taskRowCount
+      }
+    });
+  }));
+  
+  app.get('/api/debug/portfolio-tasks', isAuthenticated, asyncHandler(async (req, res) => {
+    console.log('[DEBUG PORTFOLIO TASKS] Starting debug...');
+    
+    // Test specific project 48 which we know has tasks
+    const project48 = await storage.getProject(48);
+    const project48Tasks = await storage.getTasks(48);
+    
+    console.log(`[DEBUG] Project 48 (${project48?.name}): ${project48Tasks.length} tasks`);
+    
+    // Get all active projects (like portfolio does)
+    const allProjects = await storage.getProjects();
+    const activeProjects = allProjects.filter(p => p.status === 'active');
+    
+    console.log(`[DEBUG] Found ${activeProjects.length} active projects`);
+    
+    // Test first 5 active projects
+    const debugResults = await Promise.all(
+      activeProjects.slice(0, 5).map(async (project) => {
+        const tasks = await storage.getTasks(project.id);
+        console.log(`[DEBUG] Project ${project.id} (${project.name}): ${tasks.length} tasks`);
+        
+        return {
+          id: project.id,
+          name: project.name,
+          taskCount: tasks.length,
+          sampleTask: tasks[0] ? {
+            id: tasks[0].id,
+            title: tasks[0].title,
+            projectId: tasks[0].projectId
+          } : null
+        };
+      })
+    );
+    
+    res.json({
+      project48: {
+        name: project48?.name,
+        taskCount: project48Tasks.length,
+        firstTask: project48Tasks[0] || null
+      },
+      activeProjectSample: debugResults,
+      note: "Check server logs for [DEBUG] messages"
+    });
+  }));
+
   // ============= RECURRING TASK ROUTES =============
   
   app.get('/api/tasks/:id/next-occurrence', isAuthenticated, asyncHandler(async (req, res) => {

@@ -397,10 +397,12 @@ export class DatabaseStorage implements IStorage {
 
   // Task operations
   async getTasks(projectId?: number, searchQuery?: string): Promise<Task[]> {
+    console.log(`[STORAGE DEBUG] getTasks called with projectId: ${projectId}, searchQuery: ${searchQuery}`);
     const conditions = [];
     
     if (projectId) {
       conditions.push(eq(tasks.projectId, projectId));
+      console.log(`[STORAGE DEBUG] Adding condition for projectId: ${projectId}`);
     }
     
     if (searchQuery) {
@@ -415,14 +417,21 @@ export class DatabaseStorage implements IStorage {
     
     if (conditions.length > 0) {
       const whereClause = conditions.length === 1 ? conditions[0] : and(...conditions);
-      return await db
+      const result = await db
         .select()
         .from(tasks)
         .where(whereClause)
         .orderBy(projectId ? asc(tasks.sortOrder) : desc(tasks.createdAt));
+      console.log(`[STORAGE DEBUG] Query with conditions returned ${result.length} tasks`);
+      if (result.length > 0) {
+        console.log(`[STORAGE DEBUG] First task: id=${result[0].id}, projectId=${result[0].projectId}, title=${result[0].title}`);
+      }
+      return result;
     }
     
-    return await db.select().from(tasks).orderBy(desc(tasks.createdAt));
+    const allTasks = await db.select().from(tasks).orderBy(desc(tasks.createdAt));
+    console.log(`[STORAGE DEBUG] Query without conditions returned ${allTasks.length} tasks`);
+    return allTasks;
   }
 
   async getTask(id: number): Promise<Task | undefined> {

@@ -239,6 +239,15 @@ export async function sendPortfolioSummary(
   const reportContent = generatePortfolioSummaryHTML(projectsData);
   console.log(`[PORTFOLIO EMAIL DEBUG] Generated HTML length:`, reportContent.length);
   console.log(`[PORTFOLIO EMAIL DEBUG] HTML contains task tables:`, reportContent.includes('<th>Task</th>'));
+  
+  // Check for actual task content in the HTML
+  const taskSectionCount = (reportContent.match(/<h4[^>]*>Tasks<\/h4>/g) || []).length;
+  const noTasksMessageCount = (reportContent.match(/No tasks found for this project/g) || []).length;
+  const taskRowCount = (reportContent.match(/<tr style="border-bottom: 1px solid #e5e7eb;">/g) || []).length;
+  
+  console.log(`[PORTFOLIO EMAIL DEBUG] Task sections in HTML: ${taskSectionCount}`);
+  console.log(`[PORTFOLIO EMAIL DEBUG] "No tasks" messages: ${noTasksMessageCount}`);
+  console.log(`[PORTFOLIO EMAIL DEBUG] Task data rows in HTML: ${taskRowCount}`);
   console.log(`[PORTFOLIO EMAIL DEBUG] ========== SEND PORTFOLIO SUMMARY END ==========`);
 
   await sendEmail({
@@ -715,8 +724,13 @@ function generateTaskReportHTML(projectName: string, reportType: string, tasks: 
   `;
 }
 
-function generatePortfolioSummaryHTML(projectsData: any[]): string {
+export function generatePortfolioSummaryHTML(projectsData: any[]): string {
   console.log(`[HTML DEBUG] Generating Portfolio Summary HTML`);
+  console.log(`[HTML DEBUG] Raw projectsData:`, JSON.stringify(projectsData.slice(0, 2).map(p => ({
+    name: p.name,
+    tasksLength: p.tasks?.length || 0,
+    firstTask: p.tasks?.[0]?.title || 'NO TASKS'
+  })), null, 2));
   
   // Handle null/undefined data gracefully
   if (!projectsData || !Array.isArray(projectsData)) {
