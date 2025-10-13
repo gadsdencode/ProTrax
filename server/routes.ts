@@ -1302,50 +1302,85 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // Fetch tasks for the project
     const tasks = await storage.getTasks(projectId);
     
+    // Fetch all users to map assignee IDs to names
+    const allUsers = await storage.getAllUsers();
+    const userMap = new Map(allUsers.map((u: User) => [u.id, u]));
+    
+    // Enrich tasks with assignee names
+    const enrichedTasks = tasks.map(task => {
+      const assignee = task.assigneeId ? userMap.get(task.assigneeId) : null;
+      const assigneeName = assignee
+        ? `${assignee.firstName || ''} ${assignee.lastName || ''}`.trim() || assignee.email || 'Unassigned'
+        : 'Unassigned';
+      
+      return {
+        ...task,
+        assigneeName,
+        assigneeEmail: assignee?.email || null
+      };
+    });
+    
     // Prepare report data based on type
     let reportData: any = {};
     
     if (reportType === 'summary') {
-      const totalTasks = tasks.length;
-      const completedTasks = tasks.filter(t => t.status === 'done').length;
-      const inProgressTasks = tasks.filter(t => t.status === 'in_progress').length;
+      const totalTasks = enrichedTasks.length;
+      const completedTasks = enrichedTasks.filter(t => t.status === 'done').length;
+      const inProgressTasks = enrichedTasks.filter(t => t.status === 'in_progress').length;
+      
+      // Get manager name
+      const manager = project.managerId ? userMap.get(project.managerId) : null;
+      const managerName = manager 
+        ? `${manager.firstName || ''} ${manager.lastName || ''}`.trim() || manager.email || 'N/A'
+        : 'N/A';
       
       reportData = {
         description: project.description,
         status: project.status,
-        manager: project.managerId,
+        manager: managerName,
         startDate: project.startDate,
         endDate: project.endDate,
         budget: project.budget,
         totalTasks,
         completedTasks,
         inProgressTasks,
-        tasks
+        tasks: enrichedTasks
       };
     } else if (reportType === 'status') {
-      const totalTasks = tasks.length;
-      const completedTasks = tasks.filter(t => t.status === 'done').length;
+      const totalTasks = enrichedTasks.length;
+      const completedTasks = enrichedTasks.filter(t => t.status === 'done').length;
       const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
       
       // Get risks
       const risks = await storage.getRisks(projectId);
       
+      // Get recent completed and upcoming tasks with details
+      const recentCompleted = enrichedTasks
+        .filter(t => t.status === 'done')
+        .sort((a, b) => (b.updatedAt?.getTime() || 0) - (a.updatedAt?.getTime() || 0))
+        .slice(0, 5);
+      
+      const upcomingTasks = enrichedTasks
+        .filter(t => t.status === 'todo' || t.status === 'in_progress')
+        .sort((a, b) => {
+          if (a.dueDate && b.dueDate) return a.dueDate.getTime() - b.dueDate.getTime();
+          if (a.dueDate) return -1;
+          if (b.dueDate) return 1;
+          return 0;
+        })
+        .slice(0, 5);
+      
       reportData = {
         overallStatus: progress >= 80 ? 'on_track' : progress >= 50 ? 'at_risk' : 'delayed',
         progress,
-        accomplishments: tasks
-          .filter(t => t.status === 'done')
-          .slice(0, 5)
-          .map(t => t.title),
-        upcoming: tasks
-          .filter(t => t.status === 'todo' || t.status === 'in_progress')
-          .slice(0, 5)
-          .map(t => t.title),
-        risks: risks.slice(0, 5)
+        accomplishments: recentCompleted,
+        upcoming: upcomingTasks,
+        risks: risks.slice(0, 5),
+        tasks: enrichedTasks // Include all tasks for detailed reporting
       };
     } else {
-      // For gantt/kanban reports, just send tasks
-      reportData = tasks;
+      // For gantt/kanban reports, send enriched tasks
+      reportData = enrichedTasks;
     }
 
     await sendProjectReport(project.name, reportType, reportData, recipients);

@@ -129,6 +129,26 @@ export async function sendPortfolioSummary(
 }
 
 function generateProjectSummaryHTML(projectName: string, data: any): string {
+  const formatStatus = (status: string) => {
+    const statusMap: any = {
+      'todo': 'To Do',
+      'in_progress': 'In Progress', 
+      'done': 'Completed',
+      'blocked': 'Blocked'
+    };
+    return statusMap[status] || status;
+  };
+  
+  const formatPriority = (priority: string) => {
+    const priorityColors: any = {
+      'critical': '#dc2626',
+      'high': '#ea580c',
+      'medium': '#3B82F6',
+      'low': '#10b981'
+    };
+    return `<span style="color: ${priorityColors[priority] || '#6b7280'}; font-weight: 600;">${priority ? priority.toUpperCase() : 'N/A'}</span>`;
+  };
+
   return `
     <!DOCTYPE html>
     <html>
@@ -143,6 +163,9 @@ function generateProjectSummaryHTML(projectName: string, data: any): string {
         table { width: 100%; border-collapse: collapse; margin: 15px 0; }
         th, td { padding: 12px; text-align: left; border-bottom: 1px solid #e5e7eb; }
         th { background: #f3f4f6; font-weight: 600; }
+        .task-description { font-size: 12px; color: #6b7280; margin-top: 4px; }
+        .progress-bar { background: #e5e7eb; border-radius: 4px; height: 6px; width: 60px; display: inline-block; }
+        .progress-fill { background: #3B82F6; height: 100%; border-radius: 4px; }
       </style>
     </head>
     <body>
@@ -182,23 +205,37 @@ function generateProjectSummaryHTML(projectName: string, data: any): string {
 
       ${data.tasks && data.tasks.length > 0 ? `
         <div class="section">
-          <h2>Recent Tasks</h2>
+          <h2>Task Details (Latest ${Math.min(15, data.tasks.length)} of ${data.tasks.length})</h2>
           <table>
             <thead>
               <tr>
                 <th>Task</th>
+                <th>Assignee</th>
                 <th>Status</th>
                 <th>Priority</th>
+                <th>Progress</th>
                 <th>Due Date</th>
+                <th>Est. Hours</th>
               </tr>
             </thead>
             <tbody>
-              ${data.tasks.slice(0, 10).map((task: any) => `
+              ${data.tasks.slice(0, 15).map((task: any) => `
                 <tr>
-                  <td>${task.title}</td>
-                  <td>${task.status || 'N/A'}</td>
-                  <td>${task.priority || 'N/A'}</td>
+                  <td>
+                    <strong>${task.title}</strong>
+                    ${task.description ? `<div class="task-description">${task.description.substring(0, 100)}${task.description.length > 100 ? '...' : ''}</div>` : ''}
+                  </td>
+                  <td>${task.assigneeName || 'Unassigned'}</td>
+                  <td>${formatStatus(task.status || 'todo')}</td>
+                  <td>${formatPriority(task.priority || 'medium')}</td>
+                  <td>
+                    <div class="progress-bar">
+                      <div class="progress-fill" style="width: ${task.progress || 0}%;"></div>
+                    </div>
+                    <span style="margin-left: 8px; font-size: 12px;">${task.progress || 0}%</span>
+                  </td>
                   <td>${task.dueDate ? new Date(task.dueDate).toLocaleDateString() : 'N/A'}</td>
+                  <td>${task.estimatedHours || '-'}</td>
                 </tr>
               `).join('')}
             </tbody>
@@ -217,6 +254,16 @@ function generateProjectSummaryHTML(projectName: string, data: any): string {
 }
 
 function generateStatusReportHTML(projectName: string, data: any): string {
+  const formatStatus = (status: string) => {
+    const statusMap: any = {
+      'todo': 'To Do',
+      'in_progress': 'In Progress', 
+      'done': 'Completed',
+      'blocked': 'Blocked'
+    };
+    return statusMap[status] || status;
+  };
+
   return `
     <!DOCTYPE html>
     <html>
@@ -229,6 +276,11 @@ function generateStatusReportHTML(projectName: string, data: any): string {
         .status-on-track { background: #dcfce7; color: #166534; }
         .status-at-risk { background: #fef3c7; color: #92400e; }
         .status-delayed { background: #fee2e2; color: #991b1b; }
+        .task-item { margin-bottom: 12px; padding: 10px; background: #f9fafb; border-radius: 6px; }
+        .task-header { display: flex; justify-content: space-between; margin-bottom: 4px; }
+        .task-meta { font-size: 12px; color: #6b7280; }
+        .priority-high { color: #ea580c; font-weight: 600; }
+        .priority-critical { color: #dc2626; font-weight: 600; }
       </style>
     </head>
     <body>
@@ -244,25 +296,46 @@ function generateStatusReportHTML(projectName: string, data: any): string {
             ${data.overallStatus === 'on_track' ? 'On Track' : data.overallStatus === 'at_risk' ? 'At Risk' : 'Delayed'}
           </span>
         </p>
-        <p><strong>Progress:</strong> ${data.progress || 0}%</p>
+        <p><strong>Overall Progress:</strong> ${data.progress || 0}%</p>
       </div>
 
       <div class="section">
-        <h2>Accomplishments</h2>
-        <ul>
-          ${data.accomplishments && data.accomplishments.length > 0 
-            ? data.accomplishments.map((item: string) => `<li>${item}</li>`).join('') 
-            : '<li>No accomplishments reported</li>'}
-        </ul>
+        <h2>Recently Completed Tasks</h2>
+        ${data.accomplishments && data.accomplishments.length > 0 
+          ? data.accomplishments.map((task: any) => `
+            <div class="task-item">
+              <div class="task-header">
+                <strong>${task.title || task}</strong>
+                ${task.assigneeName ? `<span class="task-meta">by ${task.assigneeName}</span>` : ''}
+              </div>
+              ${task.description ? `<p style="margin: 4px 0; font-size: 14px; color: #4b5563;">${task.description.substring(0, 150)}${task.description.length > 150 ? '...' : ''}</p>` : ''}
+              ${task.updatedAt ? `<div class="task-meta">Completed: ${new Date(task.updatedAt).toLocaleDateString()}</div>` : ''}
+            </div>
+          `).join('') 
+          : '<p style="color: #6b7280;">No tasks completed recently</p>'}
       </div>
 
       <div class="section">
-        <h2>Upcoming Activities</h2>
-        <ul>
-          ${data.upcoming && data.upcoming.length > 0 
-            ? data.upcoming.map((item: string) => `<li>${item}</li>`).join('') 
-            : '<li>No upcoming activities</li>'}
-        </ul>
+        <h2>Upcoming Tasks</h2>
+        ${data.upcoming && data.upcoming.length > 0 
+          ? data.upcoming.map((task: any) => `
+            <div class="task-item">
+              <div class="task-header">
+                <strong>${task.title || task}</strong>
+                <span class="${task.priority === 'critical' || task.priority === 'high' ? `priority-${task.priority}` : 'task-meta'}">
+                  ${task.priority ? task.priority.toUpperCase() : ''}
+                </span>
+              </div>
+              ${task.description ? `<p style="margin: 4px 0; font-size: 14px; color: #4b5563;">${task.description.substring(0, 150)}${task.description.length > 150 ? '...' : ''}</p>` : ''}
+              <div class="task-meta">
+                ${task.assigneeName ? `Assigned to: ${task.assigneeName}` : 'Unassigned'} 
+                ${task.dueDate ? ` | Due: ${new Date(task.dueDate).toLocaleDateString()}` : ''}
+                ${task.estimatedHours ? ` | Est: ${task.estimatedHours}h` : ''}
+              </div>
+              ${task.progress > 0 ? `<div class="task-meta">Progress: ${task.progress}%</div>` : ''}
+            </div>
+          `).join('') 
+          : '<p style="color: #6b7280;">No upcoming tasks scheduled</p>'}
       </div>
 
       ${data.risks && data.risks.length > 0 ? `
@@ -285,17 +358,63 @@ function generateStatusReportHTML(projectName: string, data: any): string {
 }
 
 function generateTaskReportHTML(projectName: string, reportType: string, tasks: any[]): string {
+  const formatStatus = (status: string) => {
+    const statusMap: any = {
+      'todo': 'To Do',
+      'in_progress': 'In Progress', 
+      'done': 'Completed',
+      'blocked': 'Blocked'
+    };
+    const statusColors: any = {
+      'todo': '#6b7280',
+      'in_progress': '#3B82F6',
+      'done': '#10b981',
+      'blocked': '#ef4444'
+    };
+    return `<span style="color: ${statusColors[status] || '#6b7280'}; font-weight: 600;">${statusMap[status] || status}</span>`;
+  };
+  
+  const formatPriority = (priority: string) => {
+    const priorityColors: any = {
+      'critical': '#dc2626',
+      'high': '#ea580c',
+      'medium': '#3B82F6',
+      'low': '#10b981'
+    };
+    return `<span style="color: ${priorityColors[priority] || '#6b7280'}; font-weight: 600;">${priority ? priority.toUpperCase() : 'N/A'}</span>`;
+  };
+
+  // Group tasks by status for Kanban view
+  const groupedByStatus = reportType === 'kanban' ? {
+    'To Do': tasks.filter(t => t.status === 'todo'),
+    'In Progress': tasks.filter(t => t.status === 'in_progress'),
+    'Done': tasks.filter(t => t.status === 'done'),
+    'Blocked': tasks.filter(t => t.status === 'blocked')
+  } : null;
+
   return `
     <!DOCTYPE html>
     <html>
     <head>
       <style>
-        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 1200px; margin: 0 auto; padding: 20px; }
         .header { background: #3B82F6; color: white; padding: 20px; border-radius: 8px; }
         .section { margin: 20px 0; padding: 15px; border: 1px solid #e5e7eb; border-radius: 8px; }
+        .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 20px; }
+        .summary-item { background: #f9fafb; padding: 12px; border-radius: 6px; }
+        .summary-label { font-size: 12px; color: #6b7280; text-transform: uppercase; margin-bottom: 4px; }
+        .summary-value { font-size: 20px; font-weight: bold; color: #3B82F6; }
         table { width: 100%; border-collapse: collapse; margin: 15px 0; }
         th, td { padding: 12px; text-align: left; border-bottom: 1px solid #e5e7eb; }
-        th { background: #f3f4f6; font-weight: 600; }
+        th { background: #f3f4f6; font-weight: 600; font-size: 13px; }
+        td { font-size: 14px; }
+        .task-description { font-size: 12px; color: #6b7280; margin-top: 4px; }
+        .progress-bar { background: #e5e7eb; border-radius: 4px; height: 6px; width: 60px; display: inline-block; }
+        .progress-fill { background: #3B82F6; height: 100%; border-radius: 4px; }
+        .kanban-column { margin-bottom: 20px; }
+        .kanban-header { background: #f3f4f6; padding: 10px; border-radius: 6px 6px 0 0; font-weight: 600; }
+        .kanban-task { background: white; border: 1px solid #e5e7eb; border-radius: 6px; padding: 12px; margin-bottom: 10px; }
+        .milestone-marker { color: #9333ea; font-weight: 600; }
       </style>
     </head>
     <body>
@@ -305,36 +424,95 @@ function generateTaskReportHTML(projectName: string, reportType: string, tasks: 
       </div>
       
       <div class="section">
-        <h2>Tasks Overview</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>Task</th>
-              <th>Status</th>
-              <th>Priority</th>
-              <th>Assignee</th>
-              <th>Due Date</th>
-              <th>Progress</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${tasks.map((task: any) => `
+        <h2>Task Summary</h2>
+        <div class="summary">
+          <div class="summary-item">
+            <div class="summary-label">Total Tasks</div>
+            <div class="summary-value">${tasks.length}</div>
+          </div>
+          <div class="summary-item">
+            <div class="summary-label">Completed</div>
+            <div class="summary-value">${tasks.filter(t => t.status === 'done').length}</div>
+          </div>
+          <div class="summary-item">
+            <div class="summary-label">In Progress</div>
+            <div class="summary-value">${tasks.filter(t => t.status === 'in_progress').length}</div>
+          </div>
+          <div class="summary-item">
+            <div class="summary-label">Blocked</div>
+            <div class="summary-value">${tasks.filter(t => t.status === 'blocked').length}</div>
+          </div>
+        </div>
+
+        ${reportType === 'kanban' && groupedByStatus ? `
+          <h2>Tasks by Status</h2>
+          ${Object.entries(groupedByStatus).map(([status, statusTasks]: [string, any]) => `
+            <div class="kanban-column">
+              <div class="kanban-header">${status} (${statusTasks.length})</div>
+              ${statusTasks.length > 0 ? statusTasks.slice(0, 10).map((task: any) => `
+                <div class="kanban-task">
+                  <strong>${task.title}</strong>
+                  ${task.isMilestone ? '<span class="milestone-marker"> [Milestone]</span>' : ''}
+                  ${task.description ? `<div class="task-description">${task.description.substring(0, 100)}${task.description.length > 100 ? '...' : ''}</div>` : ''}
+                  <div style="margin-top: 8px; font-size: 12px; color: #6b7280;">
+                    ${task.assigneeName || 'Unassigned'} 
+                    ${task.priority ? ` | ${formatPriority(task.priority)}` : ''}
+                    ${task.dueDate ? ` | Due: ${new Date(task.dueDate).toLocaleDateString()}` : ''}
+                  </div>
+                </div>
+              `).join('') : '<p style="color: #6b7280; font-style: italic; padding: 10px;">No tasks</p>'}
+              ${statusTasks.length > 10 ? `<p style="font-size: 12px; color: #6b7280; text-align: center;">...and ${statusTasks.length - 10} more</p>` : ''}
+            </div>
+          `).join('')}
+        ` : `
+          <h2>Detailed Task List</h2>
+          <table>
+            <thead>
               <tr>
-                <td>${task.title}</td>
-                <td>${task.status || 'N/A'}</td>
-                <td>${task.priority || 'N/A'}</td>
-                <td>${task.assigneeId || 'Unassigned'}</td>
-                <td>${task.dueDate ? new Date(task.dueDate).toLocaleDateString() : 'N/A'}</td>
-                <td>${task.progress || 0}%</td>
+                <th>Task</th>
+                <th>Assignee</th>
+                <th>Status</th>
+                <th>Priority</th>
+                <th>Progress</th>
+                <th>Start Date</th>
+                <th>Due Date</th>
+                <th>Est. Hours</th>
+                ${reportType === 'gantt' ? '<th>Duration</th>' : ''}
               </tr>
-            `).join('')}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              ${tasks.slice(0, 50).map((task: any) => `
+                <tr>
+                  <td>
+                    <strong>${task.title}</strong>
+                    ${task.isMilestone ? '<span class="milestone-marker"> [M]</span>' : ''}
+                    ${task.description ? `<div class="task-description">${task.description.substring(0, 100)}${task.description.length > 100 ? '...' : ''}</div>` : ''}
+                  </td>
+                  <td>${task.assigneeName || 'Unassigned'}</td>
+                  <td>${formatStatus(task.status || 'todo')}</td>
+                  <td>${formatPriority(task.priority || 'medium')}</td>
+                  <td>
+                    <div class="progress-bar">
+                      <div class="progress-fill" style="width: ${task.progress || 0}%;"></div>
+                    </div>
+                    <span style="margin-left: 8px; font-size: 12px;">${task.progress || 0}%</span>
+                  </td>
+                  <td>${task.startDate ? new Date(task.startDate).toLocaleDateString() : '-'}</td>
+                  <td>${task.dueDate ? new Date(task.dueDate).toLocaleDateString() : '-'}</td>
+                  <td>${task.estimatedHours || '-'}</td>
+                  ${reportType === 'gantt' ? `<td>${task.duration ? `${task.duration}h` : '-'}</td>` : ''}
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+          ${tasks.length > 50 ? `<p style="text-align: center; color: #6b7280; font-size: 12px;">Showing 50 of ${tasks.length} tasks</p>` : ''}
+        `}
       </div>
 
       <div class="section">
         <p style="color: #6b7280; font-size: 12px;">
           Generated on ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}
+          <br>Report Type: ${reportType.charAt(0).toUpperCase() + reportType.slice(1)}
         </p>
       </div>
     </body>
