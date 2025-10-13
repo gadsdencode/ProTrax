@@ -5,6 +5,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { insertTaskSchema, type InsertTask, type User, type CustomField, type Task } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useUIStore } from "@/stores/useUIStore";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -36,6 +37,9 @@ interface TaskFormProps {
 }
 
 export function TaskForm({ onSubmit, isLoading, defaultValues, projectId, parentId, presetStatus }: TaskFormProps) {
+  const { selectedProjectId } = useUIStore();
+  // Use prop projectId if provided, otherwise fall back to selectedProjectId from store
+  const effectiveProjectId = projectId || selectedProjectId || undefined;
   const [customFieldValues, setCustomFieldValues] = useState<Record<number, string>>({});
   const [isProcessing, setIsProcessing] = useState(false);
   const [isRecurring, setIsRecurring] = useState(!!defaultValues?.recurrenceType);
@@ -48,8 +52,8 @@ export function TaskForm({ onSubmit, isLoading, defaultValues, projectId, parent
 
   // Fetch custom fields for the project
   const { data: customFields } = useQuery<CustomField[]>({
-    queryKey: [`/api/projects/${projectId}/custom-fields`],
-    enabled: !!projectId,
+    queryKey: [`/api/projects/${effectiveProjectId}/custom-fields`],
+    enabled: !!effectiveProjectId,
   });
 
   // Create mutation for updating custom field values in batch
@@ -115,7 +119,7 @@ export function TaskForm({ onSubmit, isLoading, defaultValues, projectId, parent
       description: "",
       status: (presetStatus || "todo") as any,
       priority: "medium",
-      projectId: projectId,
+      projectId: effectiveProjectId,
       parentId: parentId,
       assigneeId: undefined,
       startDate: undefined,

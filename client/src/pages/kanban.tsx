@@ -18,6 +18,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { DndContext, DragEndEvent, DragOverlay, useDraggable, useDroppable } from "@dnd-kit/core";
 import { TaskForm } from "@/components/task-form";
 import { TaskDetail } from "@/components/task-detail";
+import { useUIStore } from "@/stores/useUIStore";
 import type { Task, KanbanColumn, InsertTask, Project } from "@shared/schema";
 
 export default function Kanban() {
@@ -25,11 +26,20 @@ export default function Kanban() {
   const projectIdFromUrl = params.id ? parseInt(params.id) : null;
   const [selectedProject, setSelectedProject] = useState<number | null>(projectIdFromUrl);
   const [activeId, setActiveId] = useState<number | null>(null);
-  const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [createTaskStatus, setCreateTaskStatus] = useState<string>("todo");
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
-  const [detailOpen, setDetailOpen] = useState(false);
   const { toast } = useToast();
+  
+  // Use centralized store for dialog management
+  const { 
+    activeDialog, 
+    setActiveDialog, 
+    createTaskStatus, 
+    setCreateTaskStatus,
+    selectedTaskId,
+    setSelectedTaskId,
+    selectedProjectId,
+    setSelectedProjectId
+  } = useUIStore();
 
   // Fetch all projects for auto-selection
   const { data: projects } = useQuery<Project[]>({
@@ -66,7 +76,7 @@ export default function Kanban() {
       queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
       // Also invalidate custom field values queries
       queryClient.invalidateQueries({ queryKey: ["/api/tasks/"] }); 
-      setCreateDialogOpen(false);
+      setActiveDialog(null);
       toast({
         title: "Success",
         description: "Task created successfully",
@@ -169,11 +179,13 @@ export default function Kanban() {
                     isOverLimit={isOverLimit}
                     onAddTask={(status) => {
                       setCreateTaskStatus(status);
-                      setCreateDialogOpen(true);
+                      setSelectedProjectId(selectedProject);
+                      setActiveDialog('createTask');
                     }}
                     onTaskClick={(task) => {
                       setSelectedTask(task);
-                      setDetailOpen(true);
+                      setSelectedTaskId(task.id);
+                      setActiveDialog('taskDetail');
                     }}
                   />
                 );
@@ -191,7 +203,10 @@ export default function Kanban() {
       </div>
 
       {/* Create Task Dialog */}
-      <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+      <Dialog 
+        open={activeDialog === 'createTask'} 
+        onOpenChange={(isOpen) => setActiveDialog(isOpen ? 'createTask' : null)}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Create New Task</DialogTitle>
@@ -202,7 +217,7 @@ export default function Kanban() {
               return result;
             }}
             isLoading={createTaskMutation.isPending}
-            projectId={selectedProject || undefined}
+            projectId={selectedProjectId || selectedProject || undefined}
             presetStatus={createTaskStatus}
           />
         </DialogContent>
@@ -211,10 +226,13 @@ export default function Kanban() {
       {/* Task Detail Sheet */}
       <TaskDetail
         task={selectedTask}
-        open={detailOpen}
+        open={activeDialog === 'taskDetail'}
         onOpenChange={(open) => {
-          setDetailOpen(open);
-          if (!open) setSelectedTask(null);
+          setActiveDialog(open ? 'taskDetail' : null);
+          if (!open) {
+            setSelectedTask(null);
+            setSelectedTaskId(null);
+          }
         }}
       />
     </div>

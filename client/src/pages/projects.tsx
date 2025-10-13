@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Plus, Search, Users, Paperclip, Settings, FileText } from "lucide-react";
@@ -26,23 +25,23 @@ import { useUIStore } from "@/stores/useUIStore";
 
 export default function Projects() {
   const [, setLocation] = useLocation();
-  const [searchQuery, setSearchQuery] = useState("");
-  const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [sowDialogOpen, setSowDialogOpen] = useState(false);
-  const [taskDialogOpen, setTaskDialogOpen] = useState(false);
-  
-  // Use the Zustand store instead of local state
-  const { selectedProjectId, setSelectedProjectId } = useUIStore();
-  
-  const [stakeholderDialogOpen, setStakeholderDialogOpen] = useState(false);
-  const [selectedProjectForStakeholders, setSelectedProjectForStakeholders] = useState<{ id: number; name: string } | null>(null);
-  const [fileAttachmentDialogOpen, setFileAttachmentDialogOpen] = useState(false);
-  const [selectedProjectForFiles, setSelectedProjectForFiles] = useState<{ id: number; name: string } | null>(null);
   const { toast } = useToast();
+  
+  // Use centralized store for all UI state
+  const { 
+    activeDialog, 
+    setActiveDialog, 
+    globalSearchQuery, 
+    setGlobalSearchQuery,
+    selectedProjectId,
+    setSelectedProjectId,
+    selectedProjectForDialog,
+    setSelectedProjectForDialog
+  } = useUIStore();
 
   const { data: projects, isLoading } = useQuery<Project[]>({
-    queryKey: searchQuery 
-      ? ["/api/projects", { searchQuery }] 
+    queryKey: globalSearchQuery 
+      ? ["/api/projects", { searchQuery: globalSearchQuery }] 
       : ["/api/projects"],
   });
 
@@ -52,7 +51,7 @@ export default function Projects() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/projects"], refetchType: 'all' });
-      setCreateDialogOpen(false);
+      setActiveDialog(null);
       toast({
         title: "Success",
         description: "Project created successfully",
@@ -74,7 +73,7 @@ export default function Projects() {
     onSuccess: () => {
       // Invalidate all task queries including those with search params
       queryClient.invalidateQueries({ queryKey: ["/api/tasks"], refetchType: 'all' });
-      setTaskDialogOpen(false);
+      setActiveDialog(null);
       toast({
         title: "Success",
         description: "Task created successfully",
@@ -99,7 +98,10 @@ export default function Projects() {
           <p className="text-muted-foreground">Manage your project portfolio</p>
         </div>
         <div className="flex gap-2">
-          <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+          <Dialog 
+            open={activeDialog === 'createProject'} 
+            onOpenChange={(isOpen) => setActiveDialog(isOpen ? 'createProject' : null)}
+          >
             <DialogTrigger asChild>
               <Button data-testid="button-create-project">
                 <Plus className="h-4 w-4 mr-2" />
@@ -116,7 +118,10 @@ export default function Projects() {
               />
             </DialogContent>
           </Dialog>
-          <Dialog open={sowDialogOpen} onOpenChange={setSowDialogOpen}>
+          <Dialog 
+            open={activeDialog === 'createFromSOW'} 
+            onOpenChange={(isOpen) => setActiveDialog(isOpen ? 'createFromSOW' : null)}
+          >
             <DialogTrigger asChild>
               <Button variant="outline" data-testid="button-create-from-sow">
                 <FileText className="h-4 w-4 mr-2" />
@@ -130,7 +135,7 @@ export default function Projects() {
               <SOWFileUpload
                 onUploadComplete={(project) => {
                   queryClient.invalidateQueries({ queryKey: ["/api/projects"], refetchType: 'all' });
-                  setSowDialogOpen(false);
+                  setActiveDialog(null);
                   toast({
                     title: "Success",
                     description: `Project "${project.name}" has been created from your SOW`,
@@ -156,8 +161,8 @@ export default function Projects() {
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
           placeholder="Search projects..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
+          value={globalSearchQuery}
+          onChange={(e) => setGlobalSearchQuery(e.target.value)}
           className="pl-9"
           data-testid="input-search-projects"
         />
@@ -174,7 +179,7 @@ export default function Projects() {
         <Card>
           <CardContent className="py-16 text-center">
             <p className="text-muted-foreground">
-              {searchQuery ? "No projects match your search" : "No projects yet. Create your first project to get started!"}
+              {globalSearchQuery ? "No projects match your search" : "No projects yet. Create your first project to get started!"}
             </p>
           </CardContent>
         </Card>
@@ -223,8 +228,7 @@ export default function Projects() {
                     variant="outline"
                     onClick={(e) => {
                       e.stopPropagation();
-                      setSelectedProjectId(project.id);
-                      setTaskDialogOpen(true);
+                      setActiveDialog('createTask', project.id);
                     }}
                     data-testid={`button-add-task-${project.id}`}
                   >
@@ -236,8 +240,8 @@ export default function Projects() {
                     variant="outline"
                     onClick={(e) => {
                       e.stopPropagation();
-                      setSelectedProjectForStakeholders({ id: project.id, name: project.name });
-                      setStakeholderDialogOpen(true);
+                      setSelectedProjectForDialog({ id: project.id, name: project.name });
+                      setActiveDialog('manageStakeholders');
                     }}
                     data-testid={`button-manage-stakeholders-${project.id}`}
                   >
@@ -249,8 +253,8 @@ export default function Projects() {
                     variant="outline"
                     onClick={(e) => {
                       e.stopPropagation();
-                      setSelectedProjectForFiles({ id: project.id, name: project.name });
-                      setFileAttachmentDialogOpen(true);
+                      setSelectedProjectForDialog({ id: project.id, name: project.name });
+                      setActiveDialog('fileAttachments');
                     }}
                     data-testid={`button-manage-files-${project.id}`}
                   >
@@ -278,7 +282,10 @@ export default function Projects() {
       )}
 
       {/* Task Creation Dialog */}
-      <Dialog open={taskDialogOpen} onOpenChange={setTaskDialogOpen}>
+      <Dialog 
+        open={activeDialog === 'createTask'} 
+        onOpenChange={(isOpen) => setActiveDialog(isOpen ? 'createTask' : null)}
+      >
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Create New Task</DialogTitle>
@@ -292,22 +299,22 @@ export default function Projects() {
       </Dialog>
 
       {/* Stakeholder Management Dialog */}
-      {selectedProjectForStakeholders && (
+      {selectedProjectForDialog && (
         <StakeholderDialog
-          projectId={selectedProjectForStakeholders.id}
-          projectName={selectedProjectForStakeholders.name}
-          open={stakeholderDialogOpen}
-          onOpenChange={setStakeholderDialogOpen}
+          projectId={selectedProjectForDialog.id}
+          projectName={selectedProjectForDialog.name}
+          open={activeDialog === 'manageStakeholders'}
+          onOpenChange={(isOpen) => setActiveDialog(isOpen ? 'manageStakeholders' : null)}
         />
       )}
 
       {/* File Attachment Management Dialog */}
-      {selectedProjectForFiles && (
+      {selectedProjectForDialog && (
         <FileAttachmentDialog
-          projectId={selectedProjectForFiles.id}
-          projectName={selectedProjectForFiles.name}
-          open={fileAttachmentDialogOpen}
-          onOpenChange={setFileAttachmentDialogOpen}
+          projectId={selectedProjectForDialog.id}
+          projectName={selectedProjectForDialog.name}
+          open={activeDialog === 'fileAttachments'}
+          onOpenChange={(isOpen) => setActiveDialog(isOpen ? 'fileAttachments' : null)}
         />
       )}
     </div>

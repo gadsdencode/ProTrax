@@ -20,18 +20,28 @@ import { TaskForm } from "@/components/task-form";
 import { TaskDetail } from "@/components/task-detail";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useUIStore } from "@/stores/useUIStore";
 import type { Task, Project, InsertTask } from "@shared/schema";
 
 export default function ListView() {
   const params = useParams();
   const projectIdFromUrl = params.id ? parseInt(params.id) : null;
-  const [searchQuery, setSearchQuery] = useState("");
   const [selectedTasks, setSelectedTasks] = useState<number[]>([]);
   const [sortField, setSortField] = useState<keyof Task>("dueDate");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
-  const [taskFormOpen, setTaskFormOpen] = useState(false);
-  const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
   const { toast } = useToast();
+  
+  // Use centralized store for dialog management and search
+  const {
+    activeDialog,
+    setActiveDialog,
+    selectedTaskId,
+    setSelectedTaskId,
+    globalSearchQuery,
+    setGlobalSearchQuery,
+    selectedProjectId,
+    setSelectedProjectId
+  } = useUIStore();
 
   const { data: project } = useQuery<Project>({
     queryKey: [`/api/projects/${projectIdFromUrl}`],
@@ -40,7 +50,7 @@ export default function ListView() {
 
   const queryParams: Record<string, number | string> = {};
   if (projectIdFromUrl) queryParams.projectId = projectIdFromUrl;
-  if (searchQuery) queryParams.searchQuery = searchQuery;
+  if (globalSearchQuery) queryParams.searchQuery = globalSearchQuery;
 
   const { data: tasks, isLoading } = useQuery<Task[]>({
     queryKey: 
@@ -60,7 +70,7 @@ export default function ListView() {
     onSuccess: (createdTask) => {
       queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
       queryClient.invalidateQueries({ queryKey: [`/api/tasks/${createdTask.id}`] });
-      setTaskFormOpen(false);
+      setActiveDialog(null);
       toast({
         title: "Task created",
         description: "Task has been created successfully",
@@ -123,7 +133,10 @@ export default function ListView() {
         <div className="flex items-center gap-2">
           {projectIdFromUrl && (
             <Button
-              onClick={() => setTaskFormOpen(true)}
+              onClick={() => {
+                setSelectedProjectId(projectIdFromUrl);
+                setActiveDialog('createTask');
+              }}
               data-testid="button-new-task"
             >
               <Plus className="h-4 w-4 mr-2" />
@@ -146,8 +159,8 @@ export default function ListView() {
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
           placeholder="Search tasks..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
+          value={globalSearchQuery}
+          onChange={(e) => setGlobalSearchQuery(e.target.value)}
           className="pl-9"
           data-testid="input-search-tasks"
         />
@@ -179,7 +192,7 @@ export default function ListView() {
       ) : !filteredAndSortedTasks || filteredAndSortedTasks.length === 0 ? (
         <div className="border rounded-lg p-16 text-center">
           <p className="text-muted-foreground">
-            {searchQuery ? "No tasks match your search" : "No tasks to display"}
+            {globalSearchQuery ? "No tasks match your search" : "No tasks to display"}
           </p>
         </div>
       ) : (
@@ -256,6 +269,7 @@ export default function ListView() {
                     if (!isCheckbox) {
                       console.log('Setting selected task id to:', task.id);
                       setSelectedTaskId(task.id);
+                      setActiveDialog('taskDetail');
                     }
                   }}
                 >
@@ -319,7 +333,10 @@ export default function ListView() {
       )}
 
       {/* Task Form Dialog */}
-      <Dialog open={taskFormOpen} onOpenChange={setTaskFormOpen}>
+      <Dialog 
+        open={activeDialog === 'createTask'} 
+        onOpenChange={(isOpen) => setActiveDialog(isOpen ? 'createTask' : null)}
+      >
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Create New Task</DialogTitle>
@@ -344,8 +361,9 @@ export default function ListView() {
       {/* Task Detail Sheet */}
       <TaskDetail
         task={filteredAndSortedTasks?.find(t => t.id === selectedTaskId) || null}
-        open={!!selectedTaskId}
+        open={activeDialog === 'taskDetail'}
         onOpenChange={(open) => {
+          setActiveDialog(open ? 'taskDetail' : null);
           if (!open) setSelectedTaskId(null);
         }}
       />
