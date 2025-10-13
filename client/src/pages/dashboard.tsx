@@ -185,11 +185,11 @@ export default function Dashboard() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(task.status!)}`}>
-                      {task.status}
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(task.status || 'todo')}`}>
+                      {task.status || 'todo'}
                     </span>
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${getPriorityColor(task.priority!)}`}>
-                      {task.priority}
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${getPriorityColor(task.priority || 'medium')}`}>
+                      {task.priority || 'medium'}
                     </span>
                   </div>
                 </div>
@@ -242,11 +242,11 @@ export default function Dashboard() {
                     )}
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(task.status!)}`}>
-                      {task.status}
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(task.status || 'todo')}`}>
+                      {task.status || 'todo'}
                     </span>
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${getPriorityColor(task.priority!)}`}>
-                      {task.priority}
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${getPriorityColor(task.priority || 'medium')}`}>
+                      {task.priority || 'medium'}
                     </span>
                   </div>
                 </div>
