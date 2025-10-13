@@ -96,6 +96,11 @@ export async function sendProjectReport(
   reportData: any,
   recipients: EmailRecipient[]
 ) {
+  console.log(`[EMAIL DEBUG] sendProjectReport called with type: ${reportType}`);
+  console.log(`[EMAIL DEBUG] reportData type:`, typeof reportData);
+  console.log(`[EMAIL DEBUG] reportData is array:`, Array.isArray(reportData));
+  console.log(`[EMAIL DEBUG] reportData has tasks:`, reportData?.tasks ? `yes (${reportData.tasks.length})` : 'no');
+  
   let reportContent = '';
   
   if (reportType === 'summary') {

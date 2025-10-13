@@ -1320,6 +1320,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
     });
     
+    console.log(`[EMAIL DEBUG] Project ${projectId}: ${enrichedTasks.length} enriched tasks ready for email`);
+    
     // Prepare report data based on type
     let reportData: any = {};
     
