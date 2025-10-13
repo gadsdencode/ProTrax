@@ -122,6 +122,40 @@ export async function sendProjectReport(
     console.log(`[EMAIL DEBUG] reportData.inProgressTasks:`, reportData.inProgressTasks);
   }
   
+  // Add validation before generating HTML
+  if (!reportData) {
+    throw new Error(`Report data is missing for ${reportType} report`);
+  }
+
+  // Validate data structure based on report type
+  if (reportType === 'summary' || reportType === 'status') {
+    if (typeof reportData !== 'object' || Array.isArray(reportData)) {
+      throw new Error(`Invalid data structure for ${reportType} report: expected object, got ${Array.isArray(reportData) ? 'array' : typeof reportData}`);
+    }
+    
+    // Require tasks array for summary/status reports
+    if (!reportData.tasks) {
+      // Log the issue for debugging
+      console.error(`[ERROR] No tasks provided for ${reportType} report`);
+      console.error(`[ERROR] Received data keys:`, Object.keys(reportData));
+      console.error(`[ERROR] This likely indicates a data enrichment failure upstream`);
+      
+      // Throw error to prevent incomplete emails from being sent
+      throw new Error(`${reportType.charAt(0).toUpperCase() + reportType.slice(1)} report requires tasks data but none was provided. Please check data enrichment in routes.ts`);
+    } else if (!Array.isArray(reportData.tasks)) {
+      throw new Error(`Invalid tasks data for ${reportType} report: expected array, got ${typeof reportData.tasks}`);
+    }
+    
+    // Warn if tasks array is empty (but allow it as this might be legitimate)
+    if (reportData.tasks.length === 0) {
+      console.warn(`[WARNING] ${reportType} report has empty tasks array - project may genuinely have no tasks`);
+    }
+  } else if (reportType === 'gantt' || reportType === 'kanban') {
+    if (!Array.isArray(reportData)) {
+      throw new Error(`Invalid data structure for ${reportType} report: expected array, got ${typeof reportData}`);
+    }
+  }
+  
   let reportContent = '';
   
   if (reportType === 'summary') {
@@ -174,6 +208,29 @@ export async function sendPortfolioSummary(
 
 function generateProjectSummaryHTML(projectName: string, data: any): string {
   console.log(`[HTML DEBUG] Generating Project Summary HTML`);
+  
+  // Handle null/undefined data gracefully
+  if (!data) {
+    console.error(`[ERROR] generateProjectSummaryHTML received null/undefined data`);
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; color: #333; padding: 20px; }
+          .error { background: #fee2e2; color: #991b1b; padding: 20px; border-radius: 8px; }
+        </style>
+      </head>
+      <body>
+        <div class="error">
+          <h1>Error Generating Report</h1>
+          <p>Unable to generate project summary report due to missing data.</p>
+        </div>
+      </body>
+      </html>
+    `;
+  }
+  
   console.log(`[HTML DEBUG] Data keys:`, Object.keys(data));
   console.log(`[HTML DEBUG] Tasks available:`, !!data.tasks);
   console.log(`[HTML DEBUG] Tasks count:`, data.tasks?.length || 0);
@@ -320,6 +377,29 @@ function generateProjectSummaryHTML(projectName: string, data: any): string {
 
 function generateStatusReportHTML(projectName: string, data: any): string {
   console.log(`[HTML DEBUG] Generating Status Report HTML`);
+  
+  // Handle null/undefined data gracefully
+  if (!data) {
+    console.error(`[ERROR] generateStatusReportHTML received null/undefined data`);
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; color: #333; padding: 20px; }
+          .error { background: #fee2e2; color: #991b1b; padding: 20px; border-radius: 8px; }
+        </style>
+      </head>
+      <body>
+        <div class="error">
+          <h1>Error Generating Report</h1>
+          <p>Unable to generate status report due to missing data.</p>
+        </div>
+      </body>
+      </html>
+    `;
+  }
+  
   console.log(`[HTML DEBUG] Data keys:`, Object.keys(data));
   console.log(`[HTML DEBUG] Tasks available:`, !!data.tasks);
   console.log(`[HTML DEBUG] Tasks count:`, data.tasks?.length || 0);
@@ -594,6 +674,29 @@ function generateTaskReportHTML(projectName: string, reportType: string, tasks: 
 
 function generatePortfolioSummaryHTML(projectsData: any[]): string {
   console.log(`[HTML DEBUG] Generating Portfolio Summary HTML`);
+  
+  // Handle null/undefined data gracefully
+  if (!projectsData || !Array.isArray(projectsData)) {
+    console.error(`[ERROR] generatePortfolioSummaryHTML received invalid data`);
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; color: #333; padding: 20px; }
+          .error { background: #fee2e2; color: #991b1b; padding: 20px; border-radius: 8px; }
+        </style>
+      </head>
+      <body>
+        <div class="error">
+          <h1>Error Generating Report</h1>
+          <p>Unable to generate portfolio summary due to missing or invalid data.</p>
+        </div>
+      </body>
+      </html>
+    `;
+  }
+  
   console.log(`[HTML DEBUG] Projects count:`, projectsData.length);
   
   projectsData.forEach((project, index) => {
