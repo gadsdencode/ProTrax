@@ -205,7 +205,7 @@ export async function sendPortfolioSummary(
     throw new Error('Portfolio summary requires at least one project');
   }
   
-  // Log task information for each project
+  // Log and validate task information for each project
   projectsData.forEach((project, index) => {
     console.log(`[PORTFOLIO EMAIL DEBUG] Project ${index + 1} ("${project.name}"):`);
     console.log(`  - Has tasks array:`, !!project.tasks);
@@ -213,10 +213,9 @@ export async function sendPortfolioSummary(
     console.log(`  - Task count:`, project.tasks?.length || 0);
     console.log(`  - Total tasks (calculated):`, project.totalTasks);
     
-    // Validate each project has tasks array
+    // Validate each project has tasks array - fail fast if missing
     if (!project.tasks) {
-      console.warn(`[WARNING] Project "${project.name}" missing tasks array, setting to empty`);
-      project.tasks = [];
+      throw new Error(`Portfolio summary error: Project "${project.name}" is missing task data. Task information is required for all projects in the portfolio.`);
     }
     
     // Log first task if available

@@ -1261,6 +1261,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const tasks = await storage.getTasks(project.id);
           console.log(`[PORTFOLIO] Project ${project.id} has ${tasks.length} tasks`);
           
+          // Ensure tasks is always an array (fail-safe at source)
+          if (!tasks || !Array.isArray(tasks)) {
+            throw createError.internal(`Failed to fetch tasks for project ${project.id} ("${project.name}")`);
+          }
+          
           const totalTasks = tasks.length;
           const completedTasks = tasks.filter(t => t.status === 'done').length;
           const inProgressTasks = tasks.filter(t => t.status === 'in_progress').length;
