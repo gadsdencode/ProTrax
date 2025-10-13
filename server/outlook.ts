@@ -196,7 +196,51 @@ export async function sendPortfolioSummary(
   projectsData: any[],
   recipients: EmailRecipient[]
 ) {
+  console.log(`[PORTFOLIO EMAIL DEBUG] ========== SEND PORTFOLIO SUMMARY START ==========`);
+  console.log(`[PORTFOLIO EMAIL DEBUG] Projects count:`, projectsData.length);
+  console.log(`[PORTFOLIO EMAIL DEBUG] Recipients count:`, recipients.length);
+  
+  // Validate projectsData
+  if (!projectsData || !Array.isArray(projectsData) || projectsData.length === 0) {
+    throw new Error('Portfolio summary requires at least one project');
+  }
+  
+  // Log task information for each project
+  projectsData.forEach((project, index) => {
+    console.log(`[PORTFOLIO EMAIL DEBUG] Project ${index + 1} ("${project.name}"):`);
+    console.log(`  - Has tasks array:`, !!project.tasks);
+    console.log(`  - Tasks is array:`, Array.isArray(project.tasks));
+    console.log(`  - Task count:`, project.tasks?.length || 0);
+    console.log(`  - Total tasks (calculated):`, project.totalTasks);
+    
+    // Validate each project has tasks array
+    if (!project.tasks) {
+      console.warn(`[WARNING] Project "${project.name}" missing tasks array, setting to empty`);
+      project.tasks = [];
+    }
+    
+    // Log first task if available
+    if (project.tasks && project.tasks.length > 0) {
+      console.log(`  - First task:`, {
+        title: project.tasks[0].title,
+        status: project.tasks[0].status,
+        assignee: project.tasks[0].assigneeName
+      });
+    }
+  });
+  
+  // Count total tasks across all projects
+  const totalTasksAcrossPortfolio = projectsData.reduce((sum, p) => sum + (p.tasks?.length || 0), 0);
+  console.log(`[PORTFOLIO EMAIL DEBUG] Total tasks across all projects:`, totalTasksAcrossPortfolio);
+  
+  if (totalTasksAcrossPortfolio === 0) {
+    console.warn(`[WARNING] Portfolio has no tasks across any projects`);
+  }
+  
   const reportContent = generatePortfolioSummaryHTML(projectsData);
+  console.log(`[PORTFOLIO EMAIL DEBUG] Generated HTML length:`, reportContent.length);
+  console.log(`[PORTFOLIO EMAIL DEBUG] HTML contains task tables:`, reportContent.includes('<th>Task</th>'));
+  console.log(`[PORTFOLIO EMAIL DEBUG] ========== SEND PORTFOLIO SUMMARY END ==========`);
 
   await sendEmail({
     to: recipients,
@@ -815,9 +859,9 @@ function generatePortfolioSummaryHTML(projectsData: any[]): string {
             </div>
           ` : ''}
 
-          ${project.tasks && project.tasks.length > 0 ? `
-            <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #e5e7eb;">
-              <h4 style="font-size: 14px; font-weight: 600; color: #111827; margin-bottom: 10px;">Tasks</h4>
+          <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #e5e7eb;">
+            <h4 style="font-size: 14px; font-weight: 600; color: #111827; margin-bottom: 10px;">Tasks</h4>
+            ${project.tasks && project.tasks.length > 0 ? `
               <div style="max-height: 300px; overflow-y: auto;">
                 <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
                   <thead>
@@ -873,8 +917,12 @@ function generatePortfolioSummaryHTML(projectsData: any[]): string {
                   </p>
                 ` : ''}
               </div>
-            </div>
-          ` : ''}
+            ` : `
+              <p style="color: #6b7280; font-size: 13px; padding: 20px; text-align: center; background: #f9fafb; border-radius: 6px;">
+                No tasks found for this project
+              </p>
+            `}
+          </div>
         </div>
       `).join('')}
 
