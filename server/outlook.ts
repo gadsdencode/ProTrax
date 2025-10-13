@@ -96,20 +96,59 @@ export async function sendProjectReport(
   reportData: any,
   recipients: EmailRecipient[]
 ) {
-  console.log(`[EMAIL DEBUG] sendProjectReport called with type: ${reportType}`);
+  console.log(`[EMAIL DEBUG] ========== SEND PROJECT REPORT START ==========`);
+  console.log(`[EMAIL DEBUG] Project Name: ${projectName}`);
+  console.log(`[EMAIL DEBUG] Report Type: ${reportType}`);
+  console.log(`[EMAIL DEBUG] Recipients Count: ${recipients.length}`);
   console.log(`[EMAIL DEBUG] reportData type:`, typeof reportData);
   console.log(`[EMAIL DEBUG] reportData is array:`, Array.isArray(reportData));
-  console.log(`[EMAIL DEBUG] reportData has tasks:`, reportData?.tasks ? `yes (${reportData.tasks.length})` : 'no');
+  
+  // Deep inspection of reportData structure
+  if (typeof reportData === 'object' && !Array.isArray(reportData)) {
+    console.log(`[EMAIL DEBUG] reportData keys:`, Object.keys(reportData));
+    console.log(`[EMAIL DEBUG] reportData.tasks exists:`, 'tasks' in reportData);
+    console.log(`[EMAIL DEBUG] reportData.tasks type:`, typeof reportData.tasks);
+    console.log(`[EMAIL DEBUG] reportData.tasks is array:`, Array.isArray(reportData.tasks));
+    console.log(`[EMAIL DEBUG] reportData.tasks length:`, reportData?.tasks?.length || 0);
+    
+    // Log first task if exists for verification
+    if (reportData.tasks && reportData.tasks.length > 0) {
+      console.log(`[EMAIL DEBUG] First task sample:`, JSON.stringify(reportData.tasks[0], null, 2));
+    }
+    
+    // Log other important fields
+    console.log(`[EMAIL DEBUG] reportData.totalTasks:`, reportData.totalTasks);
+    console.log(`[EMAIL DEBUG] reportData.completedTasks:`, reportData.completedTasks);
+    console.log(`[EMAIL DEBUG] reportData.inProgressTasks:`, reportData.inProgressTasks);
+  }
   
   let reportContent = '';
   
   if (reportType === 'summary') {
+    console.log(`[EMAIL DEBUG] Generating summary HTML with data:`, {
+      hasTasks: !!reportData.tasks,
+      taskCount: reportData?.tasks?.length || 0,
+      totalTasks: reportData.totalTasks,
+      completedTasks: reportData.completedTasks
+    });
     reportContent = generateProjectSummaryHTML(projectName, reportData);
   } else if (reportType === 'status') {
+    console.log(`[EMAIL DEBUG] Generating status HTML with data:`, {
+      hasTasks: !!reportData.tasks,
+      taskCount: reportData?.tasks?.length || 0,
+      accomplishments: reportData?.accomplishments?.length || 0,
+      upcoming: reportData?.upcoming?.length || 0
+    });
     reportContent = generateStatusReportHTML(projectName, reportData);
   } else if (reportType === 'gantt' || reportType === 'kanban') {
+    console.log(`[EMAIL DEBUG] Generating ${reportType} HTML with task count:`, Array.isArray(reportData) ? reportData.length : 0);
     reportContent = generateTaskReportHTML(projectName, reportType, reportData);
   }
+  
+  console.log(`[EMAIL DEBUG] Generated HTML content length:`, reportContent.length);
+  console.log(`[EMAIL DEBUG] HTML contains 'Task Details':`, reportContent.includes('Task Details'));
+  console.log(`[EMAIL DEBUG] HTML contains '<table>':`, reportContent.includes('<table>'));
+  console.log(`[EMAIL DEBUG] ========== SEND PROJECT REPORT END ==========`);
 
   await sendEmail({
     to: recipients,
@@ -134,6 +173,11 @@ export async function sendPortfolioSummary(
 }
 
 function generateProjectSummaryHTML(projectName: string, data: any): string {
+  console.log(`[HTML DEBUG] Generating Project Summary HTML`);
+  console.log(`[HTML DEBUG] Data keys:`, Object.keys(data));
+  console.log(`[HTML DEBUG] Tasks available:`, !!data.tasks);
+  console.log(`[HTML DEBUG] Tasks count:`, data.tasks?.length || 0);
+  
   const formatStatus = (status: string) => {
     const statusMap: any = {
       'todo': 'To Do',
@@ -153,6 +197,60 @@ function generateProjectSummaryHTML(projectName: string, data: any): string {
     };
     return `<span style="color: ${priorityColors[priority] || '#6b7280'}; font-weight: 600;">${priority ? priority.toUpperCase() : 'N/A'}</span>`;
   };
+  
+  // Create tasks section HTML
+  let tasksSection = '';
+  if (data.tasks && Array.isArray(data.tasks) && data.tasks.length > 0) {
+    console.log(`[HTML DEBUG] Creating tasks table with ${data.tasks.length} tasks`);
+    const tasksToShow = data.tasks.slice(0, 15);
+    tasksSection = `
+      <div class="section">
+        <h2>Task Details (Latest ${Math.min(15, data.tasks.length)} of ${data.tasks.length})</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Task</th>
+              <th>Assignee</th>
+              <th>Status</th>
+              <th>Priority</th>
+              <th>Progress</th>
+              <th>Due Date</th>
+              <th>Est. Hours</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${tasksToShow.map((task: any) => `
+              <tr>
+                <td>
+                  <strong>${task.title || 'Untitled Task'}</strong>
+                  ${task.description ? `<div class="task-description">${task.description.substring(0, 100)}${task.description.length > 100 ? '...' : ''}</div>` : ''}
+                </td>
+                <td>${task.assigneeName || 'Unassigned'}</td>
+                <td>${formatStatus(task.status || 'todo')}</td>
+                <td>${formatPriority(task.priority || 'medium')}</td>
+                <td>
+                  <div class="progress-bar">
+                    <div class="progress-fill" style="width: ${task.progress || 0}%;"></div>
+                  </div>
+                  <span style="margin-left: 8px; font-size: 12px;">${task.progress || 0}%</span>
+                </td>
+                <td>${task.dueDate ? new Date(task.dueDate).toLocaleDateString() : 'N/A'}</td>
+                <td>${task.estimatedHours || '-'}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  } else {
+    console.log(`[HTML DEBUG] No tasks available, adding message`);
+    tasksSection = `
+      <div class="section">
+        <h2>Task Details</h2>
+        <p style="color: #6b7280; font-style: italic;">No tasks available for this project.</p>
+      </div>
+    `;
+  }
 
   return `
     <!DOCTYPE html>
@@ -208,45 +306,7 @@ function generateProjectSummaryHTML(projectName: string, data: any): string {
         </div>
       </div>
 
-      ${data.tasks && data.tasks.length > 0 ? `
-        <div class="section">
-          <h2>Task Details (Latest ${Math.min(15, data.tasks.length)} of ${data.tasks.length})</h2>
-          <table>
-            <thead>
-              <tr>
-                <th>Task</th>
-                <th>Assignee</th>
-                <th>Status</th>
-                <th>Priority</th>
-                <th>Progress</th>
-                <th>Due Date</th>
-                <th>Est. Hours</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${data.tasks.slice(0, 15).map((task: any) => `
-                <tr>
-                  <td>
-                    <strong>${task.title}</strong>
-                    ${task.description ? `<div class="task-description">${task.description.substring(0, 100)}${task.description.length > 100 ? '...' : ''}</div>` : ''}
-                  </td>
-                  <td>${task.assigneeName || 'Unassigned'}</td>
-                  <td>${formatStatus(task.status || 'todo')}</td>
-                  <td>${formatPriority(task.priority || 'medium')}</td>
-                  <td>
-                    <div class="progress-bar">
-                      <div class="progress-fill" style="width: ${task.progress || 0}%;"></div>
-                    </div>
-                    <span style="margin-left: 8px; font-size: 12px;">${task.progress || 0}%</span>
-                  </td>
-                  <td>${task.dueDate ? new Date(task.dueDate).toLocaleDateString() : 'N/A'}</td>
-                  <td>${task.estimatedHours || '-'}</td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-        </div>
-      ` : ''}
+      ${tasksSection}
 
       <div class="section">
         <p style="color: #6b7280; font-size: 12px;">
