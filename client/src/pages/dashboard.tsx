@@ -1,16 +1,18 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { AlertCircle, CheckCircle2, Clock, FolderKanban, Mail, ChevronDown } from "lucide-react";
+import { AlertCircle, CheckCircle2, Clock, FolderKanban, Mail, ChevronDown, ArrowRight, ListTodo } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { EmailReportDialog } from "@/components/email-report-dialog";
 import type { Project, Task } from "@shared/schema";
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const [, setLocation] = useLocation();
   const [emailDialogOpen, setEmailDialogOpen] = useState(false);
   const [selectedReportType, setSelectedReportType] = useState<string>("summary");
   
@@ -20,6 +22,11 @@ export default function Dashboard() {
 
   const { data: myTasks, isLoading: tasksLoading } = useQuery<Task[]>({
     queryKey: ["/api/tasks/my-tasks"],
+  });
+
+  // Fetch ALL recent tasks (not just assigned to user)
+  const { data: allTasks, isLoading: allTasksLoading } = useQuery<Task[]>({
+    queryKey: ["/api/tasks"],
   });
 
   const handleEmailReport = (reportType: string) => {
@@ -125,10 +132,88 @@ export default function Dashboard() {
         ))}
       </div>
 
+      {/* Recent Tasks (All Tasks) */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="flex items-center gap-2">
+            <ListTodo className="h-5 w-5" />
+            Recent Tasks
+          </CardTitle>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setLocation('/list')}
+            className="gap-2"
+            data-testid="button-view-all-tasks"
+          >
+            View All Tasks
+            <ArrowRight className="h-4 w-4" />
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {allTasksLoading ? (
+            <div className="space-y-3">
+              {[1, 2, 3, 4, 5].map(i => <Skeleton key={i} className="h-12 w-full" />)}
+            </div>
+          ) : !allTasks || allTasks.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-8 text-center">
+              No tasks created yet. Upload an SOW document to automatically create tasks.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              <div className="text-xs text-muted-foreground mb-2">
+                Showing {Math.min(10, allTasks.length)} of {allTasks.length} total tasks
+              </div>
+              {allTasks.slice(0, 10).map(task => (
+                <div
+                  key={task.id}
+                  className="flex items-center justify-between p-3 rounded-lg border hover-elevate transition-all cursor-pointer"
+                  data-testid={`recent-task-${task.id}`}
+                  onClick={() => setLocation(`/projects/${task.projectId}/list`)}
+                >
+                  <div className="flex-1">
+                    <p className="text-sm font-medium">{task.title}</p>
+                    <div className="flex items-center gap-4 mt-1">
+                      <p className="text-xs text-muted-foreground">
+                        Project: {projects?.find(p => p.id === task.projectId)?.name || `#${task.projectId}`}
+                      </p>
+                      {task.dueDate && (
+                        <p className="text-xs text-muted-foreground">
+                          Due: {new Date(task.dueDate).toLocaleDateString()}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(task.status!)}`}>
+                      {task.status}
+                    </span>
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${getPriorityColor(task.priority!)}`}>
+                      {task.priority}
+                    </span>
+                  </div>
+                </div>
+              ))}
+              {allTasks.length > 10 && (
+                <Button
+                  variant="outline"
+                  className="w-full mt-2"
+                  onClick={() => setLocation('/list')}
+                  data-testid="button-see-more-tasks"
+                >
+                  See all {allTasks.length} tasks
+                  <ArrowRight className="h-4 w-4 ml-2" />
+                </Button>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* My Tasks */}
       <Card>
         <CardHeader>
-          <CardTitle>My Tasks</CardTitle>
+          <CardTitle>My Assigned Tasks</CardTitle>
         </CardHeader>
         <CardContent>
           {tasksLoading ? (
@@ -144,8 +229,9 @@ export default function Dashboard() {
               {myTasks.slice(0, 5).map(task => (
                 <div
                   key={task.id}
-                  className="flex items-center justify-between p-3 rounded-lg border hover-elevate transition-all"
-                  data-testid={`task-${task.id}`}
+                  className="flex items-center justify-between p-3 rounded-lg border hover-elevate transition-all cursor-pointer"
+                  data-testid={`my-task-${task.id}`}
+                  onClick={() => setLocation(`/projects/${task.projectId}/list`)}
                 >
                   <div className="flex-1">
                     <p className="text-sm font-medium">{task.title}</p>
