@@ -1457,6 +1457,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   }));
 
+  // ============= DEBUG ROUTES =============
+  app.get('/api/debug/active-projects', isAuthenticated, asyncHandler(async (req, res) => {
+    // Get all projects from storage
+    const allProjects = await storage.getProjects();
+    const activeProjects = allProjects.filter(p => p.status === 'active');
+    
+    // For each active project, get task count
+    const projectsWithTasks = await Promise.all(
+      activeProjects.map(async (project) => {
+        const tasks = await storage.getTasks(project.id);
+        return {
+          id: project.id,
+          name: project.name,
+          status: project.status,
+          taskCount: tasks.length,
+          firstThreeTasks: tasks.slice(0, 3).map(t => ({
+            id: t.id,
+            title: t.title,
+            status: t.status
+          }))
+        };
+      })
+    );
+    
+    res.json({
+      totalProjects: allProjects.length,
+      activeProjects: activeProjects.length,
+      projectsWithTasks: projectsWithTasks.filter(p => p.taskCount > 0),
+      projectsWithoutTasks: projectsWithTasks.filter(p => p.taskCount === 0)
+    });
+  }));
+
   // ============= RECURRING TASK ROUTES =============
   
   app.get('/api/tasks/:id/next-occurrence', isAuthenticated, asyncHandler(async (req, res) => {
