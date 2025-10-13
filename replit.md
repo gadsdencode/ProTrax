@@ -4,6 +4,12 @@
 
 ProjectHub is a comprehensive enterprise project management platform designed for modern teams, offering a full-featured project management suite with various visualization options like Gantt charts, Kanban boards, calendar, and list views. It supports Waterfall, Agile, and Hybrid methodologies, includes portfolio management, AI-powered insights via Google Gemini, and extensive project tracking capabilities. The platform aims to unify project, task, dependency, risk, budget, time, expense, and team collaboration management within a single interface, providing real-time updates and comprehensive reporting.
 
+### Recent Updates (December 2024)
+
+- **Enhanced Email Notifications**: Email reports now include comprehensive task details with assignee names (not IDs), task descriptions, progress bars, estimated hours, story points, and proper status/priority color coding.
+- **Improved Gantt Chart**: Gantt view now separates tasks into "Scheduled" and "Unscheduled" sections with badge indicators for better visibility of tasks needing dates.
+- **Task Editing Workflow**: Streamlined task editing with pre-filled forms and proper cache invalidation for immediate UI updates.
+
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.
