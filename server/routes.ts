@@ -1234,9 +1234,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     // Check if this is a portfolio summary (all active projects)
     if (reportType === 'summary' && (!projectId || projectId === 'all')) {
+      console.log('[PORTFOLIO] Starting portfolio email generation...');
+      
       // Fetch all active projects
       const allProjects = await storage.getProjects();
+      console.log(`[PORTFOLIO] Total projects in database: ${allProjects.length}`);
+      
       const activeProjects = allProjects.filter(p => p.status === 'active');
+      console.log(`[PORTFOLIO] Active projects found: ${activeProjects.length}`);
+      activeProjects.forEach(p => {
+        console.log(`[PORTFOLIO]   - Project ${p.id}: "${p.name}" (status: ${p.status})`);
+      });
       
       if (activeProjects.length === 0) {
         throw createError.notFound("No active projects found");
@@ -1249,7 +1257,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Collect data for each active project with enriched tasks
       const projectsData = await Promise.all(
         activeProjects.map(async (project) => {
+          console.log(`[PORTFOLIO] Fetching tasks for project ${project.id} ("${project.name}")...`);
           const tasks = await storage.getTasks(project.id);
+          console.log(`[PORTFOLIO] Project ${project.id} has ${tasks.length} tasks`);
+          
           const totalTasks = tasks.length;
           const completedTasks = tasks.filter(t => t.status === 'done').length;
           const inProgressTasks = tasks.filter(t => t.status === 'in_progress').length;
@@ -1292,6 +1303,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           };
         })
       );
+
+      console.log(`[PORTFOLIO] Prepared ${projectsData.length} projects for email`);
+      const totalTasksInPortfolio = projectsData.reduce((sum, p) => sum + p.totalTasks, 0);
+      console.log(`[PORTFOLIO] Total tasks across all projects: ${totalTasksInPortfolio}`);
+      projectsData.forEach(p => {
+        console.log(`[PORTFOLIO] Summary - ${p.name}: ${p.totalTasks} tasks, ${p.tasks?.length || 0} enriched tasks in array`);
+      });
 
       await sendPortfolioSummary(projectsData, recipients);
       
