@@ -1,0 +1,134 @@
+
+8:52:00 PM [express] GET /api/users 200 in 295ms :: [{"id":"38577561","email":"bcfrerichs@gmail.com"…
+2025-10-13 16:52:00.36
+849e46f6
+User
+8:52:00 PM [express] GET /api/tasks/my-tasks 304 in 428ms :: []
+2025-10-13 16:52:00.37
+849e46f6
+User
+8:52:00 PM [express] GET /api/tasks 304 in 427ms :: [{"id":144,"projectId":10,"sprintId":null,"paren…
+2025-10-13 16:52:17.07
+849e46f6
+User
+8:52:17 PM [express] GET /api/projects/2/stakeholders 304 in 611ms :: [{"id":2,"projectId":2,"userId…
+2025-10-13 16:52:21.44
+849e46f6
+User
+[PORTFOLIO] Starting portfolio email generation...
+2025-10-13 16:52:21.49
+849e46f6
+User
+[PORTFOLIO] Total projects in database: 3
+2025-10-13 16:52:21.49
+849e46f6
+User
+[PORTFOLIO] Active projects found: 2
+2025-10-13 16:52:21.49
+849e46f6
+User
+[PORTFOLIO] - Project 2: "CVIC Research Survey" (status: active)
+2025-10-13 16:52:21.49
+849e46f6
+User
+[PORTFOLIO] - Project 1: "FMC Focus Groups Research" (status: active)
+2025-10-13 16:52:21.54
+849e46f6
+User
+[PORTFOLIO] Fetching tasks for project 2 ("CVIC Research Survey")...
+2025-10-13 16:52:21.54
+849e46f6
+User
+[PORTFOLIO] Fetching tasks for project 1 ("FMC Focus Groups Research")...
+2025-10-13 16:52:21.59
+849e46f6
+User
+[PORTFOLIO] Project 2 has 0 tasks
+2025-10-13 16:52:21.72
+849e46f6
+User
+[PORTFOLIO] Project 1 has 0 tasks
+2025-10-13 16:52:21.72
+849e46f6
+User
+[PORTFOLIO] Prepared 2 projects for email
+2025-10-13 16:52:21.72
+849e46f6
+User
+[PORTFOLIO] Total tasks across all projects: 0
+2025-10-13 16:52:21.72
+849e46f6
+User
+[PORTFOLIO] Summary - CVIC Research Survey: 0 tasks, 0 enriched tasks in array
+2025-10-13 16:52:21.72
+849e46f6
+User
+[PORTFOLIO] Summary - FMC Focus Groups Research: 0 tasks, 0 enriched tasks in array
+2025-10-13 16:52:21.72
+849e46f6
+User
+[HTML DEBUG] Generating Portfolio Summary HTML
+2025-10-13 16:52:21.72
+849e46f6
+User
+[HTML DEBUG] Projects count: 2
+2025-10-13 16:52:21.73
+849e46f6
+User
+[HTML DEBUG] Project 1: {
+2025-10-13 16:52:21.73
+849e46f6
+User
+name: 'CVIC Research Survey',
+2025-10-13 16:52:21.73
+849e46f6
+User
+hasTasks: true,
+2025-10-13 16:52:21.73
+849e46f6
+User
+taskCount: 0,
+2025-10-13 16:52:21.73
+849e46f6
+User
+totalTasks: 0,
+2025-10-13 16:52:21.73
+849e46f6
+User
+completedTasks: 0
+2025-10-13 16:52:21.73
+849e46f6
+User
+}
+2025-10-13 16:52:21.73
+849e46f6
+User
+[HTML DEBUG] Project 2: {
+2025-10-13 16:52:21.73
+849e46f6
+User
+name: 'FMC Focus Groups Research',
+2025-10-13 16:52:21.73
+849e46f6
+User
+hasTasks: true,
+2025-10-13 16:52:21.73
+849e46f6
+User
+taskCount: 0,
+2025-10-13 16:52:21.73
+849e46f6
+User
+totalTasks: 0,
+2025-10-13 16:52:21.73
+849e46f6
+User
+completedTasks: 0
+2025-10-13 16:52:21.73
+849e46f6
+User
+}
+2025-10-13 16:52:22.85
+849e46f6
+User
+8:52:22 PM [express] POST /api/email/send-report 200 in 1453ms :: {"message":"Portfolio summary sent…
