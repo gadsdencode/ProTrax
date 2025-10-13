@@ -1333,13 +1333,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     // Fetch tasks for the project
+    console.log(`[ROUTES DEBUG] Fetching tasks for project ${projectId}...`);
     const tasks = await storage.getTasks(projectId);
+    console.log(`[ROUTES DEBUG] Found ${tasks.length} tasks for project ${projectId}`);
+    if (tasks.length > 0) {
+      console.log(`[ROUTES DEBUG] First task sample:`, {
+        id: tasks[0].id,
+        title: tasks[0].title,
+        status: tasks[0].status,
+        assigneeId: tasks[0].assigneeId
+      });
+    }
     
     // Fetch all users to map assignee IDs to names
+    console.log(`[ROUTES DEBUG] Fetching all users for assignee mapping...`);
     const allUsers = await storage.getAllUsers();
     const userMap = new Map(allUsers.map((u: User) => [u.id, u]));
+    console.log(`[ROUTES DEBUG] Created user map with ${userMap.size} users`);
     
     // Enrich tasks with assignee names
+    console.log(`[ROUTES DEBUG] Enriching ${tasks.length} tasks with assignee names...`);
     const enrichedTasks = tasks.map(task => {
       const assignee = task.assigneeId ? userMap.get(task.assigneeId) : null;
       const assigneeName = assignee
@@ -1353,7 +1366,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
     });
     
-    console.log(`[EMAIL DEBUG] Project ${projectId}: ${enrichedTasks.length} enriched tasks ready for email`);
+    console.log(`[ROUTES DEBUG] Successfully enriched ${enrichedTasks.length} tasks`);
+    if (enrichedTasks.length > 0) {
+      console.log(`[ROUTES DEBUG] First enriched task sample:`, {
+        id: enrichedTasks[0].id,
+        title: enrichedTasks[0].title,
+        assigneeName: enrichedTasks[0].assigneeName,
+        status: enrichedTasks[0].status
+      });
+    }
     
     // Prepare report data based on type
     let reportData: any = {};
@@ -1362,6 +1383,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const totalTasks = enrichedTasks.length;
       const completedTasks = enrichedTasks.filter(t => t.status === 'done').length;
       const inProgressTasks = enrichedTasks.filter(t => t.status === 'in_progress').length;
+      
+      console.log(`[ROUTES DEBUG] Preparing summary report data:`);
+      console.log(`[ROUTES DEBUG] - Total Tasks: ${totalTasks}`);
+      console.log(`[ROUTES DEBUG] - Completed Tasks: ${completedTasks}`);
+      console.log(`[ROUTES DEBUG] - In Progress Tasks: ${inProgressTasks}`);
       
       // Get manager name
       const manager = project.managerId ? userMap.get(project.managerId) : null;
@@ -1379,8 +1405,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         totalTasks,
         completedTasks,
         inProgressTasks,
-        tasks: enrichedTasks
+        tasks: enrichedTasks  // IMPORTANT: Include the tasks array
       };
+      
+      console.log(`[ROUTES DEBUG] Final reportData structure:`);
+      console.log(`[ROUTES DEBUG] - Has tasks property: ${'tasks' in reportData}`);
+      console.log(`[ROUTES DEBUG] - Tasks is array: ${Array.isArray(reportData.tasks)}`);
+      console.log(`[ROUTES DEBUG] - Tasks count: ${reportData.tasks?.length || 0}`);
     } else if (reportType === 'status') {
       const totalTasks = enrichedTasks.length;
       const completedTasks = enrichedTasks.filter(t => t.status === 'done').length;
