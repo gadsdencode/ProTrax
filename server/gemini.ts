@@ -346,107 +346,84 @@ export async function extractProjectDataFromSOW(
   try {
     console.log(`[Gemini Extraction] Starting extraction from ${sowText.length} characters of text`);
     console.log(`[Gemini Extraction] Text preview: ${sowText.substring(0, 200)}...`);
-    const systemPrompt = `You are an expert at analyzing Statement of Work (SOW) documents and extracting COMPREHENSIVE project information.
-Your goal is to extract EVERY SINGLE task, activity, deliverable, and milestone from the SOW document. Be THOROUGH and EXHAUSTIVE.
+    
+    const prompt = `You are an expert at analyzing Statement of Work (SOW) documents. Extract comprehensive project information from the following document.
 
-CRITICAL EXTRACTION RULES:
+DOCUMENT TEXT:
+${sowText}
+
+EXTRACTION REQUIREMENTS:
 1. Extract a clear project name (max 255 characters)
-2. Create a comprehensive description summarizing the project scope and objectives
-3. Generate a detailed project charter that includes: project goals, scope, deliverables, assumptions, constraints, and success criteria
-4. Extract start and end dates if mentioned (format: YYYY-MM-DD)
-5. Extract the budget if mentioned (as a decimal number, without currency symbols)
-6. MOST IMPORTANT: Extract ALL tasks, activities, and deliverables. Look for:
-   - Every numbered or bulleted item that describes work to be done
-   - All phases, stages, or workstreams mentioned
-   - Each deliverable, output, or outcome described
-   - Any activities, steps, or processes outlined
+2. Create a comprehensive description summarizing the project scope
+3. Extract start and end dates if mentioned (format: YYYY-MM-DD)
+4. Extract budget if mentioned (as decimal number)
+5. MOST IMPORTANT: Extract ALL tasks, activities, and deliverables:
+   - Every numbered or bulleted item describing work
+   - All phases, stages, or workstreams
+   - Each deliverable, output, or outcome
+   - Any activities, steps, or processes
    - All milestones, checkpoints, or review points
-   - Any subtasks or sub-activities mentioned
-   - Requirements gathering, analysis, design, development, testing, deployment activities
-   - Documentation tasks, training activities, meetings, reviews
-   - Setup, configuration, or installation tasks
-   - Research, investigation, or discovery activities
-   - Any task that has a verb (create, develop, design, implement, test, review, approve, etc.)
+   - Documentation tasks, training, meetings
+   - Setup, configuration, installation tasks
+   - Any item with action verbs (create, develop, test, review, etc.)
 
-EXTRACTION PATTERNS TO LOOK FOR:
-- Numbered lists (1., 2., 3. or 1.1, 1.2, etc.)
-- Bullet points (•, -, *, etc.)
-- Sections like "Deliverables:", "Tasks:", "Activities:", "Scope:", "Work Breakdown:"
-- Phase descriptions (Phase 1, Stage 2, Sprint 1, etc.)
-- Timeline or schedule sections
-- Responsibility matrices or RACI charts
-- Any sentence starting with action verbs
+Look for patterns like:
+- Numbered lists (1., 2., 3.)
+- Bullet points (•, -, *)
+- Sections like "Deliverables:", "Tasks:", "Scope:"
+- Phase descriptions (Phase 1, Stage 2, etc.)
+- Timeline sections
+- Work breakdown structures
 
-MILESTONE IDENTIFICATION:
-- Mark as milestone (isMilestone: true) if it's:
-  - A major deliverable completion
-  - End of a phase or stage
-  - Key review or approval point
-  - Critical checkpoint or gate
-  - Major document or report delivery
-- Regular tasks and ongoing activities should be isMilestone: false
+Mark items as milestones if they are:
+- Major deliverable completions
+- End of phases
+- Key review/approval points
+- Critical checkpoints
 
-OUTPUT REQUIREMENTS:
-- Generate a task for EVERY work item found, even if it seems minor
-- Each task must have a clear, specific title (not generic)
-- Include detailed descriptions explaining what needs to be done
-- When in doubt, extract it as a task - it's better to have too many than too few
-- If the SOW mentions "including but not limited to", generate tasks for the examples given
-
-Respond with JSON in this format:
+Provide your response as a valid JSON object with this exact structure:
 {
-  "name": string (required),
-  "description": string (optional),
-  "charter": string (optional, rich text with line breaks),
-  "startDate": string (optional, YYYY-MM-DD format),
-  "endDate": string (optional, YYYY-MM-DD format),
-  "budget": string (optional, decimal number as string),
-  "tasks": array of {
-    "title": string,
-    "description": string,
-    "isMilestone": boolean
-  } (optional but should have many items)
-}`;
+  "name": "Project name here",
+  "description": "Project description here",
+  "charter": "Optional project charter",
+  "startDate": "YYYY-MM-DD or null",
+  "endDate": "YYYY-MM-DD or null",
+  "budget": "50000 or null",
+  "tasks": [
+    {
+      "title": "Task title",
+      "description": "Task description",
+      "isMilestone": false
+    }
+  ]
+}
+
+Be thorough - extract EVERY work item. It's better to have too many tasks than too few.`;
 
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-pro",
-      config: {
-        systemInstruction: systemPrompt,
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: "object",
-          properties: {
-            name: { type: "string" },
-            description: { type: "string" },
-            charter: { type: "string" },
-            startDate: { type: "string" },
-            endDate: { type: "string" },
-            budget: { type: "string" },
-            tasks: {
-              type: "array",
-              items: {
-                type: "object",
-                properties: {
-                  title: { type: "string" },
-                  description: { type: "string" },
-                  isMilestone: { type: "boolean" }
-                },
-                required: ["title", "description", "isMilestone"]
-              }
-            }
-          },
-          required: ["name"],
-        },
-      },
-      contents: sowText,
+      model: "gemini-2.5-flash",
+      contents: prompt,
     });
-
-    console.log(`[Gemini Extraction] Got response from Gemini API`);
-    const rawJson = response.text;
-    console.log(`[Gemini Extraction] Raw response: ${rawJson}`);
     
-    if (rawJson) {
-      const parsedData = JSON.parse(rawJson);
+    const text = response.text || "";
+    
+    console.log(`[Gemini Extraction] Got response from Gemini API`);
+    console.log(`[Gemini Extraction] Raw response: ${text}`);
+    
+    // Clean the response text to extract JSON
+    let jsonText = text;
+    
+    // Try to extract JSON from markdown code blocks if present
+    if (jsonText.includes('```json')) {
+      jsonText = jsonText.split('```json')[1].split('```')[0].trim();
+    } else if (jsonText.includes('```')) {
+      jsonText = jsonText.split('```')[1].split('```')[0].trim();
+    }
+    
+    console.log(`[Gemini Extraction] Cleaned JSON: ${jsonText}`);
+    
+    try {
+      const parsedData = JSON.parse(jsonText);
       
       // Log the extraction results for debugging
       console.log(`[SOW Extraction] Extracted project: ${parsedData.name}`);
@@ -456,32 +433,38 @@ Respond with JSON in this format:
       }
       
       // Validate and format dates if present
-      if (parsedData.startDate) {
+      if (parsedData.startDate && parsedData.startDate !== 'null') {
         const startDate = new Date(parsedData.startDate);
         if (!isNaN(startDate.getTime())) {
           parsedData.startDate = startDate.toISOString().split('T')[0];
         } else {
           delete parsedData.startDate;
         }
+      } else {
+        delete parsedData.startDate;
       }
       
-      if (parsedData.endDate) {
+      if (parsedData.endDate && parsedData.endDate !== 'null') {
         const endDate = new Date(parsedData.endDate);
         if (!isNaN(endDate.getTime())) {
           parsedData.endDate = endDate.toISOString().split('T')[0];
         } else {
           delete parsedData.endDate;
         }
+      } else {
+        delete parsedData.endDate;
       }
       
       // Ensure budget is a valid decimal string if present
-      if (parsedData.budget) {
-        const budgetNum = parseFloat(parsedData.budget.replace(/[^0-9.-]/g, ''));
+      if (parsedData.budget && parsedData.budget !== 'null') {
+        const budgetNum = parseFloat(parsedData.budget.toString().replace(/[^0-9.-]/g, ''));
         if (!isNaN(budgetNum)) {
           parsedData.budget = budgetNum.toFixed(2);
         } else {
           delete parsedData.budget;
         }
+      } else {
+        delete parsedData.budget;
       }
       
       // Ensure we have at least some basic structure
@@ -495,8 +478,21 @@ Respond with JSON in this format:
       }
       
       return parsedData;
-    } else {
-      throw new Error("Empty response from model");
+    } catch (parseError) {
+      console.error(`[Gemini Extraction] Failed to parse JSON response:`, parseError);
+      console.error(`[Gemini Extraction] Raw text was:`, jsonText);
+      
+      // Try to create a minimal project if we can extract a name
+      const nameMatch = sowText.match(/project[:\s]+([^\n]+)/i);
+      if (nameMatch) {
+        return {
+          name: nameMatch[1].trim().substring(0, 255),
+          description: "Project extracted from SOW document",
+          tasks: []
+        };
+      }
+      
+      throw new Error("Unable to parse the AI response. The document format may not be supported.");
     }
   } catch (error: any) {
     console.error("Error extracting project data from SOW:", error);
