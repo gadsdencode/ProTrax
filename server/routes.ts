@@ -1255,6 +1255,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const inProgressTasks = tasks.filter(t => t.status === 'in_progress').length;
           const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
           
+          console.log(`[PORTFOLIO DEBUG] Project "${project.name}" (ID: ${project.id}): ${totalTasks} tasks`);
+          
           // Get manager name
           const manager = project.managerId ? userMap.get(project.managerId) : null;
           const managerName = manager 
@@ -1277,6 +1279,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           };
         })
       );
+      
+      console.log(`[PORTFOLIO DEBUG] Total projects in portfolio: ${projectsData.length}`);
+      console.log(`[PORTFOLIO DEBUG] Projects data:`, JSON.stringify(projectsData, null, 2));
 
       await sendPortfolioSummary(projectsData, recipients);
       
