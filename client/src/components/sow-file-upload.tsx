@@ -67,14 +67,36 @@ export function SOWFileUpload({
       });
 
       // Handle completion
-      xhr.addEventListener('load', () => {
+      xhr.addEventListener('load', async () => {
         if (xhr.status >= 200 && xhr.status < 300) {
           const project = JSON.parse(xhr.responseText);
           
-          toast({
-            title: "Success",
-            description: `Project "${project.name}" has been created successfully`,
-          });
+          // Fetch the actual created project to get task count
+          try {
+            const tasksResponse = await fetch(`/api/tasks?projectId=${project.id}`);
+            const tasks = await tasksResponse.json();
+            
+            const taskCount = tasks.length;
+            let description = `Project "${project.name}" has been created successfully`;
+            
+            if (taskCount > 0) {
+              description += ` with ${taskCount} task${taskCount !== 1 ? 's' : ''} extracted.`;
+            } else {
+              description += `. WARNING: No tasks were extracted from the document. Please check if your SOW contains clear task definitions, deliverables, or work items.`;
+            }
+            
+            toast({
+              title: "Project Created from SOW",
+              description,
+              variant: taskCount > 0 ? "default" : "destructive",
+            });
+          } catch (error) {
+            // Fallback to simple success message if we can't fetch tasks
+            toast({
+              title: "Success",
+              description: `Project "${project.name}" has been created successfully`,
+            });
+          }
           
           if (onUploadComplete) {
             onUploadComplete(project);
