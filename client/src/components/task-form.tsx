@@ -23,6 +23,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Repeat } from "lucide-react";
 
 interface TaskFormProps {
   onSubmit: (data: InsertTask) => void;
@@ -36,6 +38,7 @@ interface TaskFormProps {
 export function TaskForm({ onSubmit, isLoading, defaultValues, projectId, parentId, presetStatus }: TaskFormProps) {
   const [customFieldValues, setCustomFieldValues] = useState<Record<number, string>>({});
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isRecurring, setIsRecurring] = useState(!!defaultValues?.recurrenceType);
   const { toast } = useToast();
   
   // Fetch users for assignee selection
@@ -306,6 +309,104 @@ export function TaskForm({ onSubmit, isLoading, defaultValues, projectId, parent
             </FormItem>
           )}
         />
+
+        {/* Recurring Task Section */}
+        <div className="space-y-4 pt-4 border-t">
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="is-recurring"
+              checked={isRecurring}
+              onCheckedChange={(checked) => {
+                setIsRecurring(!!checked);
+                if (!checked) {
+                  form.setValue('recurrenceType', undefined);
+                  form.setValue('recurrenceInterval', undefined);
+                  form.setValue('recurrenceEndDate', undefined);
+                }
+              }}
+              data-testid="checkbox-recurring-task"
+            />
+            <label
+              htmlFor="is-recurring"
+              className="text-sm font-medium flex items-center gap-2 cursor-pointer"
+            >
+              <Repeat className="h-4 w-4" />
+              Recurring Task
+            </label>
+          </div>
+
+          {isRecurring && (
+            <div className="space-y-4 pl-6">
+              <FormField
+                control={form.control}
+                name="recurrenceType"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Recurrence Pattern</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value || undefined}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-recurrence-type">
+                          <SelectValue placeholder="Select recurrence pattern" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="daily">Daily</SelectItem>
+                        <SelectItem value="weekly">Weekly</SelectItem>
+                        <SelectItem value="monthly">Monthly</SelectItem>
+                        <SelectItem value="custom">Custom Interval</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {form.watch('recurrenceType') === 'custom' && (
+                <FormField
+                  control={form.control}
+                  name="recurrenceInterval"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Interval (in days)</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          type="number"
+                          min="1"
+                          value={field.value || ""}
+                          onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : undefined)}
+                          placeholder="Enter number of days"
+                          data-testid="input-recurrence-interval"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+
+              <FormField
+                control={form.control}
+                name="recurrenceEndDate"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Recurrence End Date (Optional)</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        type="date"
+                        value={field.value ? new Date(field.value).toISOString().split('T')[0] : ''}
+                        onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value) : undefined)}
+                        data-testid="input-recurrence-end-date"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+          )}
+        </div>
 
         {/* Custom Fields */}
         {customFields && customFields.length > 0 && (
