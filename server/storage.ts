@@ -234,51 +234,58 @@ export class DatabaseStorage implements IStorage {
     tasks: Task[];
     failedTasks: { title: string; error: string }[];
   }> {
-    // Use transaction for true atomic creation - all or nothing
-    const result = await db.transaction(async (tx) => {
-      // Create the project first
-      const [newProject] = await tx.insert(projects).values(projectData).returning();
-      console.log(`[SOW Upload] Project saved to DB with ID: ${newProject.id}`);
+    const createdTasks: Task[] = [];
+    const failedTasks: { title: string; error: string }[] = [];
+    
+    // First, create the project - this should always succeed
+    const [project] = await db.insert(projects).values(projectData).returning();
+    console.log(`[SOW Upload] Project created with ID: ${project.id}`);
+    
+    // Now attempt to create each task individually
+    // SAVE ALL THAT CAN BE SAVED - NO ROLLBACK
+    if (taskList && taskList.length > 0) {
+      console.log(`[SOW Upload] Attempting to create ${taskList.length} tasks...`);
       
-      const createdTasks: Task[] = [];
-      
-      // Create tasks if provided
-      if (taskList && taskList.length > 0) {
-        console.log(`[SOW Upload] Creating ${taskList.length} tasks in transaction...`);
+      for (let i = 0; i < taskList.length; i++) {
+        const task = taskList[i];
         
-        for (let i = 0; i < taskList.length; i++) {
-          const task = taskList[i];
-          
+        try {
           // Prepare task data with defaults
           const taskData = {
-            projectId: newProject.id,
+            projectId: project.id,
             title: task.title || 'Untitled Task',
             description: task.description || null,
             status: 'todo' as const,
             priority: 'medium' as const,
             isMilestone: task.isMilestone || false,
-            sortOrder: i, // Set sort order based on position
+            sortOrder: i,
           };
           
-          // Create task - any failure will rollback entire transaction
-          const [createdTask] = await tx.insert(tasks).values(taskData).returning();
+          // Try to create this task
+          const [createdTask] = await db.insert(tasks).values(taskData).returning();
           createdTasks.push(createdTask);
-          console.log(`[SOW Upload] Task ${i + 1}/${taskList.length} saved: "${createdTask.title}" (ID: ${createdTask.id})`);
+          console.log(`[SOW Upload] Task ${i + 1}/${taskList.length} SAVED: "${createdTask.title}" (ID: ${createdTask.id})`);
+          
+        } catch (error: any) {
+          // This task failed - log it but continue with others
+          const errorMessage = error.message || 'Unknown error';
+          const taskTitle = task.title || 'Untitled Task';
+          failedTasks.push({ 
+            title: taskTitle, 
+            error: errorMessage 
+          });
+          console.error(`[SOW Upload] Task ${i + 1}/${taskList.length} FAILED: "${taskTitle}" - ${errorMessage}`);
+          // CONTINUE PROCESSING OTHER TASKS - DON'T STOP
         }
-        
-        console.log(`[SOW Upload] All ${createdTasks.length} tasks created successfully`);
       }
       
-      return {
-        project: newProject,
-        tasks: createdTasks
-      };
-    });
+      console.log(`[SOW Upload] Results: ${createdTasks.length} tasks saved, ${failedTasks.length} tasks failed`);
+    }
     
     return {
-      project: result.project,
-      tasks: result.tasks,
-      failedTasks: [] // In atomic transaction, either all succeed or all fail
+      project,
+      tasks: createdTasks,
+      failedTasks
     };
   }
 

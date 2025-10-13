@@ -71,27 +71,40 @@ export function SOWFileUpload({
         if (xhr.status >= 200 && xhr.status < 300) {
           const project = JSON.parse(xhr.responseText);
           
-          // Fetch the actual created project to get task count
-          try {
-            const tasksResponse = await fetch(`/api/tasks?projectId=${project.id}`);
-            const tasks = await tasksResponse.json();
+          // Check the response for task creation results
+          if (project.tasksCreated !== undefined && project.tasksFailed !== undefined) {
+            // New response format with partial success info
+            let description = `Project "${project.name}" created successfully. `;
             
-            const taskCount = tasks.length;
-            let description = `Project "${project.name}" has been created successfully`;
-            
-            if (taskCount > 0) {
-              description += ` with ${taskCount} task${taskCount !== 1 ? 's' : ''} extracted.`;
-            } else {
-              description += `. WARNING: No tasks were extracted from the document. Please check if your SOW contains clear task definitions, deliverables, or work items.`;
+            if (project.tasksCreated > 0) {
+              description += `${project.tasksCreated} task${project.tasksCreated !== 1 ? 's' : ''} saved`;
             }
             
+            if (project.tasksFailed > 0) {
+              description += project.tasksCreated > 0 ? `, ` : ``;
+              description += `${project.tasksFailed} task${project.tasksFailed !== 1 ? 's' : ''} failed`;
+              
+              // Log failed tasks for debugging if available
+              if (project.failedTasks && project.failedTasks.length > 0) {
+                console.warn('[SOW Upload] Failed to create the following tasks:', project.failedTasks);
+              }
+            }
+            
+            if (project.tasksCreated === 0 && project.tasksFailed === 0) {
+              description += `No tasks were found in the document.`;
+            }
+            
+            // Show appropriate toast based on results
+            const variant = project.tasksFailed > 0 ? "default" : "default";
+            const title = project.tasksFailed > 0 ? "Partial Success" : "Success";
+            
             toast({
-              title: "Project Created from SOW",
+              title,
               description,
-              variant: taskCount > 0 ? "default" : "destructive",
+              variant,
             });
-          } catch (error) {
-            // Fallback to simple success message if we can't fetch tasks
+          } else {
+            // Fallback for old response format or missing task info
             toast({
               title: "Success",
               description: `Project "${project.name}" has been created successfully`,

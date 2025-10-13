@@ -199,25 +199,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
     
     console.log(`[SOW Upload] Creating project: ${data.name}`);
     
-    // Use transaction to ensure project and tasks are created atomically
+    // Create project and tasks - save everything that can be saved
     try {
-      console.log(`[SOW Upload] Starting atomic creation of project and ${tasks?.length || 0} tasks...`);
+      console.log(`[SOW Upload] Creating project and ${tasks?.length || 0} tasks...`);
       
-      // Create project and tasks in a transaction - all or nothing
+      // Create project and tasks - partial success is OK
       const result = await storage.createProjectWithTasks(data, tasks || []);
-      const { project, tasks: createdTasks } = result;
+      const { project, tasks: createdTasks, failedTasks } = result;
       
-      console.log(`[SOW Upload] Transaction completed successfully`);
       console.log(`[SOW Upload] Project created with ID: ${project.id}`);
-      console.log(`[SOW Upload] Successfully created all ${createdTasks.length} tasks`);
+      console.log(`[SOW Upload] Task creation results: ${createdTasks.length} succeeded, ${failedTasks.length} failed`);
       
-      res.status(201).json(project);
+      // Log any failures for debugging
+      if (failedTasks.length > 0) {
+        console.warn(`[SOW Upload] The following tasks failed to create:`);
+        failedTasks.forEach((ft, index) => {
+          console.warn(`  ${index + 1}. "${ft.title}": ${ft.error}`);
+        });
+      }
+      
+      // Always return success with details about what worked and what didn't
+      const response: any = {
+        ...project,
+        tasksCreated: createdTasks.length,
+        tasksFailed: failedTasks.length,
+      };
+      
+      // Include failure details if there were any
+      if (failedTasks.length > 0) {
+        response.failedTasks = failedTasks;
+        response.message = `Project created successfully. ${createdTasks.length} tasks saved, ${failedTasks.length} tasks failed.`;
+      } else {
+        response.message = `Project and all ${createdTasks.length} tasks created successfully.`;
+      }
+      
+      res.status(201).json(response);
     } catch (error: any) {
-      // If ANY task fails, the entire transaction is rolled back
-      console.error(`[SOW Upload] Transaction failed - project and tasks were NOT created:`, error);
-      throw createError.badRequest(
-        `Failed to create project from SOW. ${error.message || "One or more tasks could not be created, so the entire operation was cancelled."}`
-      );
+      // This should only happen if the project itself fails to create
+      console.error(`[SOW Upload] Failed to create project:`, error);
+      throw createError.internal(`Failed to create project: ${error.message}`);
     }
   }));
 
