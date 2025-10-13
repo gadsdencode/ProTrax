@@ -225,9 +225,18 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateProject(id: number, projectData: Partial<InsertProject>): Promise<Project> {
+    // Convert date strings to Date objects if they exist
+    const updateData = { ...projectData };
+    if (updateData.startDate && typeof updateData.startDate === 'string') {
+      updateData.startDate = new Date(updateData.startDate);
+    }
+    if (updateData.endDate && typeof updateData.endDate === 'string') {
+      updateData.endDate = new Date(updateData.endDate);
+    }
+    
     const [project] = await db
       .update(projects)
-      .set({ ...projectData, updatedAt: new Date() })
+      .set({ ...updateData, updatedAt: new Date() })
       .where(eq(projects.id, id))
       .returning();
     return project;

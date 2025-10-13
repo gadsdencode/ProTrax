@@ -1,0 +1,89 @@
+Error occurred: {
+2025-10-13 07:06:24.09
+ee2f2fdc
+User
+name: 'TypeError',
+2025-10-13 07:06:24.09
+ee2f2fdc
+User
+message: 'value.toISOString is not a function',
+2025-10-13 07:06:24.09
+ee2f2fdc
+User
+stack: 'TypeError: value.toISOString is not a function\n' +
+2025-10-13 07:06:24.09
+ee2f2fdc
+User
+' at PgTimestamp.mapToDriverValue (file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/columns/timestamp.js:34:18)\n' +
+2025-10-13 07:06:24.09
+ee2f2fdc
+User
+' at file:///home/runner/workspace/node_modules/drizzle-orm/sql/sql.js:131:73\n' +
+2025-10-13 07:06:24.09
+ee2f2fdc
+User
+' at Array.map ()\n' +
+2025-10-13 07:06:24.09
+ee2f2fdc
+User
+' at SQL.buildQueryFromSourceParams (file:///home/runner/workspace/node_modules/drizzle-orm/sql/sql.js:73:32)\n' +
+2025-10-13 07:06:24.09
+ee2f2fdc
+User
+' at file:///home/runner/workspace/node_modules/drizzle-orm/sql/sql.js:95:21\n' +
+2025-10-13 07:06:24.09
+ee2f2fdc
+User
+' at Array.map ()\n' +
+2025-10-13 07:06:24.09
+ee2f2fdc
+User
+' at SQL.buildQueryFromSourceParams (file:///home/runner/workspace/node_modules/drizzle-orm/sql/sql.js:73:32)\n' +
+2025-10-13 07:06:24.09
+ee2f2fdc
+User
+' at file:///home/runner/workspace/node_modules/drizzle-orm/sql/sql.js:95:21\n' +
+2025-10-13 07:06:24.09
+ee2f2fdc
+User
+' at Array.map ()\n' +
+2025-10-13 07:06:24.09
+ee2f2fdc
+User
+' at SQL.buildQueryFromSourceParams (file:///home/runner/workspace/node_modules/drizzle-orm/sql/sql.js:73:32)\n' +
+2025-10-13 07:06:24.09
+ee2f2fdc
+User
+' at file:///home/runner/workspace/node_modules/drizzle-orm/sql/sql.js:52:26\n' +
+2025-10-13 07:06:24.09
+ee2f2fdc
+User
+' at Object.startActiveSpan (file:///home/runner/workspace/node_modules/drizzle-orm/tracing.js:8:14)\n' +
+2025-10-13 07:06:24.09
+ee2f2fdc
+User
+' at SQL.toQuery (file:///home/runner/workspace/node_modules/drizzle-orm/sql/sql.js:51:19)\n' +
+2025-10-13 07:06:24.09
+ee2f2fdc
+User
+' at PgDialect.sqlToQuery (file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/dialect.js:418:17)\n' +
+2025-10-13 07:06:24.09
+ee2f2fdc
+User
+' at QueryPromise._prepare (file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/update.js:189:58)\n' +
+2025-10-13 07:06:24.09
+ee2f2fdc
+User
+' at QueryPromise.execute (file:///home/runner/workspace/node_modules/drizzle-orm/pg-core/query-builders/update.js:203:17)',
+2025-10-13 07:06:24.09
+ee2f2fdc
+User
+url: '/api/projects/7',
+2025-10-13 07:06:24.09
+ee2f2fdc
+User
+method: 'PATCH'
+2025-10-13 07:06:24.09
+ee2f2fdc
+User
+}
