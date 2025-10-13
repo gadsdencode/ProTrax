@@ -1266,11 +1266,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             throw createError.internal(`Failed to fetch tasks for project ${project.id} ("${project.name}")`);
           }
           
-          const totalTasks = tasks.length;
-          const completedTasks = tasks.filter(t => t.status === 'done').length;
-          const inProgressTasks = tasks.filter(t => t.status === 'in_progress').length;
-          const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
-          
           // Enrich tasks with assignee names (same as single project email)
           const enrichedTasks = tasks.map(task => {
             const assignee = task.assigneeId ? userMap.get(task.assigneeId) : null;
@@ -1284,6 +1279,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
               assigneeEmail: assignee?.email || null
             };
           });
+
+          const totalTasks = enrichedTasks.length;
+          const completedTasks = enrichedTasks.filter(t => t.status === 'done').length;
+          const inProgressTasks = enrichedTasks.filter(t => t.status === 'in_progress').length;
+          const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
           
           // Get manager name
           const manager = project.managerId ? userMap.get(project.managerId) : null;

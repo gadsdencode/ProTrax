@@ -1,0 +1,117 @@
+The root cause of the problem is a logical issue in the getTasks function within server/storage.ts, which sometimes fails to retrieve tasks for a project when generating email reports. Additionally, there's a minor inconsistency in server/routes.ts that I'll correct.
+
+Please apply the following changes:
+
+Step 1: Fix the Task Fetching Logic
+The primary issue is in server/storage.ts. You need to update the getTasks method to ensure it correctly queries the database when a projectId is provided.
+
+File to modify: server/storage.ts
+
+Instruction: Replace the entire existing getTasks function with the following corrected version:
+
+TypeScript
+
+  async getTasks(projectId?: number, searchQuery?: string): Promise<Task[]> {
+    console.log(`[STORAGE DEBUG] getTasks called with projectId: ${projectId}, searchQuery: ${searchQuery}`);
+    
+    if (projectId && !searchQuery) {
+      console.log(`[STORAGE DEBUG] Using direct query for projectId: ${projectId}`);
+      const result = await db
+        .select()
+        .from(tasks)
+        .where(eq(tasks.projectId, projectId))
+        .orderBy(asc(tasks.sortOrder));
+      console.log(`[STORAGE DEBUG] Direct query returned ${result.length} tasks`);
+      return result;
+    }
+
+    const conditions = [];
+    
+    if (projectId) {
+      conditions.push(eq(tasks.projectId, projectId));
+      console.log(`[STORAGE DEBUG] Adding condition for projectId: ${projectId}`);
+    }
+    
+    if (searchQuery) {
+      const searchPattern = `%${searchQuery}%`;
+      conditions.push(
+        or(
+          ilike(tasks.title, searchPattern),
+          ilike(tasks.description, searchPattern)
+        )
+      );
+    }
+    
+    if (conditions.length > 0) {
+      const whereClause = conditions.length === 1 ? conditions[0] : and(...conditions);
+      const result = await db
+        .select()
+        .from(tasks)
+        .where(whereClause)
+        .orderBy(projectId ? asc(tasks.sortOrder) : desc(tasks.createdAt));
+      console.log(`[STORAGE DEBUG] Query with conditions returned ${result.length} tasks`);
+      if (result.length > 0) {
+        console.log(`[STORAGE DEBUG] First task: id=${result[0].id}, projectId=${result[0].projectId}, title=${result[0].title}`);
+      }
+      return result;
+    }
+    
+    const allTasks = await db.select().from(tasks).orderBy(desc(tasks.createdAt));
+    console.log(`[STORAGE DEBUG] Query without conditions returned ${allTasks.length} tasks`);
+    return allTasks;
+  }
+Step 2: Improve Data Consistency in Email Route
+To ensure consistency in the portfolio summary email logic, let's adjust how the total task count is determined in server/routes.ts.
+
+File to modify: server/routes.ts
+
+Instruction: Inside the app.post('/api/email/send-report', ...) route handler, find the Promise.all block that processes active projects for the portfolio summary. Modify the logic inside the .map() callback to define totalTasks after the enrichedTasks have been created.
+
+Find this code block:
+
+TypeScript
+
+          const tasks = await storage.getTasks(project.id);
+          console.log(`[PORTFOLIO] Project ${project.id} has ${tasks.length} tasks`);
+          
+          if (!tasks || !Array.isArray(tasks)) {
+            throw createError.internal(`Failed to fetch tasks for project ${project.id} ("${project.name}")`);
+          }
+          
+          const totalTasks = tasks.length;
+          const completedTasks = tasks.filter(t => t.status === 'done').length;
+          const inProgressTasks = tasks.filter(t => t.status === 'in_progress').length;
+          const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+          
+          // Enrich tasks with assignee names (same as single project email)
+          const enrichedTasks = tasks.map(task => {
+And replace it with this corrected version:
+
+TypeScript
+
+          const tasks = await storage.getTasks(project.id);
+          console.log(`[PORTFOLIO] Project ${project.id} has ${tasks.length} tasks`);
+          
+          if (!tasks || !Array.isArray(tasks)) {
+            throw createError.internal(`Failed to fetch tasks for project ${project.id} ("${project.name}")`);
+          }
+          
+          // Enrich tasks with assignee names (same as single project email)
+          const enrichedTasks = tasks.map(task => {
+            const assignee = task.assigneeId ? userMap.get(task.assigneeId) : null;
+            const assigneeName = assignee
+              ? `${assignee.firstName || ''} ${assignee.lastName || ''}`.trim() || assignee.email || 'Unassigned'
+              : 'Unassigned';
+            
+            return {
+              ...task,
+              assigneeName,
+              assigneeEmail: assignee?.email || null
+            };
+          });
+
+          const totalTasks = enrichedTasks.length;
+          const completedTasks = enrichedTasks.filter(t => t.status === 'done').length;
+          const inProgressTasks = enrichedTasks.filter(t => t.status === 'in_progress').length;
+          const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+After applying these two changes, the email functionality will correctly include all tasks associated with the projects.

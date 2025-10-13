@@ -398,6 +398,18 @@ export class DatabaseStorage implements IStorage {
   // Task operations
   async getTasks(projectId?: number, searchQuery?: string): Promise<Task[]> {
     console.log(`[STORAGE DEBUG] getTasks called with projectId: ${projectId}, searchQuery: ${searchQuery}`);
+    
+    if (projectId && !searchQuery) {
+      console.log(`[STORAGE DEBUG] Using direct query for projectId: ${projectId}`);
+      const result = await db
+        .select()
+        .from(tasks)
+        .where(eq(tasks.projectId, projectId))
+        .orderBy(asc(tasks.sortOrder));
+      console.log(`[STORAGE DEBUG] Direct query returned ${result.length} tasks`);
+      return result;
+    }
+
     const conditions = [];
     
     if (projectId) {
