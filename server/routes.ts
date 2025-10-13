@@ -1246,7 +1246,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const allUsers = await storage.getAllUsers();
       const userMap = new Map(allUsers.map((u: User) => [u.id, u]));
 
-      // Collect data for each active project
+      // Collect data for each active project with enriched tasks
       const projectsData = await Promise.all(
         activeProjects.map(async (project) => {
           const tasks = await storage.getTasks(project.id);
@@ -1255,7 +1255,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const inProgressTasks = tasks.filter(t => t.status === 'in_progress').length;
           const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
           
-          console.log(`[PORTFOLIO DEBUG] Project "${project.name}" (ID: ${project.id}): ${totalTasks} tasks`);
+          // Enrich tasks with assignee names (same as single project email)
+          const enrichedTasks = tasks.map(task => {
+            const assignee = task.assigneeId ? userMap.get(task.assigneeId) : null;
+            const assigneeName = assignee
+              ? `${assignee.firstName || ''} ${assignee.lastName || ''}`.trim() || assignee.email || 'Unassigned'
+              : 'Unassigned';
+            
+            return {
+              ...task,
+              assigneeName,
+              assigneeEmail: assignee?.email || null
+            };
+          });
           
           // Get manager name
           const manager = project.managerId ? userMap.get(project.managerId) : null;
@@ -1275,13 +1287,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
             totalTasks,
             completedTasks,
             inProgressTasks,
-            progress
+            progress,
+            tasks: enrichedTasks // Include the enriched tasks array
           };
         })
       );
-      
-      console.log(`[PORTFOLIO DEBUG] Total projects in portfolio: ${projectsData.length}`);
-      console.log(`[PORTFOLIO DEBUG] Projects data:`, JSON.stringify(projectsData, null, 2));
 
       await sendPortfolioSummary(projectsData, recipients);
       

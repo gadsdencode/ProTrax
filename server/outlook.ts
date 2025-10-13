@@ -631,6 +631,67 @@ function generatePortfolioSummaryHTML(projectsData: any[]): string {
               </span>
             </div>
           ` : ''}
+
+          ${project.tasks && project.tasks.length > 0 ? `
+            <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #e5e7eb;">
+              <h4 style="font-size: 14px; font-weight: 600; color: #111827; margin-bottom: 10px;">Tasks</h4>
+              <div style="max-height: 300px; overflow-y: auto;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+                  <thead>
+                    <tr style="background: #f9fafb; text-align: left;">
+                      <th style="padding: 8px; border-bottom: 2px solid #e5e7eb;">Task</th>
+                      <th style="padding: 8px; border-bottom: 2px solid #e5e7eb;">Assignee</th>
+                      <th style="padding: 8px; border-bottom: 2px solid #e5e7eb;">Status</th>
+                      <th style="padding: 8px; border-bottom: 2px solid #e5e7eb;">Progress</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${project.tasks.slice(0, 10).map((task: any) => {
+                      const statusColors: any = {
+                        'todo': '#6b7280',
+                        'in_progress': '#3B82F6',
+                        'done': '#10b981',
+                        'blocked': '#ef4444'
+                      };
+                      const statusLabels: any = {
+                        'todo': 'To Do',
+                        'in_progress': 'In Progress',
+                        'done': 'Done',
+                        'blocked': 'Blocked'
+                      };
+                      return `
+                        <tr style="border-bottom: 1px solid #e5e7eb;">
+                          <td style="padding: 8px;">
+                            <div style="font-weight: 500; color: #111827;">${task.title}</div>
+                            ${task.description ? `<div style="font-size: 11px; color: #6b7280; margin-top: 2px;">${task.description.slice(0, 60)}${task.description.length > 60 ? '...' : ''}</div>` : ''}
+                          </td>
+                          <td style="padding: 8px; color: #374151;">${task.assigneeName || 'Unassigned'}</td>
+                          <td style="padding: 8px;">
+                            <span style="color: ${statusColors[task.status] || '#6b7280'}; font-weight: 600;">
+                              ${statusLabels[task.status] || task.status}
+                            </span>
+                          </td>
+                          <td style="padding: 8px;">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                              <div style="flex: 1; background: #e5e7eb; border-radius: 4px; height: 6px; overflow: hidden;">
+                                <div style="background: #3B82F6; height: 100%; width: ${task.progress || 0}%;"></div>
+                              </div>
+                              <span style="font-size: 11px; color: #6b7280; white-space: nowrap;">${task.progress || 0}%</span>
+                            </div>
+                          </td>
+                        </tr>
+                      `;
+                    }).join('')}
+                  </tbody>
+                </table>
+                ${project.tasks.length > 10 ? `
+                  <p style="text-align: center; color: #6b7280; font-size: 11px; margin-top: 8px;">
+                    Showing 10 of ${project.tasks.length} tasks
+                  </p>
+                ` : ''}
+              </div>
+            </div>
+          ` : ''}
         </div>
       `).join('')}
 
