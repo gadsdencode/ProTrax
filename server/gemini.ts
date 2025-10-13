@@ -344,6 +344,8 @@ export async function extractProjectDataFromSOW(
   }>;
 }> {
   try {
+    console.log(`[Gemini Extraction] Starting extraction from ${sowText.length} characters of text`);
+    console.log(`[Gemini Extraction] Text preview: ${sowText.substring(0, 200)}...`);
     const systemPrompt = `You are an expert at analyzing Statement of Work (SOW) documents and extracting COMPREHENSIVE project information.
 Your goal is to extract EVERY SINGLE task, activity, deliverable, and milestone from the SOW document. Be THOROUGH and EXHAUSTIVE.
 
@@ -439,13 +441,19 @@ Respond with JSON in this format:
       contents: sowText,
     });
 
+    console.log(`[Gemini Extraction] Got response from Gemini API`);
     const rawJson = response.text;
+    console.log(`[Gemini Extraction] Raw response: ${rawJson}`);
+    
     if (rawJson) {
       const parsedData = JSON.parse(rawJson);
       
       // Log the extraction results for debugging
       console.log(`[SOW Extraction] Extracted project: ${parsedData.name}`);
       console.log(`[SOW Extraction] Number of tasks extracted: ${parsedData.tasks?.length || 0}`);
+      if (parsedData.tasks && parsedData.tasks.length > 0) {
+        console.log(`[SOW Extraction] Task titles: ${parsedData.tasks.map((t: any) => t.title).join(', ')}`);
+      }
       
       // Validate and format dates if present
       if (parsedData.startDate) {

@@ -97,6 +97,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.status(204).send();
   }));
 
+  // Test endpoint for SOW extraction
+  app.post('/api/test-sow-extraction', isAuthenticated, asyncHandler(async (req, res) => {
+    const { text } = req.body;
+    if (!text) {
+      throw createError.badRequest("No text provided");
+    }
+    
+    console.log(`[TEST] Testing SOW extraction with ${text.length} characters`);
+    
+    try {
+      const result = await extractProjectDataFromSOW(text);
+      res.json(result);
+    } catch (error: any) {
+      console.error("[TEST] Extraction failed:", error);
+      throw createError.badRequest(error.message || "Extraction failed");
+    }
+  }));
+
   // Create project from SOW document
   app.post('/api/projects/create-from-sow', isAuthenticated, upload.single('file'), asyncHandler(async (req: any, res) => {
     if (!req.file) {
@@ -104,14 +122,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     // Extract text from the document
+    console.log(`[SOW Upload] Processing file: ${req.file.originalname}, type: ${req.file.mimetype}, size: ${req.file.size} bytes`);
+    
     let text = "";
     const mimeType = req.file.mimetype;
     
     if (mimeType === "application/pdf") {
       // PDF file parsing
+      console.log("[SOW Upload] Extracting text from PDF...");
       try {
         const data = await pdfParse(req.file.buffer);
         text = data.text;
+        console.log(`[SOW Upload] Extracted ${text.length} characters from PDF`);
       } catch (error) {
         console.error("Error extracting text from PDF:", error);
         throw createError.badRequest("Failed to extract text from PDF document");
@@ -121,18 +143,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       mimeType === "application/msword"
     ) {
       // Word document (.docx or .doc)
+      console.log("[SOW Upload] Extracting text from Word document...");
       try {
         const result = await mammoth.extractRawText({
           buffer: req.file.buffer,
         });
         text = result.value;
+        console.log(`[SOW Upload] Extracted ${text.length} characters from Word document`);
       } catch (error) {
         console.error("Error extracting text from Word document:", error);
         throw createError.badRequest("Failed to extract text from Word document");
       }
     } else if (mimeType === "text/plain") {
       // Plain text file
+      console.log("[SOW Upload] Processing plain text file...");
       text = req.file.buffer.toString('utf-8');
+      console.log(`[SOW Upload] Extracted ${text.length} characters from text file`);
     } else {
       throw createError.badRequest(`Unsupported file type: ${mimeType}. Please upload a PDF, Word document (.docx) or text file.`);
     }
@@ -140,18 +166,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!text || text.trim().length === 0) {
       throw createError.badRequest("The uploaded document appears to be empty");
     }
+    
+    // Log first 500 chars of extracted text for debugging
+    console.log(`[SOW Upload] First 500 chars of extracted text: ${text.substring(0, 500)}`);
+    console.log(`[SOW Upload] Document contains ${text.split(/\s+/).length} words`);
 
     // Extract project data from the SOW using Gemini
     let projectData;
     try {
+      console.log("[SOW Upload] Calling Gemini API to extract project data...");
       projectData = await extractProjectDataFromSOW(text);
+      console.log("[SOW Upload] Gemini API response received");
+      console.log(`[SOW Upload] Extracted data: ${JSON.stringify(projectData, null, 2)}`);
     } catch (error: any) {
-      console.error("Error extracting project data:", error);
+      console.error("[SOW Upload] Error extracting project data:", error);
       throw createError.badRequest(error.message || "Failed to extract project data from the SOW document");
     }
 
     // Extract tasks from the project data (we'll create them separately)
     const { tasks, ...projectFields } = projectData;
+    console.log(`[SOW Upload] Tasks to create: ${tasks?.length || 0}`);
 
     // Create the project with the extracted data
     const userId = req.user.claims.sub;
@@ -161,10 +195,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       status: 'planning' // Set initial status
     });
     
+    console.log(`[SOW Upload] Creating project: ${data.name}`);
     const project = await storage.createProject(data);
+    console.log(`[SOW Upload] Project created with ID: ${project.id}`);
 
     // Create tasks if they were extracted from the SOW
+    let tasksCreated = 0;
     if (tasks && tasks.length > 0) {
+      console.log(`[SOW Upload] Creating ${tasks.length} tasks...`);
       for (const task of tasks) {
         try {
           const taskData = insertTaskSchema.parse({
@@ -175,11 +213,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
             status: 'todo', // Default status for new tasks
           });
           await storage.createTask(taskData);
+          tasksCreated++;
+          console.log(`[SOW Upload] Created task ${tasksCreated}/${tasks.length}: ${task.title}`);
         } catch (error) {
-          console.error(`Error creating task "${task.title}":`, error);
+          console.error(`[SOW Upload] Error creating task "${task.title}":`, error);
           // Continue creating other tasks even if one fails
         }
       }
+      console.log(`[SOW Upload] Successfully created ${tasksCreated}/${tasks.length} tasks`);
+    } else {
+      console.warn("[SOW Upload] No tasks were extracted from the SOW document");
     }
 
     res.status(201).json(project);
