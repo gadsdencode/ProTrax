@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Download, ZoomIn, ZoomOut, Plus } from "lucide-react";
+import { Download, ZoomIn, ZoomOut, Plus, AlertCircle, Calendar } from "lucide-react";
 import { useParams } from "wouter";
 import { DndContext, DragEndEvent } from "@dnd-kit/core";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -32,7 +33,7 @@ export default function Gantt() {
   });
 
   const { data: tasks, isLoading } = useQuery<Task[]>({
-    queryKey: ["/api/tasks", { projectId: selectedProject }],
+    queryKey: selectedProject ? ["/api/tasks", { projectId: selectedProject }] : ["/api/tasks"],
   });
 
   const createTaskMutation = useMutation({
@@ -172,6 +173,10 @@ export default function Gantt() {
 
   const dateRange = getDateRange();
   const dayWidth = 40 * zoom;
+  
+  // Separate tasks into scheduled and unscheduled
+  const scheduledTasks = tasks?.filter(t => t.startDate && t.dueDate) || [];
+  const unscheduledTasks = tasks?.filter(t => !t.startDate || !t.dueDate) || [];
 
   return (
     <div className="h-full flex flex-col">
@@ -182,9 +187,25 @@ export default function Gantt() {
             <h1 className="text-2xl font-semibold" data-testid="text-gantt-title">
               {project ? `${project.name} - Gantt Chart` : 'Gantt Chart'}
             </h1>
-            {project && (
-              <p className="text-sm text-muted-foreground mt-1">{project.description}</p>
-            )}
+            <div className="flex items-center gap-4 mt-1">
+              {project && (
+                <p className="text-sm text-muted-foreground">{project.description}</p>
+              )}
+              {tasks && tasks.length > 0 && (
+                <div className="flex items-center gap-2 text-sm">
+                  <Badge variant="secondary" className="gap-1">
+                    <Calendar className="h-3 w-3" />
+                    {scheduledTasks.length} Scheduled
+                  </Badge>
+                  {unscheduledTasks.length > 0 && (
+                    <Badge variant="outline" className="gap-1">
+                      <AlertCircle className="h-3 w-3" />
+                      {unscheduledTasks.length} Unscheduled
+                    </Badge>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-2">
             {selectedProject && (
@@ -242,6 +263,50 @@ export default function Gantt() {
               </p>
             </CardContent>
           </Card>
+        ) : scheduledTasks.length === 0 ? (
+          <div className="p-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <AlertCircle className="h-5 w-5 text-muted-foreground" />
+                  No Scheduled Tasks
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-muted-foreground mb-4">
+                  {unscheduledTasks.length} task{unscheduledTasks.length !== 1 ? 's' : ''} need dates to appear on the Gantt chart.
+                  Tasks created from SOW uploads often don't have dates assigned.
+                </p>
+                {unscheduledTasks.length > 0 && (
+                  <div className="space-y-2 max-h-96 overflow-y-auto">
+                    <div className="text-sm font-medium mb-2">Unscheduled Tasks:</div>
+                    {unscheduledTasks.slice(0, 20).map(task => (
+                      <div key={task.id} className="flex items-center justify-between p-2 border rounded-lg hover-elevate">
+                        <span className="text-sm">{task.title}</span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setTaskDialogOpen(true);
+                            // TODO: Pre-fill task dialog with task details to edit
+                          }}
+                          data-testid={`button-schedule-task-${task.id}`}
+                        >
+                          <Calendar className="h-3 w-3 mr-1" />
+                          Add Dates
+                        </Button>
+                      </div>
+                    ))}
+                    {unscheduledTasks.length > 20 && (
+                      <p className="text-sm text-muted-foreground text-center mt-2">
+                        And {unscheduledTasks.length - 20} more...
+                      </p>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         ) : (
           <div className="min-w-max">
             {/* Timeline Header */}
@@ -265,7 +330,7 @@ export default function Gantt() {
             {/* Task Rows */}
             <DndContext onDragEnd={handleDragEnd}>
               <div>
-                {tasks.map(task => (
+                {scheduledTasks.map(task => (
                   <GanttRow
                     key={task.id}
                     task={task}
@@ -275,6 +340,45 @@ export default function Gantt() {
                 ))}
               </div>
             </DndContext>
+            
+            {/* Unscheduled Tasks Section */}
+            {unscheduledTasks.length > 0 && (
+              <div className="mt-8 mx-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <AlertCircle className="h-4 w-4 text-muted-foreground" />
+                      Unscheduled Tasks ({unscheduledTasks.length})
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-xs text-muted-foreground mb-3">
+                      These tasks need start and due dates to appear in the timeline above.
+                    </p>
+                    <div className="grid gap-2 max-h-48 overflow-y-auto">
+                      {unscheduledTasks.map(task => (
+                        <div key={task.id} className="flex items-center justify-between p-2 border rounded text-sm hover-elevate">
+                          <span className="truncate flex-1 mr-2">{task.title}</span>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-xs"
+                            onClick={() => {
+                              setTaskDialogOpen(true);
+                              // TODO: Pre-fill with task for editing
+                            }}
+                            data-testid={`button-schedule-${task.id}`}
+                          >
+                            <Calendar className="h-3 w-3 mr-1" />
+                            Schedule
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
           </div>
         )}
       </div>
