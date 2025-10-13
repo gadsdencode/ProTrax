@@ -32,6 +32,8 @@ import {
   insertProjectStakeholderSchema,
   insertNotificationSchema,
   type User,
+  type Project,
+  type Task,
 } from "@shared/schema";
 
 // Configure multer for file uploads
@@ -196,36 +198,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
     
     console.log(`[SOW Upload] Creating project: ${data.name}`);
-    const project = await storage.createProject(data);
-    console.log(`[SOW Upload] Project created with ID: ${project.id}`);
-
-    // Create tasks if they were extracted from the SOW
-    let tasksCreated = 0;
-    if (tasks && tasks.length > 0) {
-      console.log(`[SOW Upload] Creating ${tasks.length} tasks...`);
-      for (const task of tasks) {
-        try {
-          const taskData = insertTaskSchema.parse({
-            projectId: project.id,
-            title: task.title,
-            description: task.description,
-            isMilestone: task.isMilestone,
-            status: 'todo', // Default status for new tasks
-          });
-          await storage.createTask(taskData);
-          tasksCreated++;
-          console.log(`[SOW Upload] Created task ${tasksCreated}/${tasks.length}: ${task.title}`);
-        } catch (error) {
-          console.error(`[SOW Upload] Error creating task "${task.title}":`, error);
-          // Continue creating other tasks even if one fails
-        }
-      }
-      console.log(`[SOW Upload] Successfully created ${tasksCreated}/${tasks.length} tasks`);
-    } else {
-      console.warn("[SOW Upload] No tasks were extracted from the SOW document");
+    
+    // Use transaction to ensure project and tasks are created atomically
+    try {
+      console.log(`[SOW Upload] Starting atomic creation of project and ${tasks?.length || 0} tasks...`);
+      
+      // Create project and tasks in a transaction - all or nothing
+      const result = await storage.createProjectWithTasks(data, tasks || []);
+      const { project, tasks: createdTasks } = result;
+      
+      console.log(`[SOW Upload] Transaction completed successfully`);
+      console.log(`[SOW Upload] Project created with ID: ${project.id}`);
+      console.log(`[SOW Upload] Successfully created all ${createdTasks.length} tasks`);
+      
+      res.status(201).json(project);
+    } catch (error: any) {
+      // If ANY task fails, the entire transaction is rolled back
+      console.error(`[SOW Upload] Transaction failed - project and tasks were NOT created:`, error);
+      throw createError.badRequest(
+        `Failed to create project from SOW. ${error.message || "One or more tasks could not be created, so the entire operation was cancelled."}`
+      );
     }
-
-    res.status(201).json(project);
   }));
 
   // ============= SPRINT ROUTES =============

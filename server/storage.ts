@@ -74,6 +74,11 @@ export interface IStorage {
   getProjects(searchQuery?: string): Promise<Project[]>;
   getProject(id: number): Promise<Project | undefined>;
   createProject(project: InsertProject): Promise<Project>;
+  createProjectWithTasks(project: InsertProject, tasks: any[]): Promise<{
+    project: Project;
+    tasks: Task[];
+    failedTasks: { title: string; error: string }[];
+  }>;
   updateProject(id: number, project: Partial<InsertProject>): Promise<Project>;
   deleteProject(id: number): Promise<void>;
   
@@ -222,6 +227,59 @@ export class DatabaseStorage implements IStorage {
   async createProject(projectData: InsertProject): Promise<Project> {
     const [project] = await db.insert(projects).values(projectData).returning();
     return project;
+  }
+
+  async createProjectWithTasks(projectData: InsertProject, taskList: any[]): Promise<{
+    project: Project;
+    tasks: Task[];
+    failedTasks: { title: string; error: string }[];
+  }> {
+    // Use transaction for true atomic creation - all or nothing
+    const result = await db.transaction(async (tx) => {
+      // Create the project first
+      const [newProject] = await tx.insert(projects).values(projectData).returning();
+      console.log(`[SOW Upload] Project saved to DB with ID: ${newProject.id}`);
+      
+      const createdTasks: Task[] = [];
+      
+      // Create tasks if provided
+      if (taskList && taskList.length > 0) {
+        console.log(`[SOW Upload] Creating ${taskList.length} tasks in transaction...`);
+        
+        for (let i = 0; i < taskList.length; i++) {
+          const task = taskList[i];
+          
+          // Prepare task data with defaults
+          const taskData = {
+            projectId: newProject.id,
+            title: task.title || 'Untitled Task',
+            description: task.description || null,
+            status: 'todo' as const,
+            priority: 'medium' as const,
+            isMilestone: task.isMilestone || false,
+            sortOrder: i, // Set sort order based on position
+          };
+          
+          // Create task - any failure will rollback entire transaction
+          const [createdTask] = await tx.insert(tasks).values(taskData).returning();
+          createdTasks.push(createdTask);
+          console.log(`[SOW Upload] Task ${i + 1}/${taskList.length} saved: "${createdTask.title}" (ID: ${createdTask.id})`);
+        }
+        
+        console.log(`[SOW Upload] All ${createdTasks.length} tasks created successfully`);
+      }
+      
+      return {
+        project: newProject,
+        tasks: createdTasks
+      };
+    });
+    
+    return {
+      project: result.project,
+      tasks: result.tasks,
+      failedTasks: [] // In atomic transaction, either all succeed or all fail
+    };
   }
 
   async updateProject(id: number, projectData: Partial<InsertProject>): Promise<Project> {
