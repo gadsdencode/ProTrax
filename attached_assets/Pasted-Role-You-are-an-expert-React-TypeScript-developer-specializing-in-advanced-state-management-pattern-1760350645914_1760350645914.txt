@@ -1,0 +1,196 @@
+Role: You are an expert React/TypeScript developer specializing in advanced state management patterns.
+Goal: Your primary objective is to refactor the existing frontend state management to fully and robustly leverage our Zustand implementation. The goal is to create a single source of truth for global UI state, eliminate the use of useState for transient or shared state in page-level components, and improve the overall predictability and maintainability of the client-side code.
+Context:
+The application already has a Zustand store located at client/src/stores/useUIStore.ts. This store is correctly used for some state like selectedProjectId and isSidebarOpen. However, several page components, such as client/src/pages/projects.tsx, still use multiple useState hooks to manage the visibility of various dialogs and other UI states.
+We must adhere to the best practice of keeping server cache state (managed by React Query) separate from client-side UI state (managed by Zustand).
+Detailed Implementation Plan:
+Please follow these steps precisely.
+Step 1: Expand the useUIStore to Manage All Global UI State
+Modify client/src/stores/useUIStore.ts. We will centralize the management of all dialogs and modals using a single state property to ensure only one can be open at a time.
+Define a DialogType: Create a union type for all the dialogs that are currently managed with useState in projects.tsx and other pages.
+Add activeDialog to the State: Add an activeDialog property to the UIState interface, which will hold either a DialogType or null.
+Add searchQuery to the State: The search query from projects.tsx should also be global. Add a globalSearchQuery and its setter to the store.
+Your updated useUIStore.ts should look like this:
+TypeScript
+// client/src/stores/useUIStore.ts
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
+
+// Define all possible dialogs that can be opened globally
+export type DialogType = 
+  | 'createProject' 
+  | 'createFromSOW' 
+  | 'createTask' 
+  | 'manageStakeholders' 
+  | 'fileAttachments';
+
+interface UIState {
+  // Project selection
+  selectedProjectId: number | null;
+  setSelectedProjectId: (projectId: number | null) => void;
+  
+  // Sidebar state
+  isSidebarOpen: boolean;
+  toggleSidebar: () => void;
+  setSidebarOpen: (open: boolean) => void;
+
+  // Add the new centralized dialog state
+  activeDialog: DialogType | null;
+  setActiveDialog: (dialog: DialogType | null, projectId?: number) => void;
+  
+  // Global search/filter
+  globalSearchQuery: string;
+  setGlobalSearchQuery: (query: string) => void;
+}
+
+export const useUIStore = create<UIState>()(
+  persist(
+    (set) => ({
+      selectedProjectId: null,
+      setSelectedProjectId: (projectId) => set({ selectedProjectId: projectId }),
+      
+      isSidebarOpen: true,
+      toggleSidebar: () => set((state) => ({ isSidebarOpen: !state.isSidebarOpen })),
+      setSidebarOpen: (open) => set({ isSidebarOpen: open }),
+      
+      // Implement the new state and setters
+      activeDialog: null,
+      setActiveDialog: (dialog, projectId) => set(state => ({ 
+        activeDialog: dialog, 
+        // Also set the selectedProjectId if a dialog needs it
+        selectedProjectId: projectId !== undefined ? projectId : state.selectedProjectId
+      })),
+
+      globalSearchQuery: '',
+      setGlobalSearchQuery: (query) => set({ globalSearchQuery: query }),
+    }),
+    {
+      name: 'ui-storage',
+      // Only persist non-transient state
+      partialize: (state) => ({
+        isSidebarOpen: state.isSidebarOpen,
+      }),
+    }
+  )
+);
+Step 2: Refactor the projects.tsx Page Component
+Now, update client/src/pages/projects.tsx to use the centralized store.
+Remove useState Hooks: Delete all the useState calls for searchQuery, createDialogOpen, sowDialogOpen, taskDialogOpen, stakeholderDialogOpen, and fileAttachmentDialogOpen.
+Use the Store: Import useUIStore and pull the activeDialog, setActiveDialog, globalSearchQuery, and setGlobalSearchQuery properties from it.
+Update Dialog Triggers and Props: Wire the open and onOpenChange props of each <Dialog> component to the activeDialog state. When opening a dialog that requires a project context (like "Add Task"), pass the project.id to setActiveDialog.
+Example Refactoring for the "New Project" and "Add Task" Dialogs:
+TypeScript
+// client/src/pages/projects.tsx
+import { useUIStore } from "@/stores/useUIStore";
+
+export default function Projects() {
+  const [, setLocation] = useLocation();
+  const { 
+    activeDialog, 
+    setActiveDialog, 
+    globalSearchQuery, 
+    setGlobalSearchQuery 
+  } = useUIStore();
+  
+  // ... rest of the component's existing hooks (useQuery, useMutation, etc.) ...
+
+  // ...
+
+  return (
+    <div className="p-6 space-y-6">
+      {/* Header with Dialog Triggers */}
+      <div className="flex items-center justify-between">
+        {/* ... */}
+        <div className="flex gap-2">
+          {/* Create Project Dialog */}
+          <Dialog 
+            open={activeDialog === 'createProject'} 
+            onOpenChange={(isOpen) => setActiveDialog(isOpen ? 'createProject' : null)}
+          >
+            <DialogTrigger asChild>
+              <Button data-testid="button-create-project">
+                <Plus className="h-4 w-4 mr-2" />
+                New Project
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl">
+              {/* ... Dialog Content ... */}
+            </DialogContent>
+          </Dialog>
+
+          {/* Create from SOW Dialog */}
+          <Dialog 
+            open={activeDialog === 'createFromSOW'} 
+            onOpenChange={(isOpen) => setActiveDialog(isOpen ? 'createFromSOW' : null)}
+          >
+            {/* ... Dialog Trigger and Content ... */}
+          </Dialog>
+        </div>
+      </div>
+
+      {/* Search Input */}
+      <Input
+          placeholder="Search projects..."
+          value={globalSearchQuery}
+          onChange={(e) => setGlobalSearchQuery(e.target.value)}
+          className="pl-9"
+          data-testid="input-search-projects"
+        />
+
+      {/* Projects Grid */}
+      {/* ... */}
+      {filteredProjects.map(project => (
+        // ... inside the project card mapping ...
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={(e) => {
+            e.stopPropagation();
+            // Open the 'createTask' dialog and set the context
+            setActiveDialog('createTask', project.id);
+          }}
+          data-testid={`button-add-task-${project.id}`}
+        >
+          <Plus className="h-3 w-3 mr-1" />
+          Add Task
+        </Button>
+        // ... other buttons for stakeholders, files, etc., following the same pattern ...
+      ))}
+
+      {/* Task Creation Dialog */}
+      <Dialog 
+        open={activeDialog === 'createTask'} 
+        onOpenChange={(isOpen) => setActiveDialog(isOpen ? 'createTask' : null)}
+      >
+        <DialogContent className="max-w-2xl">
+          {/* ... Task Form is now context-aware via the store ... */}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+Step 3: Update TaskForm to Use the Store
+Modify client/src/components/task-form.tsx so it can get projectId directly from the useUIStore, making it more decoupled.
+TypeScript
+// client/src/components/task-form.tsx
+import { useUIStore } from "@/stores/useUIStore";
+
+// In the TaskForm component:
+// Remove the projectId prop if it's no longer needed for overrides.
+export function TaskForm({ onSubmit, isLoading, defaultValues, parentId, presetStatus }: TaskFormProps) {
+  const { selectedProjectId } = useUIStore();
+  
+  const form = useForm<InsertTask>({
+    // ...
+    defaultValues: defaultValues || {
+      // ...
+      // Get the projectId from the global store instead of a prop
+      projectId: selectedProjectId || undefined, 
+      parentId: parentId,
+      // ...
+    },
+  });
+  // ... rest of the component
+}
+Final Instructions:
+Apply this refactoring pattern to all other page components that manage their own local UI state (kanban.tsx, list-view.tsx, etc.). The goal is a complete consolidation of shared and transient UI state into useUIStore. Do not modify any logic related to useQuery or useMutation.
