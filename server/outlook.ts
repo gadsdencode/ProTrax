@@ -319,6 +319,13 @@ function generateProjectSummaryHTML(projectName: string, data: any): string {
 }
 
 function generateStatusReportHTML(projectName: string, data: any): string {
+  console.log(`[HTML DEBUG] Generating Status Report HTML`);
+  console.log(`[HTML DEBUG] Data keys:`, Object.keys(data));
+  console.log(`[HTML DEBUG] Tasks available:`, !!data.tasks);
+  console.log(`[HTML DEBUG] Tasks count:`, data.tasks?.length || 0);
+  console.log(`[HTML DEBUG] Accomplishments count:`, data.accomplishments?.length || 0);
+  console.log(`[HTML DEBUG] Upcoming tasks count:`, data.upcoming?.length || 0);
+  
   const formatStatus = (status: string) => {
     const statusMap: any = {
       'todo': 'To Do',
@@ -586,6 +593,19 @@ function generateTaskReportHTML(projectName: string, reportType: string, tasks: 
 }
 
 function generatePortfolioSummaryHTML(projectsData: any[]): string {
+  console.log(`[HTML DEBUG] Generating Portfolio Summary HTML`);
+  console.log(`[HTML DEBUG] Projects count:`, projectsData.length);
+  
+  projectsData.forEach((project, index) => {
+    console.log(`[HTML DEBUG] Project ${index + 1}:`, {
+      name: project.name,
+      hasTasks: !!project.tasks,
+      taskCount: project.tasks?.length || 0,
+      totalTasks: project.totalTasks,
+      completedTasks: project.completedTasks
+    });
+  });
+  
   const totalBudget = projectsData.reduce((sum, p) => sum + (parseFloat(p.budget) || 0), 0);
   const totalTasks = projectsData.reduce((sum, p) => sum + p.totalTasks, 0);
   const totalCompleted = projectsData.reduce((sum, p) => sum + p.completedTasks, 0);
