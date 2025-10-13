@@ -25,6 +25,7 @@ export default function Gantt() {
   const [zoom, setZoom] = useState(1);
   const [selectedProject, setSelectedProject] = useState<number | null>(projectIdFromUrl);
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
   const { toast } = useToast();
 
   const { data: project } = useQuery<Project>({
@@ -42,12 +43,48 @@ export default function Gantt() {
       return await response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/tasks", { projectId: selectedProject }] });
+      // Invalidate all task queries to ensure UI updates
+      if (selectedProject) {
+        queryClient.invalidateQueries({ queryKey: ["/api/tasks", { projectId: selectedProject }] });
+      }
       queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
       setTaskDialogOpen(false);
+      setEditingTask(null);
       toast({
         title: "Success",
         description: "Task created successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateTaskMutation = useMutation({
+    mutationFn: async (data: InsertTask & { id: number }) => {
+      const { id, ...updateData } = data;
+      const response = await apiRequest("PATCH", `/api/tasks/${id}`, updateData);
+      return await response.json();
+    },
+    onSuccess: () => {
+      // Invalidate all task queries to ensure UI updates
+      if (selectedProject) {
+        queryClient.invalidateQueries({ queryKey: ["/api/tasks", { projectId: selectedProject }] });
+      }
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+      // Also invalidate the specific task query
+      if (editingTask) {
+        queryClient.invalidateQueries({ queryKey: [`/api/tasks/${editingTask.id}`] });
+      }
+      setTaskDialogOpen(false);
+      setEditingTask(null);
+      toast({
+        title: "Success",
+        description: "Task dates updated successfully",
       });
     },
     onError: (error: Error) => {
@@ -67,7 +104,10 @@ export default function Gantt() {
       });
     },
     onSuccess: (data: any) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/tasks", { projectId: selectedProject }] });
+      // Invalidate all task queries to ensure UI updates
+      if (selectedProject) {
+        queryClient.invalidateQueries({ queryKey: ["/api/tasks", { projectId: selectedProject }] });
+      }
       queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
       
       // Check if there were cascaded updates
@@ -287,8 +327,8 @@ export default function Gantt() {
                           size="sm"
                           variant="outline"
                           onClick={() => {
+                            setEditingTask(task);
                             setTaskDialogOpen(true);
-                            // TODO: Pre-fill task dialog with task details to edit
                           }}
                           data-testid={`button-schedule-task-${task.id}`}
                         >
@@ -364,8 +404,8 @@ export default function Gantt() {
                             variant="ghost"
                             className="text-xs"
                             onClick={() => {
+                              setEditingTask(task);
                               setTaskDialogOpen(true);
-                              // TODO: Pre-fill with task for editing
                             }}
                             data-testid={`button-schedule-${task.id}`}
                           >
@@ -383,19 +423,41 @@ export default function Gantt() {
         )}
       </div>
 
-      {/* Task Creation Dialog */}
-      <Dialog open={taskDialogOpen} onOpenChange={setTaskDialogOpen}>
+      {/* Task Creation/Edit Dialog */}
+      <Dialog 
+        open={taskDialogOpen} 
+        onOpenChange={(open) => {
+          setTaskDialogOpen(open);
+          if (!open) setEditingTask(null);
+        }}
+      >
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Create New Task</DialogTitle>
+            <DialogTitle>{editingTask ? 'Update Task Dates' : 'Create New Task'}</DialogTitle>
           </DialogHeader>
           <TaskForm
-            projectId={selectedProject || undefined}
+            projectId={editingTask?.projectId || selectedProject || undefined}
+            defaultValues={editingTask ? {
+              title: editingTask.title,
+              description: editingTask.description || undefined,
+              status: editingTask.status || undefined,
+              priority: editingTask.priority || undefined,
+              projectId: editingTask.projectId || undefined,
+              assigneeId: editingTask.assigneeId || undefined,
+              startDate: editingTask.startDate || undefined,
+              dueDate: editingTask.dueDate || undefined,
+              estimatedHours: editingTask.estimatedHours || undefined,
+            } : undefined}
             onSubmit={async (data) => {
-              const result = await createTaskMutation.mutateAsync(data);
-              return result;
+              if (editingTask) {
+                const result = await updateTaskMutation.mutateAsync({ ...data, id: editingTask.id });
+                return result;
+              } else {
+                const result = await createTaskMutation.mutateAsync(data);
+                return result;
+              }
             }}
-            isLoading={createTaskMutation.isPending}
+            isLoading={editingTask ? updateTaskMutation.isPending : createTaskMutation.isPending}
           />
         </DialogContent>
       </Dialog>
