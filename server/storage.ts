@@ -250,16 +250,54 @@ export class DatabaseStorage implements IStorage {
         const task = taskList[i];
         
         try {
-          // Prepare task data with defaults
+          // Ensure title is not too long (max 500 chars) and handle special characters
+          let title = task.title || 'Untitled Task';
+          
+          // Truncate title if too long (varchar(500) limit)
+          if (title.length > 500) {
+            console.warn(`[SOW Upload] Task ${i + 1} title truncated from ${title.length} to 500 chars`);
+            title = title.substring(0, 497) + '...';
+          }
+          
+          // Clean up any problematic characters
+          title = title.replace(/[\x00-\x1F\x7F]/g, '').trim(); // Remove control characters
+          if (!title) {
+            title = `Task ${i + 1}`; // Fallback if title becomes empty
+          }
+          
+          // Prepare description with same safety checks
+          let description = task.description || null;
+          if (description) {
+            description = description.replace(/[\x00-\x1F\x7F]/g, '').trim();
+          }
+          
+          // Validate and prepare task data with all defaults
           const taskData = {
             projectId: project.id,
-            title: task.title || 'Untitled Task',
-            description: task.description || null,
+            title: title,
+            description: description,
             status: 'todo' as const,
             priority: 'medium' as const,
-            isMilestone: task.isMilestone || false,
+            isMilestone: Boolean(task.isMilestone),
             sortOrder: i,
+            progress: 0,
+            // Ensure all optional fields have proper defaults
+            assigneeId: null,
+            sprintId: null,
+            parentId: null,
+            startDate: null,
+            dueDate: null,
+            duration: null,
+            estimatedHours: null,
+            storyPoints: null,
+            isOnCriticalPath: false,
+            recurrenceType: null,
+            recurrenceInterval: null,
+            recurrenceEndDate: null,
           };
+          
+          // Log what we're about to create for debugging
+          console.log(`[SOW Upload] Creating task ${i + 1}/${taskList.length}: "${title}"`);
           
           // Try to create this task
           const [createdTask] = await db.insert(tasks).values(taskData).returning();
@@ -267,19 +305,37 @@ export class DatabaseStorage implements IStorage {
           console.log(`[SOW Upload] Task ${i + 1}/${taskList.length} SAVED: "${createdTask.title}" (ID: ${createdTask.id})`);
           
         } catch (error: any) {
-          // This task failed - log it but continue with others
+          // This task failed - log detailed error information
           const errorMessage = error.message || 'Unknown error';
           const taskTitle = task.title || 'Untitled Task';
+          
+          // Log full error details for debugging
+          console.error(`[SOW Upload] Task ${i + 1}/${taskList.length} FAILED:`, {
+            title: taskTitle,
+            error: errorMessage,
+            errorCode: error.code,
+            errorDetail: error.detail,
+            taskData: task
+          });
+          
           failedTasks.push({ 
             title: taskTitle, 
-            error: errorMessage 
+            error: `${errorMessage}${error.detail ? ` - ${error.detail}` : ''}` 
           });
-          console.error(`[SOW Upload] Task ${i + 1}/${taskList.length} FAILED: "${taskTitle}" - ${errorMessage}`);
+          
           // CONTINUE PROCESSING OTHER TASKS - DON'T STOP
         }
       }
       
-      console.log(`[SOW Upload] Results: ${createdTasks.length} tasks saved, ${failedTasks.length} tasks failed`);
+      console.log(`[SOW Upload] Final Results: ${createdTasks.length} tasks saved, ${failedTasks.length} tasks failed`);
+      
+      // If any tasks failed, log a summary
+      if (failedTasks.length > 0) {
+        console.warn(`[SOW Upload] Failed tasks summary:`);
+        failedTasks.forEach((ft, index) => {
+          console.warn(`  ${index + 1}. "${ft.title}": ${ft.error}`);
+        });
+      }
     }
     
     return {

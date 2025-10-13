@@ -425,9 +425,53 @@ Be thorough - extract EVERY work item. It's better to have too many tasks than t
     try {
       const parsedData = JSON.parse(jsonText);
       
+      // Validate and clean the extracted data
+      if (!parsedData.name || parsedData.name.trim() === '') {
+        parsedData.name = 'Untitled Project';
+      }
+      
+      // Clean project name (max 255 chars for DB)
+      parsedData.name = parsedData.name.substring(0, 255).replace(/[\x00-\x1F\x7F]/g, '').trim();
+      
+      // Ensure tasks array exists and clean each task
+      if (!parsedData.tasks || !Array.isArray(parsedData.tasks)) {
+        parsedData.tasks = [];
+      } else {
+        // Clean and validate each task
+        parsedData.tasks = parsedData.tasks.map((task: any, index: number) => {
+          // Ensure task has a title
+          let title = task.title || task.name || task.task || '';
+          title = String(title).replace(/[\x00-\x1F\x7F]/g, '').trim();
+          
+          // If still no title, create one
+          if (!title) {
+            title = `Task ${index + 1}`;
+          }
+          
+          // Ensure title isn't too long (max 500 chars for DB)
+          if (title.length > 500) {
+            console.warn(`[SOW Extraction] Task ${index + 1} title truncated from ${title.length} to 500 chars`);
+            title = title.substring(0, 497) + '...';
+          }
+          
+          // Clean description
+          let description = task.description || '';
+          description = String(description).replace(/[\x00-\x1F\x7F]/g, '').trim();
+          
+          // Ensure isMilestone is a boolean
+          const isMilestone = Boolean(task.isMilestone || task.milestone || false);
+          
+          return {
+            title,
+            description,
+            isMilestone
+          };
+        }).filter((task: any) => task.title); // Remove any tasks without titles
+      }
+      
       // Log the extraction results for debugging
-      console.log(`[SOW Extraction] Extracted project: ${parsedData.name}`);
-      console.log(`[SOW Extraction] Number of tasks extracted: ${parsedData.tasks?.length || 0}`);
+      console.log(`[SOW Extraction] Extracted and cleaned project: ${parsedData.name}`);
+      console.log(`[SOW Extraction] Number of valid tasks: ${parsedData.tasks?.length || 0}`);
       if (parsedData.tasks && parsedData.tasks.length > 0) {
         console.log(`[SOW Extraction] Task titles: ${parsedData.tasks.map((t: any) => t.title).join(', ')}`);
       }
