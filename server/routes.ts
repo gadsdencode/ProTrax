@@ -31,9 +31,9 @@ import emailRoutes from "./routes/emailRoutes";
 import debugRoutes from "./routes/debugRoutes";
 import recurringTaskRoutes from "./routes/recurringTaskRoutes";
 
-export function setupRoutes(app: express.Application) {
+export async function setupRoutes(app: express.Application) {
   // Setup authentication middleware first
-  setupAuth(app);
+  await setupAuth(app);
 
   // Health check
   app.get('/api/health', (req, res) => {
