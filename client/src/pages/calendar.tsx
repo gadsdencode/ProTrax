@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { useParams } from "wouter";
@@ -20,15 +20,16 @@ import type { Task, Project, InsertTask } from "@shared/schema";
 export default function Calendar() {
   const params = useParams();
   const projectIdFromUrl = params.id ? parseInt(params.id) : null;
-  const [currentDate, setCurrentDate] = useState(new Date());
   const { toast } = useToast();
   
-  // Use centralized store for dialog management
+  // Use centralized store for all state management
   const { 
     activeDialog, 
     setActiveDialog,
     selectedProjectId,
-    setSelectedProjectId
+    setSelectedProjectId,
+    calendarCurrentDate,
+    setCalendarCurrentDate
   } = useUIStore();
 
   // Initialize project from URL
@@ -72,29 +73,29 @@ export default function Calendar() {
     },
   });
 
-  const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
-  const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay();
+  const daysInMonth = new Date(calendarCurrentDate.getFullYear(), calendarCurrentDate.getMonth() + 1, 0).getDate();
+  const firstDayOfMonth = new Date(calendarCurrentDate.getFullYear(), calendarCurrentDate.getMonth(), 1).getDay();
   
   const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
   const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
   const getTasksForDate = (day: number) => {
-    const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
+    const date = new Date(calendarCurrentDate.getFullYear(), calendarCurrentDate.getMonth(), day);
     return tasks?.filter(task => {
       if (!task.dueDate) return false;
       const dueDate = new Date(task.dueDate);
       return dueDate.getDate() === day &&
-             dueDate.getMonth() === currentDate.getMonth() &&
-             dueDate.getFullYear() === currentDate.getFullYear();
+             dueDate.getMonth() === calendarCurrentDate.getMonth() &&
+             dueDate.getFullYear() === calendarCurrentDate.getFullYear();
     }) || [];
   };
 
   const previousMonth = () => {
-    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1));
+    setCalendarCurrentDate(new Date(calendarCurrentDate.getFullYear(), calendarCurrentDate.getMonth() - 1));
   };
 
   const nextMonth = () => {
-    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1));
+    setCalendarCurrentDate(new Date(calendarCurrentDate.getFullYear(), calendarCurrentDate.getMonth() + 1));
   };
 
   return (
@@ -123,7 +124,7 @@ export default function Calendar() {
             <ChevronLeft className="h-4 w-4" />
           </Button>
           <div className="text-sm font-medium min-w-32 text-center">
-            {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
+            {monthNames[calendarCurrentDate.getMonth()]} {calendarCurrentDate.getFullYear()}
           </div>
           <Button
             variant="outline"
@@ -136,7 +137,7 @@ export default function Calendar() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => setCurrentDate(new Date())}
+            onClick={() => setCalendarCurrentDate(new Date())}
             data-testid="button-today"
           >
             Today
@@ -170,8 +171,8 @@ export default function Calendar() {
               const day = i + 1;
               const dayTasks = getTasksForDate(day);
               const isToday = day === new Date().getDate() &&
-                              currentDate.getMonth() === new Date().getMonth() &&
-                              currentDate.getFullYear() === new Date().getFullYear();
+                              calendarCurrentDate.getMonth() === new Date().getMonth() &&
+                              calendarCurrentDate.getFullYear() === new Date().getFullYear();
 
               return (
                 <div

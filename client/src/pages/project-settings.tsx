@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
 import { ArrowLeft, Save, Settings as SettingsIcon, Trash2 } from "lucide-react";
@@ -24,6 +23,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useUIStore } from "@/stores/useUIStore";
 import type { Project, InsertProject } from "@shared/schema";
 import { ProjectForm } from "@/components/project-form";
 import { CustomFieldsSettings } from "@/components/custom-fields-settings";
@@ -33,7 +33,9 @@ export default function ProjectSettings() {
   const projectId = params.id ? parseInt(params.id) : null;
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState("general");
+  
+  // Use centralized store for tab state
+  const { projectSettingsActiveTab, setProjectSettingsActiveTab } = useUIStore();
 
   const { data: project, isLoading } = useQuery<Project>({
     queryKey: [`/api/projects/${projectId}`],
@@ -154,7 +156,7 @@ export default function ProjectSettings() {
         </p>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+      <Tabs value={projectSettingsActiveTab} onValueChange={setProjectSettingsActiveTab} className="space-y-4">
         <TabsList className="grid w-full max-w-md grid-cols-3">
           <TabsTrigger value="general" data-testid="tab-general">
             General

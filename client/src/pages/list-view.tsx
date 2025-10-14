@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Search, Filter, Download, ArrowUpDown, Plus } from "lucide-react";
 import { useParams } from "wouter";
@@ -26,12 +26,9 @@ import type { Task, Project, InsertTask } from "@shared/schema";
 export default function ListView() {
   const params = useParams();
   const projectIdFromUrl = params.id ? parseInt(params.id) : null;
-  const [selectedTasks, setSelectedTasks] = useState<number[]>([]);
-  const [sortField, setSortField] = useState<keyof Task>("dueDate");
-  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const { toast } = useToast();
   
-  // Use centralized store for dialog management and search
+  // Use centralized store for all state management
   const {
     activeDialog,
     setActiveDialog,
@@ -40,8 +37,19 @@ export default function ListView() {
     globalSearchQuery,
     setGlobalSearchQuery,
     selectedProjectId,
-    setSelectedProjectId
+    setSelectedProjectId,
+    listViewSelectedTasks,
+    setListViewSelectedTasks,
+    listViewSortField,
+    setListViewSortField,
+    listViewSortDirection,
+    setListViewSortDirection,
   } = useUIStore();
+
+  // Clear selected tasks when project changes to prevent operating on wrong tasks
+  useEffect(() => {
+    setListViewSelectedTasks([]);
+  }, [projectIdFromUrl, setListViewSelectedTasks]);
 
   const { data: project } = useQuery<Project>({
     queryKey: [`/api/projects/${projectIdFromUrl}`],
@@ -86,9 +94,9 @@ export default function ListView() {
   });
 
   const filteredAndSortedTasks = tasks?.sort((a, b) => {
-    const aValue = a[sortField];
-    const bValue = b[sortField];
-    const direction = sortDirection === "asc" ? 1 : -1;
+    const aValue = a[listViewSortField as keyof Task];
+    const bValue = b[listViewSortField as keyof Task];
+    const direction = listViewSortDirection === "asc" ? 1 : -1;
     
     if (aValue === null || aValue === undefined) return 1;
     if (bValue === null || bValue === undefined) return -1;
@@ -99,27 +107,27 @@ export default function ListView() {
   });
 
   const toggleSort = (field: keyof Task) => {
-    if (sortField === field) {
-      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+    if (listViewSortField === field) {
+      setListViewSortDirection(listViewSortDirection === "asc" ? "desc" : "asc");
     } else {
-      setSortField(field);
-      setSortDirection("asc");
+      setListViewSortField(field);
+      setListViewSortDirection("asc");
     }
   };
 
   const toggleTaskSelection = (taskId: number) => {
-    setSelectedTasks(prev =>
-      prev.includes(taskId)
-        ? prev.filter(id => id !== taskId)
-        : [...prev, taskId]
+    setListViewSelectedTasks(
+      listViewSelectedTasks.includes(taskId)
+        ? listViewSelectedTasks.filter(id => id !== taskId)
+        : [...listViewSelectedTasks, taskId]
     );
   };
 
   const toggleAllTasks = () => {
-    if (selectedTasks.length === filteredAndSortedTasks?.length) {
-      setSelectedTasks([]);
+    if (listViewSelectedTasks.length === filteredAndSortedTasks?.length) {
+      setListViewSelectedTasks([]);
     } else {
-      setSelectedTasks(filteredAndSortedTasks?.map(t => t.id) || []);
+      setListViewSelectedTasks(filteredAndSortedTasks?.map(t => t.id) || []);
     }
   };
 
@@ -167,9 +175,9 @@ export default function ListView() {
       </div>
 
       {/* Bulk Actions */}
-      {selectedTasks.length > 0 && (
+      {listViewSelectedTasks.length > 0 && (
         <div className="flex items-center gap-2 p-3 bg-primary/10 rounded-lg border border-primary/20">
-          <span className="text-sm font-medium">{selectedTasks.length} selected</span>
+          <span className="text-sm font-medium">{listViewSelectedTasks.length} selected</span>
           <Button variant="outline" size="sm">
             Change Status
           </Button>
@@ -202,7 +210,7 @@ export default function ListView() {
               <TableRow>
                 <TableHead className="w-12">
                   <Checkbox
-                    checked={selectedTasks.length === filteredAndSortedTasks.length}
+                    checked={listViewSelectedTasks.length === filteredAndSortedTasks.length}
                     onCheckedChange={toggleAllTasks}
                     data-testid="checkbox-select-all"
                   />
@@ -275,7 +283,7 @@ export default function ListView() {
                 >
                   <TableCell onClick={(e) => e.stopPropagation()}>
                     <Checkbox
-                      checked={selectedTasks.includes(task.id)}
+                      checked={listViewSelectedTasks.includes(task.id)}
                       onCheckedChange={() => toggleTaskSelection(task.id)}
                     />
                   </TableCell>

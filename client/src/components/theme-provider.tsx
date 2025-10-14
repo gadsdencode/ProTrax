@@ -1,11 +1,9 @@
-import { createContext, useContext, useEffect, useState } from "react";
-
-type Theme = "dark" | "light" | "system";
+import { createContext, useContext, useEffect } from "react";
+import { useUIStore, Theme } from "@/stores/useUIStore";
 
 type ThemeProviderProps = {
   children: React.ReactNode;
   defaultTheme?: Theme;
-  storageKey?: string;
 };
 
 type ThemeProviderState = {
@@ -22,13 +20,19 @@ const ThemeProviderContext = createContext<ThemeProviderState>(initialState);
 
 export function ThemeProvider({
   children,
-  defaultTheme = "system",
-  storageKey = "projecthub-theme",
+  defaultTheme = "light",
   ...props
 }: ThemeProviderProps) {
-  const [theme, setTheme] = useState<Theme>(
-    () => (localStorage.getItem(storageKey) as Theme) || defaultTheme
-  );
+  const { theme, setTheme } = useUIStore();
+
+  // Initialize theme from defaultTheme prop if not already set
+  useEffect(() => {
+    const storedState = localStorage.getItem('ui-storage');
+    if (!storedState) {
+      // First time - use the defaultTheme prop
+      setTheme(defaultTheme);
+    }
+  }, [defaultTheme, setTheme]);
 
   useEffect(() => {
     const root = window.document.documentElement;
@@ -48,10 +52,7 @@ export function ThemeProvider({
 
   const value = {
     theme,
-    setTheme: (theme: Theme) => {
-      localStorage.setItem(storageKey, theme);
-      setTheme(theme);
-    },
+    setTheme,
   };
 
   return (

@@ -11,6 +11,8 @@ export type DialogType =
   | 'fileAttachments'
   | 'taskDetail';
 
+export type Theme = "dark" | "light" | "system";
+
 interface UIState {
   // Project selection
   selectedProjectId: number | null;
@@ -21,9 +23,29 @@ interface UIState {
   toggleSidebar: () => void;
   setSidebarOpen: (open: boolean) => void;
   
+  // Theme state
+  theme: Theme;
+  setTheme: (theme: Theme) => void;
+  
   // View preferences
   ganttZoomLevel: number;
   setGanttZoomLevel: (level: number) => void;
+  
+  // ListView state
+  listViewSelectedTasks: number[];
+  setListViewSelectedTasks: (tasks: number[]) => void;
+  listViewSortField: string;
+  setListViewSortField: (field: string) => void;
+  listViewSortDirection: "asc" | "desc";
+  setListViewSortDirection: (direction: "asc" | "desc") => void;
+  
+  // Calendar state
+  calendarCurrentDate: Date;
+  setCalendarCurrentDate: (date: Date) => void;
+  
+  // Project Settings state
+  projectSettingsActiveTab: string;
+  setProjectSettingsActiveTab: (tab: string) => void;
   
   // Centralized dialog state
   activeDialog: DialogType | null;
@@ -56,9 +78,29 @@ export const useUIStore = create<UIState>()(
       toggleSidebar: () => set((state) => ({ isSidebarOpen: !state.isSidebarOpen })),
       setSidebarOpen: (open) => set({ isSidebarOpen: open }),
       
+      // Theme state
+      theme: 'light',
+      setTheme: (theme) => set({ theme }),
+      
       // View preferences
       ganttZoomLevel: 1,
       setGanttZoomLevel: (level) => set({ ganttZoomLevel: level }),
+      
+      // ListView state
+      listViewSelectedTasks: [],
+      setListViewSelectedTasks: (tasks) => set({ listViewSelectedTasks: tasks }),
+      listViewSortField: 'dueDate',
+      setListViewSortField: (field) => set({ listViewSortField: field }),
+      listViewSortDirection: 'asc',
+      setListViewSortDirection: (direction) => set({ listViewSortDirection: direction }),
+      
+      // Calendar state
+      calendarCurrentDate: new Date(),
+      setCalendarCurrentDate: (date) => set({ calendarCurrentDate: date }),
+      
+      // Project Settings state
+      projectSettingsActiveTab: 'general',
+      setProjectSettingsActiveTab: (tab) => set({ projectSettingsActiveTab: tab }),
       
       // Centralized dialog state
       activeDialog: null,
@@ -88,6 +130,10 @@ export const useUIStore = create<UIState>()(
       partialize: (state) => ({
         isSidebarOpen: state.isSidebarOpen,
         ganttZoomLevel: state.ganttZoomLevel,
+        theme: state.theme,
+        listViewSortField: state.listViewSortField,
+        listViewSortDirection: state.listViewSortDirection,
+        projectSettingsActiveTab: state.projectSettingsActiveTab,
       }),
     }
   )

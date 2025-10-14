@@ -10,6 +10,7 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { PageTransition } from "@/components/page-transition";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { useAuth } from "@/hooks/useAuth";
+import { useUIStore } from "@/stores/useUIStore";
 import Landing from "@/pages/landing";
 import Dashboard from "@/pages/dashboard";
 import Projects from "@/pages/projects";
@@ -69,6 +70,7 @@ function Router() {
 
 function AppContent() {
   const { isAuthenticated } = useAuth();
+  const { isSidebarOpen, setSidebarOpen } = useUIStore();
   
   // Sidebar width configuration
   const style = {
@@ -79,7 +81,11 @@ function AppContent() {
   return (
     <>
       {isAuthenticated ? (
-        <SidebarProvider style={style as React.CSSProperties}>
+        <SidebarProvider 
+          style={style as React.CSSProperties}
+          open={isSidebarOpen}
+          onOpenChange={setSidebarOpen}
+        >
           <div className="flex h-screen w-full">
             <AppSidebar />
             <div className="flex flex-col flex-1 overflow-hidden">
