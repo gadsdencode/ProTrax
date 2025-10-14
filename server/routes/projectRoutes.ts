@@ -261,4 +261,42 @@ router.get('/:projectId/critical-path', isAuthenticated, asyncHandler(async (req
   });
 }));
 
+// Get project stakeholders
+router.get('/:id/stakeholders', isAuthenticated, asyncHandler(async (req, res) => {
+  const projectId = parseInt(req.params.id);
+  const stakeholders = await storage.getProjectStakeholders(projectId);
+  res.json(stakeholders);
+}));
+
+// Add project stakeholder
+router.post('/:id/stakeholders', isAuthenticated, asyncHandler(async (req: any, res) => {
+  const { insertProjectStakeholderSchema } = await import('@shared/schema');
+  const projectId = parseInt(req.params.id);
+  const userId = req.user.claims.sub;
+  
+  // Validate input
+  const data = insertProjectStakeholderSchema.parse({
+    ...req.body,
+    projectId,
+    addedBy: userId
+  });
+  
+  // Check if stakeholder already exists
+  const existing = await storage.getProjectStakeholders(projectId);
+  if (existing.some(s => s.userId === data.userId)) {
+    throw createError.badRequest("User is already a stakeholder");
+  }
+  
+  const stakeholder = await storage.addProjectStakeholder(data);
+  res.status(201).json(stakeholder);
+}));
+
+// Remove project stakeholder
+router.delete('/:id/stakeholders/:userId', isAuthenticated, asyncHandler(async (req, res) => {
+  const projectId = parseInt(req.params.id);
+  const userId = req.params.userId;
+  await storage.removeProjectStakeholder(projectId, userId);
+  res.status(204).send();
+}));
+
 export default router;
