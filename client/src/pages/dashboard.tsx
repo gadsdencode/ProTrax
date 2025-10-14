@@ -5,14 +5,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { AlertCircle, CheckCircle2, Clock, FolderKanban, Mail, ChevronDown, ArrowRight, ListTodo } from "lucide-react";
+import { AlertCircle, CheckCircle2, Clock, FolderKanban, Mail, ChevronDown, ArrowRight, ListTodo, Plus, UserCheck, Upload } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { EmailReportDialog } from "@/components/email-report-dialog";
+import { EmptyState } from "@/components/empty-state";
+import { useUIStore } from "@/stores/useUIStore";
 import type { Project, Task } from "@shared/schema";
 
 export default function Dashboard() {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
+  const { setActiveDialog } = useUIStore();
   const [emailDialogOpen, setEmailDialogOpen] = useState(false);
   const [selectedReportType, setSelectedReportType] = useState<string>("summary");
   
@@ -153,12 +156,26 @@ export default function Dashboard() {
         <CardContent>
           {allTasksLoading ? (
             <div className="space-y-3">
-              {[1, 2, 3, 4, 5].map(i => <Skeleton key={i} className="h-12 w-full" />)}
+              {[1, 2, 3, 4, 5].map(i => (
+                <div key={i} className="flex items-center space-x-3">
+                  <Skeleton className="h-12 flex-1" />
+                  <div className="flex gap-1">
+                    <Skeleton className="h-6 w-16 rounded-full" />
+                    <Skeleton className="h-6 w-16 rounded-full" />
+                  </div>
+                </div>
+              ))}
             </div>
           ) : !allTasks || allTasks.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-8 text-center">
-              No tasks created yet. Upload an SOW document to automatically create tasks.
-            </p>
+            <EmptyState
+              icon={ListTodo}
+              title="No tasks yet"
+              description="Upload an SOW document to automatically create tasks, or create your first task manually."
+              action={{
+                label: "Upload SOW",
+                onClick: () => setLocation('/projects')
+              }}
+            />
           ) : (
             <div className="space-y-2">
               <div className="text-xs text-muted-foreground mb-2">
@@ -218,12 +235,26 @@ export default function Dashboard() {
         <CardContent>
           {tasksLoading ? (
             <div className="space-y-3">
-              {[1, 2, 3].map(i => <Skeleton key={i} className="h-12 w-full" />)}
+              {[1, 2, 3].map(i => (
+                <div key={i} className="flex items-center space-x-3">
+                  <Skeleton className="h-12 flex-1" />
+                  <div className="flex gap-1">
+                    <Skeleton className="h-6 w-16 rounded-full" />
+                    <Skeleton className="h-6 w-16 rounded-full" />
+                  </div>
+                </div>
+              ))}
             </div>
           ) : !myTasks || myTasks.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-8 text-center">
-              No tasks assigned to you yet
-            </p>
+            <EmptyState
+              icon={UserCheck}
+              title="No assigned tasks"
+              description="You don't have any tasks assigned to you yet. Check the task list to see available tasks."
+              action={{
+                label: "View All Tasks",
+                onClick: () => setLocation('/list')
+              }}
+            />
           ) : (
             <div className="space-y-2">
               {myTasks.slice(0, 5).map(task => (
@@ -264,12 +295,29 @@ export default function Dashboard() {
         <CardContent>
           {projectsLoading ? (
             <div className="space-y-3">
-              {[1, 2].map(i => <Skeleton key={i} className="h-20 w-full" />)}
+              {[1, 2].map(i => (
+                <div key={i} className="p-4 rounded-lg border">
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="flex-1">
+                      <Skeleton className="h-4 w-32 mb-2" />
+                      <Skeleton className="h-3 w-full" />
+                    </div>
+                    <Skeleton className="h-3 w-3 rounded-full ml-3" />
+                  </div>
+                  <Skeleton className="h-3 w-48 mt-2" />
+                </div>
+              ))}
             </div>
-          ) : !projects || projects.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-8 text-center">
-              No active projects
-            </p>
+          ) : !projects || projects.filter(p => p.status === 'active').length === 0 ? (
+            <EmptyState
+              icon={FolderKanban}
+              title="No active projects"
+              description="You don't have any active projects. Create a new project to get started."
+              action={{
+                label: "New Project",
+                onClick: () => setLocation('/projects')
+              }}
+            />
           ) : (
             <div className="space-y-3">
               {projects.filter(p => p.status === 'active').slice(0, 3).map(project => (
