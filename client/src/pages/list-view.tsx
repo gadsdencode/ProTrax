@@ -1,11 +1,12 @@
 import { useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Search, Filter, Download, ArrowUpDown, Plus } from "lucide-react";
-import { useParams } from "wouter";
+import { Search, Filter, Download, ArrowUpDown, Plus, List } from "lucide-react";
+import { useParams, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/empty-state";
 import {
   Table,
   TableBody,
@@ -27,6 +28,7 @@ export default function ListView() {
   const params = useParams();
   const projectIdFromUrl = params.id ? parseInt(params.id) : null;
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   
   // Use centralized store for all state management
   const {
@@ -192,17 +194,74 @@ export default function ListView() {
 
       {/* Table */}
       {isLoading ? (
-        <div className="space-y-2">
-          {[1, 2, 3, 4, 5].map(i => (
-            <Skeleton key={i} className="h-12 w-full" />
-          ))}
+        <div className="border rounded-lg overflow-hidden">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-12">
+                  <Skeleton className="h-4 w-4" />
+                </TableHead>
+                <TableHead><Skeleton className="h-4 w-16" /></TableHead>
+                <TableHead><Skeleton className="h-4 w-16" /></TableHead>
+                <TableHead><Skeleton className="h-4 w-16" /></TableHead>
+                <TableHead><Skeleton className="h-4 w-20" /></TableHead>
+                <TableHead><Skeleton className="h-4 w-16" /></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {[1, 2, 3, 4, 5].map(i => (
+                <TableRow key={i}>
+                  <TableCell><Skeleton className="h-4 w-4" /></TableCell>
+                  <TableCell>
+                    <div className="space-y-1">
+                      <Skeleton className="h-4 w-32" />
+                      <Skeleton className="h-3 w-48" />
+                    </div>
+                  </TableCell>
+                  <TableCell><Skeleton className="h-6 w-20" /></TableCell>
+                  <TableCell><Skeleton className="h-6 w-16" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                  <TableCell><Skeleton className="h-2 w-24" /></TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         </div>
+      ) : !projectIdFromUrl ? (
+        <EmptyState
+          icon={List}
+          title="No project selected"
+          description="Select a project to view its tasks in a list format."
+          action={{
+            label: "Create Project",
+            onClick: () => setLocation('/projects')
+          }}
+        />
       ) : !filteredAndSortedTasks || filteredAndSortedTasks.length === 0 ? (
-        <div className="border rounded-lg p-16 text-center">
-          <p className="text-muted-foreground">
-            {globalSearchQuery ? "No tasks match your search" : "No tasks to display"}
-          </p>
-        </div>
+        globalSearchQuery ? (
+          <EmptyState
+            icon={Search}
+            title="No matching tasks"
+            description={`No tasks match your search for "${globalSearchQuery}".`}
+            action={{
+              label: "Clear Search",
+              onClick: () => setGlobalSearchQuery("")
+            }}
+          />
+        ) : (
+          <EmptyState
+            icon={List}
+            title="No tasks yet"
+            description="Create your first task to see it in the list view."
+            action={{
+              label: "Create Task",
+              onClick: () => {
+                setSelectedProjectId(projectIdFromUrl);
+                setActiveDialog('createTask');
+              }
+            }}
+          />
+        )
       ) : (
         <div className="border rounded-lg overflow-hidden">
           <Table>
