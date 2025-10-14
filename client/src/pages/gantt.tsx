@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Download, ZoomIn, ZoomOut, Plus, AlertCircle, Calendar } from "lucide-react";
 import { useParams } from "wouter";
@@ -17,25 +17,44 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { TaskForm } from "@/components/task-form";
 import { GanttRow } from "@/components/gantt-row";
+import { useUIStore } from "@/stores/useUIStore";
 import type { Task, Project, InsertTask } from "@shared/schema";
 
 export default function Gantt() {
   const params = useParams();
   const projectIdFromUrl = params.id ? parseInt(params.id) : null;
-  const [zoom, setZoom] = useState(1);
-  const [selectedProject, setSelectedProject] = useState<number | null>(projectIdFromUrl);
-  const [taskDialogOpen, setTaskDialogOpen] = useState(false);
-  const [editingTask, setEditingTask] = useState<Task | null>(null);
   const { toast } = useToast();
+  
+  // Use centralized store for all state management
+  const { 
+    activeDialog, 
+    setActiveDialog,
+    ganttZoomLevel,
+    setGanttZoomLevel,
+    selectedProjectId,
+    setSelectedProjectId,
+    selectedTaskId,
+    setSelectedTaskId
+  } = useUIStore();
+
+  // Initialize project from URL
+  useEffect(() => {
+    if (projectIdFromUrl) {
+      setSelectedProjectId(projectIdFromUrl);
+    }
+  }, [projectIdFromUrl, setSelectedProjectId]);
 
   const { data: project } = useQuery<Project>({
-    queryKey: [`/api/projects/${selectedProject}`],
-    enabled: !!selectedProject,
+    queryKey: [`/api/projects/${selectedProjectId}`],
+    enabled: !!selectedProjectId,
   });
 
   const { data: tasks, isLoading } = useQuery<Task[]>({
-    queryKey: selectedProject ? ["/api/tasks", { projectId: selectedProject }] : ["/api/tasks"],
+    queryKey: selectedProjectId ? ["/api/tasks", { projectId: selectedProjectId }] : ["/api/tasks"],
   });
+
+  // Derive editing task from selectedTaskId
+  const editingTask = tasks?.find(t => t.id === selectedTaskId) || null;
 
   const createTaskMutation = useMutation({
     mutationFn: async (data: InsertTask) => {
@@ -44,12 +63,12 @@ export default function Gantt() {
     },
     onSuccess: () => {
       // Invalidate all task queries to ensure UI updates
-      if (selectedProject) {
-        queryClient.invalidateQueries({ queryKey: ["/api/tasks", { projectId: selectedProject }] });
+      if (selectedProjectId) {
+        queryClient.invalidateQueries({ queryKey: ["/api/tasks", { projectId: selectedProjectId }] });
       }
       queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
-      setTaskDialogOpen(false);
-      setEditingTask(null);
+      setActiveDialog(null);
+      setSelectedTaskId(null);
       toast({
         title: "Success",
         description: "Task created successfully",
@@ -72,16 +91,16 @@ export default function Gantt() {
     },
     onSuccess: () => {
       // Invalidate all task queries to ensure UI updates
-      if (selectedProject) {
-        queryClient.invalidateQueries({ queryKey: ["/api/tasks", { projectId: selectedProject }] });
+      if (selectedProjectId) {
+        queryClient.invalidateQueries({ queryKey: ["/api/tasks", { projectId: selectedProjectId }] });
       }
       queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
       // Also invalidate the specific task query
-      if (editingTask) {
-        queryClient.invalidateQueries({ queryKey: [`/api/tasks/${editingTask.id}`] });
+      if (selectedTaskId) {
+        queryClient.invalidateQueries({ queryKey: [`/api/tasks/${selectedTaskId}`] });
       }
-      setTaskDialogOpen(false);
-      setEditingTask(null);
+      setActiveDialog(null);
+      setSelectedTaskId(null);
       toast({
         title: "Success",
         description: "Task dates updated successfully",
@@ -105,8 +124,8 @@ export default function Gantt() {
     },
     onSuccess: (data: any) => {
       // Invalidate all task queries to ensure UI updates
-      if (selectedProject) {
-        queryClient.invalidateQueries({ queryKey: ["/api/tasks", { projectId: selectedProject }] });
+      if (selectedProjectId) {
+        queryClient.invalidateQueries({ queryKey: ["/api/tasks", { projectId: selectedProjectId }] });
       }
       queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
       
@@ -212,7 +231,7 @@ export default function Gantt() {
   };
 
   const dateRange = getDateRange();
-  const dayWidth = 40 * zoom;
+  const dayWidth = 40 * ganttZoomLevel;
   
   // Separate tasks into scheduled and unscheduled
   const scheduledTasks = tasks?.filter(t => t.startDate && t.dueDate) || [];
@@ -248,9 +267,9 @@ export default function Gantt() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {selectedProject && (
+            {selectedProjectId && (
               <Button
-                onClick={() => setTaskDialogOpen(true)}
+                onClick={() => setActiveDialog('createTask')}
                 data-testid="button-new-task"
               >
                 <Plus className="h-4 w-4 mr-2" />
@@ -260,7 +279,7 @@ export default function Gantt() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setZoom(Math.max(0.5, zoom - 0.25))}
+              onClick={() => setGanttZoomLevel(Math.max(0.5, ganttZoomLevel - 0.25))}
               data-testid="button-zoom-out"
             >
               <ZoomOut className="h-4 w-4" />
@@ -268,7 +287,7 @@ export default function Gantt() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setZoom(Math.min(2, zoom + 0.25))}
+              onClick={() => setGanttZoomLevel(Math.min(2, ganttZoomLevel + 0.25))}
               data-testid="button-zoom-in"
             >
               <ZoomIn className="h-4 w-4" />
@@ -327,8 +346,8 @@ export default function Gantt() {
                           size="sm"
                           variant="outline"
                           onClick={() => {
-                            setEditingTask(task);
-                            setTaskDialogOpen(true);
+                            setSelectedTaskId(task.id);
+                            setActiveDialog('createTask');
                           }}
                           data-testid={`button-schedule-task-${task.id}`}
                         >
@@ -404,8 +423,8 @@ export default function Gantt() {
                             variant="ghost"
                             className="text-xs"
                             onClick={() => {
-                              setEditingTask(task);
-                              setTaskDialogOpen(true);
+                              setSelectedTaskId(task.id);
+                              setActiveDialog('createTask');
                             }}
                             data-testid={`button-schedule-${task.id}`}
                           >
@@ -425,10 +444,10 @@ export default function Gantt() {
 
       {/* Task Creation/Edit Dialog */}
       <Dialog 
-        open={taskDialogOpen} 
+        open={activeDialog === 'createTask'} 
         onOpenChange={(open) => {
-          setTaskDialogOpen(open);
-          if (!open) setEditingTask(null);
+          setActiveDialog(open ? 'createTask' : null);
+          if (!open) setSelectedTaskId(null);
         }}
       >
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -436,7 +455,7 @@ export default function Gantt() {
             <DialogTitle>{editingTask ? 'Update Task Dates' : 'Create New Task'}</DialogTitle>
           </DialogHeader>
           <TaskForm
-            projectId={editingTask?.projectId || selectedProject || undefined}
+            projectId={editingTask?.projectId || selectedProjectId || undefined}
             defaultValues={editingTask ? {
               title: editingTask.title,
               description: editingTask.description || undefined,

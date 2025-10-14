@@ -4,7 +4,12 @@
 
 ProjectHub is a comprehensive enterprise project management platform designed for modern teams, offering a full-featured project management suite with various visualization options like Gantt charts, Kanban boards, calendar, and list views. It supports Waterfall, Agile, and Hybrid methodologies, includes portfolio management, AI-powered insights via Google Gemini, and extensive project tracking capabilities. The platform aims to unify project, task, dependency, risk, budget, time, expense, and team collaboration management within a single interface, providing real-time updates and comprehensive reporting.
 
-### Recent Updates (December 2024)
+### Recent Updates (October 2024)
+
+- **State Management Consolidation**: Unified all global UI state management using Zustand. All dialog visibility, project/task selection, and view preferences now managed through a centralized store for consistency and predictability.
+- **Architecture Cleanup**: Eliminated duplicate state between local useState and Zustand store across Kanban, Gantt, and Calendar components, reducing potential bugs and state synchronization issues.
+
+### Previous Updates (December 2024)
 
 - **Enhanced Email Notifications**: Email reports now include comprehensive task details with assignee names (not IDs), task descriptions, progress bars, estimated hours, story points, and proper status/priority color coding.
 - **Improved Gantt Chart**: Gantt view now separates tasks into "Scheduled" and "Unscheduled" sections with badge indicators for better visibility of tasks needing dates.
@@ -22,7 +27,11 @@ Preferred communication style: Simple, everyday language.
 
 **UI Component System:** Shadcn/ui (built on Radix UI primitives), Tailwind CSS for styling with a custom palette, hybrid design inspired by Linear and Material Design 3, and dark/light theme support.
 
-**State Management:** React Query for server state, React Context for themes, and local component state for UI interactions.
+**State Management:** 
+- **Server State**: React Query (@tanstack/react-query) for data fetching, caching, and synchronization
+- **Global UI State**: Zustand store (`useUIStore`) for dialog management, project/task selection, view preferences, and global search
+- **Theme State**: React Context (`ThemeProvider`) for light/dark mode
+- **Local Component State**: useState for component-specific UI (calendar navigation, drag states, form inputs)
 
 **Key Features:** Drag-and-drop with @dnd-kit, form validation with React Hook Form and Zod, real-time updates via WebSockets, and responsive design.
 

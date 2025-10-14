@@ -24,12 +24,10 @@ import type { Task, KanbanColumn, InsertTask, Project } from "@shared/schema";
 export default function Kanban() {
   const params = useParams();
   const projectIdFromUrl = params.id ? parseInt(params.id) : null;
-  const [selectedProject, setSelectedProject] = useState<number | null>(projectIdFromUrl);
   const [activeId, setActiveId] = useState<number | null>(null);
-  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const { toast } = useToast();
   
-  // Use centralized store for dialog management
+  // Use centralized store for all state management
   const { 
     activeDialog, 
     setActiveDialog, 
@@ -46,25 +44,30 @@ export default function Kanban() {
     queryKey: ["/api/projects"],
   });
 
-  // Auto-select first project if none is selected
+  // Initialize project from URL or auto-select first project
   useEffect(() => {
-    if (!selectedProject && projects && projects.length > 0) {
-      setSelectedProject(projects[0].id);
+    if (projectIdFromUrl) {
+      setSelectedProjectId(projectIdFromUrl);
+    } else if (!selectedProjectId && projects && projects.length > 0) {
+      setSelectedProjectId(projects[0].id);
     }
-  }, [selectedProject, projects]);
+  }, [projectIdFromUrl, selectedProjectId, projects, setSelectedProjectId]);
 
   const { data: project } = useQuery<Project>({
-    queryKey: [`/api/projects/${selectedProject}`],
-    enabled: !!selectedProject,
+    queryKey: [`/api/projects/${selectedProjectId}`],
+    enabled: !!selectedProjectId,
   });
 
   const { data: columns, isLoading: columnsLoading } = useQuery<KanbanColumn[]>({
-    queryKey: ["/api/kanban/columns", { projectId: selectedProject }],
+    queryKey: ["/api/kanban/columns", { projectId: selectedProjectId }],
   });
 
   const { data: tasks, isLoading: tasksLoading } = useQuery<Task[]>({
-    queryKey: ["/api/tasks", { projectId: selectedProject }],
+    queryKey: ["/api/tasks", { projectId: selectedProjectId }],
   });
+
+  // Derive selected task from store's selectedTaskId
+  const selectedTask = tasks?.find(t => t.id === selectedTaskId) || null;
 
   const createTaskMutation = useMutation({
     mutationFn: async (data: InsertTask) => {
@@ -72,7 +75,7 @@ export default function Kanban() {
       return await response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/tasks", { projectId: selectedProject }] });
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks", { projectId: selectedProjectId }] });
       queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
       // Also invalidate custom field values queries
       queryClient.invalidateQueries({ queryKey: ["/api/tasks/"] }); 
@@ -97,7 +100,7 @@ export default function Kanban() {
     },
     onSuccess: () => {
       // Invalidate with the correct query key pattern
-      queryClient.invalidateQueries({ queryKey: ["/api/tasks", { projectId: selectedProject }] });
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks", { projectId: selectedProjectId }] });
       queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
       toast({
         title: "Task moved",
@@ -179,11 +182,9 @@ export default function Kanban() {
                     isOverLimit={isOverLimit}
                     onAddTask={(status) => {
                       setCreateTaskStatus(status);
-                      setSelectedProjectId(selectedProject);
                       setActiveDialog('createTask');
                     }}
                     onTaskClick={(task) => {
-                      setSelectedTask(task);
                       setSelectedTaskId(task.id);
                       setActiveDialog('taskDetail');
                     }}
@@ -217,7 +218,7 @@ export default function Kanban() {
               return result;
             }}
             isLoading={createTaskMutation.isPending}
-            projectId={selectedProjectId || selectedProject || undefined}
+            projectId={selectedProjectId || undefined}
             presetStatus={createTaskStatus}
           />
         </DialogContent>
@@ -230,7 +231,6 @@ export default function Kanban() {
         onOpenChange={(open) => {
           setActiveDialog(open ? 'taskDetail' : null);
           if (!open) {
-            setSelectedTask(null);
             setSelectedTaskId(null);
           }
         }}

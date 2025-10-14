@@ -1,18 +1,39 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { useParams } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { TaskForm } from "@/components/task-form";
+import { useUIStore } from "@/stores/useUIStore";
 import type { Task, Project } from "@shared/schema";
 
 export default function Calendar() {
   const params = useParams();
   const projectIdFromUrl = params.id ? parseInt(params.id) : null;
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [taskFormOpen, setTaskFormOpen] = useState(false);
+  
+  // Use centralized store for dialog management
+  const { 
+    activeDialog, 
+    setActiveDialog,
+    selectedProjectId,
+    setSelectedProjectId
+  } = useUIStore();
+
+  // Initialize project from URL
+  useEffect(() => {
+    if (projectIdFromUrl) {
+      setSelectedProjectId(projectIdFromUrl);
+    }
+  }, [projectIdFromUrl, setSelectedProjectId]);
 
   const { data: project } = useQuery<Project>({
     queryKey: [`/api/projects/${projectIdFromUrl}`],
@@ -56,9 +77,9 @@ export default function Calendar() {
           {project ? `${project.name} - Calendar` : 'Calendar'}
         </h1>
         <div className="flex items-center gap-2">
-          {projectIdFromUrl && (
+          {selectedProjectId && (
             <Button
-              onClick={() => setTaskFormOpen(true)}
+              onClick={() => setActiveDialog('createTask')}
               data-testid="button-new-task"
             >
               <Plus className="h-4 w-4 mr-2" />
@@ -157,11 +178,19 @@ export default function Calendar() {
       )}
 
       {/* Task Form Dialog */}
-      <TaskForm
-        open={taskFormOpen}
-        onOpenChange={setTaskFormOpen}
-        projectId={projectIdFromUrl}
-      />
+      <Dialog 
+        open={activeDialog === 'createTask'} 
+        onOpenChange={(isOpen) => setActiveDialog(isOpen ? 'createTask' : null)}
+      >
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Create New Task</DialogTitle>
+          </DialogHeader>
+          <TaskForm
+            projectId={selectedProjectId || undefined}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
