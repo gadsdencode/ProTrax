@@ -24,9 +24,10 @@ interface ProjectFormProps {
   onSubmit: (data: InsertProject) => void;
   isLoading?: boolean;
   defaultValues?: Partial<InsertProject>;
+  mode?: "create" | "edit";
 }
 
-export function ProjectForm({ onSubmit, isLoading, defaultValues }: ProjectFormProps) {
+export function ProjectForm({ onSubmit, isLoading, defaultValues, mode = "create" }: ProjectFormProps) {
   const form = useForm<InsertProject>({
     resolver: zodResolver(insertProjectSchema),
     defaultValues: defaultValues || {
@@ -205,7 +206,10 @@ export function ProjectForm({ onSubmit, isLoading, defaultValues }: ProjectFormP
             disabled={isLoading}
             data-testid="button-submit-project"
           >
-            {isLoading ? "Creating..." : "Create Project"}
+            {isLoading 
+              ? (mode === "edit" ? "Saving..." : "Creating...") 
+              : (mode === "edit" ? "Save Project" : "Create Project")
+            }
           </Button>
         </div>
       </form>

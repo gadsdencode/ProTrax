@@ -173,6 +173,7 @@ export default function ProjectSettings() {
           <div className="max-w-2xl">
             <h2 className="text-xl font-semibold mb-4">General Settings</h2>
             <ProjectForm
+              mode="edit"
               onSubmit={handleProjectUpdate}
               isLoading={updateProjectMutation.isPending}
               defaultValues={{
