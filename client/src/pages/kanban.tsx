@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Plus, MoreVertical, GripVertical } from "lucide-react";
-import { useParams } from "wouter";
+import { Plus, MoreVertical, GripVertical, Kanban, FolderKanban } from "lucide-react";
+import { useParams, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -19,6 +19,7 @@ import { DndContext, DragEndEvent, DragOverlay, useDraggable, useDroppable } fro
 import { TaskForm } from "@/components/task-form";
 import { TaskDetail } from "@/components/task-detail";
 import { useUIStore } from "@/stores/useUIStore";
+import { EmptyState } from "@/components/empty-state";
 import type { Task, KanbanColumn, InsertTask, Project } from "@shared/schema";
 
 export default function Kanban() {
@@ -26,6 +27,7 @@ export default function Kanban() {
   const projectIdFromUrl = params.id ? parseInt(params.id) : null;
   const [activeId, setActiveId] = useState<number | null>(null);
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   
   // Use centralized store for all state management
   const { 
@@ -164,9 +166,54 @@ export default function Kanban() {
         {columnsLoading || tasksLoading ? (
           <div className="flex gap-4">
             {[1, 2, 3, 4].map(i => (
-              <Skeleton key={i} className="w-80 h-96" />
+              <div key={i} className="w-80 shrink-0">
+                <div className="flex items-center gap-2 mb-4">
+                  <Skeleton className="h-3 w-3 rounded-full" />
+                  <Skeleton className="h-5 w-24" />
+                  <Skeleton className="h-5 w-8 rounded-full" />
+                </div>
+                <div className="space-y-3">
+                  {[1, 2, 3].map(j => (
+                    <Card key={j}>
+                      <CardHeader className="p-4">
+                        <Skeleton className="h-4 w-full" />
+                      </CardHeader>
+                      <CardContent className="p-4 pt-0 space-y-2">
+                        <Skeleton className="h-3 w-3/4" />
+                        <div className="flex justify-between">
+                          <Skeleton className="h-5 w-16 rounded-full" />
+                          <Skeleton className="h-6 w-6 rounded-full" />
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </div>
             ))}
           </div>
+        ) : !selectedProjectId ? (
+          <EmptyState
+            icon={FolderKanban}
+            title="No project selected"
+            description="Select a project to view its Kanban board or create a new project."
+            action={{
+              label: "Create Project",
+              onClick: () => setLocation('/projects')
+            }}
+          />
+        ) : !tasks || tasks.length === 0 ? (
+          <EmptyState
+            icon={Kanban}
+            title="No tasks yet"
+            description="Create your first task to start organizing work on the Kanban board."
+            action={{
+              label: "Create Task",
+              onClick: () => {
+                setCreateTaskStatus('todo');
+                setActiveDialog('createTask');
+              }
+            }}
+          />
         ) : (
           <DndContext onDragEnd={handleDragEnd} onDragStart={(e) => setActiveId(e.active.id as number)}>
             <div className="flex gap-4 min-w-max">
