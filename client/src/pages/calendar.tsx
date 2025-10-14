@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
-import { useParams } from "wouter";
+import { ChevronLeft, ChevronRight, Plus, Calendar as CalendarIcon } from "lucide-react";
+import { useParams, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -15,12 +15,14 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { TaskForm } from "@/components/task-form";
 import { useUIStore } from "@/stores/useUIStore";
+import { EmptyState } from "@/components/empty-state";
 import type { Task, Project, InsertTask } from "@shared/schema";
 
 export default function Calendar() {
   const params = useParams();
   const projectIdFromUrl = params.id ? parseInt(params.id) : null;
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   
   // Use centralized store for all state management
   const { 
@@ -147,7 +149,39 @@ export default function Calendar() {
 
       {/* Calendar Grid */}
       {isLoading ? (
-        <Skeleton className="h-96" />
+        <Card className="p-4">
+          <div className="grid grid-cols-7 gap-px bg-border rounded-lg overflow-hidden">
+            {/* Day Headers Skeleton */}
+            {dayNames.map(day => (
+              <div
+                key={day}
+                className="bg-card p-3 text-center"
+              >
+                <Skeleton className="h-4 w-8 mx-auto" />
+              </div>
+            ))}
+            {/* Calendar Days Skeleton */}
+            {Array.from({ length: 35 }).map((_, i) => (
+              <div key={i} className="bg-card p-2 min-h-24 border-t">
+                <Skeleton className="h-4 w-4 mb-2" />
+                <div className="space-y-1">
+                  <Skeleton className="h-3 w-full" />
+                  <Skeleton className="h-3 w-3/4" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      ) : !tasks || tasks.length === 0 ? (
+        <EmptyState
+          icon={CalendarIcon}
+          title="No events scheduled"
+          description="You don't have any tasks with due dates yet. Create tasks with due dates to see them on the calendar."
+          action={{
+            label: "Create Task",
+            onClick: () => setActiveDialog('createTask')
+          }}
+        />
       ) : (
         <Card className="p-4">
           <div className="grid grid-cols-7 gap-px bg-border rounded-lg overflow-hidden">
