@@ -7,8 +7,14 @@ ProjectHub is a comprehensive enterprise project management platform designed fo
 ### Recent Updates (October 2024)
 
 - **Comprehensive Error Handling**: Implemented multi-layered error handling architecture with React Error Boundary for runtime errors, global mutation error handlers in React Query, enhanced error parsing utilities, and user-friendly error display system.
-- **State Management Consolidation**: Unified all global UI state management using Zustand. All dialog visibility, project/task selection, and view preferences now managed through a centralized store for consistency and predictability.
-- **Architecture Cleanup**: Eliminated duplicate state between local useState and Zustand store across Kanban, Gantt, and Calendar components, reducing potential bugs and state synchronization issues.
+- **Complete State Management Refactoring**: Successfully unified all global UI state management using Zustand with zero regressions:
+  - **Centralized Store**: All dialog visibility, project/task selection, view preferences, theme, and sidebar state now managed through `useUIStore`
+  - **ListView State**: Migrated selectedTasks, sortField, sortDirection to Zustand with automatic selection clearing on project navigation to prevent cross-project operations
+  - **Theme Management**: Integrated theme state into Zustand while preserving ThemeProvider's defaultTheme prop functionality
+  - **Sidebar Integration**: Unified SidebarProvider state with Zustand, eliminating duplicate state management
+  - **View Persistence**: Calendar currentDate and Project Settings activeTab now persist across navigation via Zustand
+  - **Critical Fixes**: ListView selections now properly clear when navigating between projects (watches projectIdFromUrl changes), preventing incorrect bulk operations
+- **Architecture Cleanup**: Eliminated all duplicate state between local useState and Zustand store across all components. Transient UI state (drag & drop, form loading, error boundaries) correctly kept as local state for optimal performance.
 
 ### Previous Updates (December 2024)
 
@@ -30,9 +36,13 @@ Preferred communication style: Simple, everyday language.
 
 **State Management:** 
 - **Server State**: React Query (@tanstack/react-query) for data fetching, caching, and synchronization
-- **Global UI State**: Zustand store (`useUIStore`) for dialog management, project/task selection, view preferences, and global search
-- **Theme State**: React Context (`ThemeProvider`) for light/dark mode
-- **Local Component State**: useState for component-specific UI (calendar navigation, drag states, form inputs)
+- **Global UI State**: Zustand store (`useUIStore`) with localStorage persistence for:
+  - Dialog management (activeDialog, task/project selection)
+  - View preferences (Gantt zoom level, ListView sort/selection, Calendar current date)
+  - Theme management (light/dark/system with defaultTheme prop support)
+  - Sidebar state (open/closed)
+  - Global search query
+- **Local Component State**: useState for transient UI (drag & drop states, form loading states, error boundaries, component-specific inputs)
 
 **Key Features:** Drag-and-drop with @dnd-kit, form validation with React Hook Form and Zod, real-time updates via WebSockets, and responsive design.
 
