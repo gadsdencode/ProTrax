@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Download, ZoomIn, ZoomOut, Plus, AlertCircle, Calendar } from "lucide-react";
-import { useParams } from "wouter";
+import { Download, ZoomIn, ZoomOut, Plus, AlertCircle, Calendar, BarChart } from "lucide-react";
+import { useParams, useLocation } from "wouter";
 import { DndContext, DragEndEvent } from "@dnd-kit/core";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -18,12 +18,14 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { TaskForm } from "@/components/task-form";
 import { GanttRow } from "@/components/gantt-row";
 import { useUIStore } from "@/stores/useUIStore";
+import { EmptyState } from "@/components/empty-state";
 import type { Task, Project, InsertTask } from "@shared/schema";
 
 export default function Gantt() {
   const params = useParams();
   const projectIdFromUrl = params.id ? parseInt(params.id) : null;
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   
   // Use centralized store for all state management
   const { 
@@ -309,19 +311,56 @@ export default function Gantt() {
       {/* Gantt Chart */}
       <div className="flex-1 overflow-auto">
         {isLoading ? (
-          <div className="p-6 space-y-3">
-            {[1, 2, 3, 4, 5].map(i => (
-              <Skeleton key={i} className="h-6 w-full" />
-            ))}
+          <div className="p-6">
+            <div className="sticky top-0 z-10 bg-background border-b flex">
+              <div className="w-80 shrink-0 border-r p-3">
+                <Skeleton className="h-4 w-24" />
+              </div>
+              <div className="flex">
+                {[1, 2, 3, 4, 5, 6, 7].map(i => (
+                  <div key={i} className="border-r p-2" style={{ width: '40px' }}>
+                    <Skeleton className="h-3 w-full" />
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-2 mt-4">
+              {[1, 2, 3, 4, 5].map(i => (
+                <div key={i} className="flex">
+                  <div className="w-80 shrink-0 border-r p-3">
+                    <Skeleton className="h-4 w-48" />
+                  </div>
+                  <div className="flex-1 p-2">
+                    <Skeleton className="h-8 w-64" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : !selectedProjectId ? (
+          <div className="p-6">
+            <EmptyState
+              icon={BarChart}
+              title="No project selected"
+              description="Select a project to view its Gantt chart or create a new project."
+              action={{
+                label: "Create Project",
+                onClick: () => setLocation('/projects')
+              }}
+            />
           </div>
         ) : !tasks || tasks.length === 0 ? (
-          <Card className="m-6">
-            <CardContent className="py-16 text-center">
-              <p className="text-muted-foreground">
-                No tasks to display. Create tasks to see them on the Gantt chart.
-              </p>
-            </CardContent>
-          </Card>
+          <div className="p-6">
+            <EmptyState
+              icon={Calendar}
+              title="No tasks to display"
+              description="Create tasks with start and due dates to see them on the Gantt chart."
+              action={{
+                label: "Create Task",
+                onClick: () => setActiveDialog('createTask')
+              }}
+            />
+          </div>
         ) : scheduledTasks.length === 0 ? (
           <div className="p-6">
             <Card>

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Plus, MoreVertical, GripVertical, Kanban, FolderKanban } from "lucide-react";
+import { Plus, MoreVertical, GripVertical, Columns3, FolderKanban } from "lucide-react";
 import { useParams, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -203,7 +203,7 @@ export default function Kanban() {
           />
         ) : !tasks || tasks.length === 0 ? (
           <EmptyState
-            icon={Kanban}
+            icon={Columns3}
             title="No tasks yet"
             description="Create your first task to start organizing work on the Kanban board."
             action={{
