@@ -13,6 +13,7 @@ import * as mammoth from "mammoth";
 import * as pdfParseModule from "pdf-parse";
 const pdfParse = (pdfParseModule as any).default || pdfParseModule;
 import { extractProjectDataFromSOW } from "./gemini";
+import { ReportService } from "./services/reportService";
 import {
   insertProjectSchema,
   insertSprintSchema,
@@ -1226,240 +1227,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   app.post('/api/email/send-report', isAuthenticated, asyncHandler(async (req, res) => {
     const { sendProjectReport, sendPortfolioSummary } = await import('./outlook');
+    const { ReportServiceError } = await import('./services/reportService');
     const { projectId, reportType, recipients } = req.body;
     
     if (!reportType || !recipients || !Array.isArray(recipients) || recipients.length === 0) {
       throw createError.badRequest("reportType and recipients array are required");
     }
 
-    // Check if this is a portfolio summary (all active projects)
-    if (reportType === 'summary' && (!projectId || projectId === 'all')) {
-      console.log('[PORTFOLIO] Starting portfolio email generation...');
-      
-      // Fetch all active projects
-      const allProjects = await storage.getProjects();
-      console.log(`[PORTFOLIO] Total projects in database: ${allProjects.length}`);
-      
-      const activeProjects = allProjects.filter(p => p.status === 'active');
-      console.log(`[PORTFOLIO] Active projects found: ${activeProjects.length}`);
-      activeProjects.forEach(p => {
-        console.log(`[PORTFOLIO]   - Project ${p.id}: "${p.name}" (status: ${p.status})`);
-      });
-      
-      if (activeProjects.length === 0) {
-        throw createError.notFound("No active projects found");
+    const reportService = new ReportService(storage);
+
+    try {
+      // Check if this is a portfolio summary (all active projects)
+      if (reportType === 'summary' && (!projectId || projectId === 'all')) {
+        const projectsData = await reportService.getPortfolioSummaryData();
+        
+        await sendPortfolioSummary(projectsData, recipients);
+        
+        res.json({ 
+          message: "Portfolio summary sent successfully",
+          recipientCount: recipients.length,
+          projectCount: projectsData.length
+        });
+        return;
       }
 
-      // Fetch all users to map manager IDs to names
-      const allUsers = await storage.getAllUsers();
-      const userMap = new Map(allUsers.map((u: User) => [u.id, u]));
+      // Single project report
+      if (!projectId) {
+        throw createError.badRequest("projectId is required for non-portfolio reports");
+      }
 
-      // Collect data for each active project with enriched tasks
-      const projectsData = await Promise.all(
-        activeProjects.map(async (project) => {
-          console.log(`[PORTFOLIO] Fetching tasks for project ${project.id} ("${project.name}")...`);
-          const tasks = await storage.getTasks(project.id);
-          console.log(`[PORTFOLIO] Project ${project.id} has ${tasks.length} tasks`);
-          
-          // Ensure tasks is always an array (fail-safe at source)
-          if (!tasks || !Array.isArray(tasks)) {
-            throw createError.internal(`Failed to fetch tasks for project ${project.id} ("${project.name}")`);
-          }
-          
-          // Enrich tasks with assignee names (same as single project email)
-          const enrichedTasks = tasks.map(task => {
-            const assignee = task.assigneeId ? userMap.get(task.assigneeId) : null;
-            const assigneeName = assignee
-              ? `${assignee.firstName || ''} ${assignee.lastName || ''}`.trim() || assignee.email || 'Unassigned'
-              : 'Unassigned';
-            
-            return {
-              ...task,
-              assigneeName,
-              assigneeEmail: assignee?.email || null
-            };
-          });
-
-          const totalTasks = enrichedTasks.length;
-          const completedTasks = enrichedTasks.filter(t => t.status === 'done').length;
-          const inProgressTasks = enrichedTasks.filter(t => t.status === 'in_progress').length;
-          const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
-          
-          // Get manager name
-          const manager = project.managerId ? userMap.get(project.managerId) : null;
-          const managerName = manager 
-            ? `${manager.firstName || ''} ${manager.lastName || ''}`.trim() || manager.email || 'N/A'
-            : 'N/A';
-          
-          return {
-            id: project.id,
-            name: project.name,
-            description: project.description,
-            status: project.status,
-            manager: managerName,
-            startDate: project.startDate,
-            endDate: project.endDate,
-            budget: project.budget,
-            totalTasks,
-            completedTasks,
-            inProgressTasks,
-            progress,
-            tasks: enrichedTasks // Include the enriched tasks array
-          };
-        })
-      );
-
-      console.log(`[PORTFOLIO] Prepared ${projectsData.length} projects for email`);
-      const totalTasksInPortfolio = projectsData.reduce((sum, p) => sum + p.totalTasks, 0);
-      console.log(`[PORTFOLIO] Total tasks across all projects: ${totalTasksInPortfolio}`);
-      projectsData.forEach(p => {
-        console.log(`[PORTFOLIO] Summary - ${p.name}: ${p.totalTasks} tasks, ${p.tasks?.length || 0} enriched tasks in array`);
-      });
-
-      await sendPortfolioSummary(projectsData, recipients);
+      const reportData = await reportService.getSingleProjectReportData(projectId, reportType);
+      
+      // Get project name for email (service already validated project exists)
+      const project = await storage.getProject(projectId);
+      
+      await sendProjectReport(project!.name, reportType, reportData, recipients);
       
       res.json({ 
-        message: "Portfolio summary sent successfully",
-        recipientCount: recipients.length,
-        projectCount: activeProjects.length
+        message: "Report sent successfully",
+        recipientCount: recipients.length 
       });
-      return;
+    } catch (error) {
+      if (error instanceof ReportServiceError) {
+        if (error.statusCode === 404) {
+          throw createError.notFound(error.message);
+        } else if (error.statusCode === 400) {
+          throw createError.badRequest(error.message);
+        } else {
+          throw createError.internal(error.message);
+        }
+      }
+      throw error;
     }
-
-    // Single project report (original functionality)
-    if (!projectId) {
-      throw createError.badRequest("projectId is required for non-portfolio reports");
-    }
-
-    // Fetch project data
-    const project = await storage.getProject(projectId);
-    if (!project) {
-      throw createError.notFound("Project not found");
-    }
-
-    // Fetch tasks for the project
-    console.log(`[ROUTES DEBUG] Fetching tasks for project ${projectId}...`);
-    const tasks = await storage.getTasks(projectId);
-    console.log(`[ROUTES DEBUG] Found ${tasks.length} tasks for project ${projectId}`);
-    if (tasks.length > 0) {
-      console.log(`[ROUTES DEBUG] First task sample:`, {
-        id: tasks[0].id,
-        title: tasks[0].title,
-        status: tasks[0].status,
-        assigneeId: tasks[0].assigneeId
-      });
-    }
-    
-    // Fetch all users to map assignee IDs to names
-    console.log(`[ROUTES DEBUG] Fetching all users for assignee mapping...`);
-    const allUsers = await storage.getAllUsers();
-    const userMap = new Map(allUsers.map((u: User) => [u.id, u]));
-    console.log(`[ROUTES DEBUG] Created user map with ${userMap.size} users`);
-    
-    // Enrich tasks with assignee names
-    console.log(`[ROUTES DEBUG] Enriching ${tasks.length} tasks with assignee names...`);
-    const enrichedTasks = tasks.map(task => {
-      const assignee = task.assigneeId ? userMap.get(task.assigneeId) : null;
-      const assigneeName = assignee
-        ? `${assignee.firstName || ''} ${assignee.lastName || ''}`.trim() || assignee.email || 'Unassigned'
-        : 'Unassigned';
-      
-      return {
-        ...task,
-        assigneeName,
-        assigneeEmail: assignee?.email || null
-      };
-    });
-    
-    console.log(`[ROUTES DEBUG] Successfully enriched ${enrichedTasks.length} tasks`);
-    if (enrichedTasks.length > 0) {
-      console.log(`[ROUTES DEBUG] First enriched task sample:`, {
-        id: enrichedTasks[0].id,
-        title: enrichedTasks[0].title,
-        assigneeName: enrichedTasks[0].assigneeName,
-        status: enrichedTasks[0].status
-      });
-    }
-    
-    // Prepare report data based on type
-    let reportData: any = {};
-    
-    if (reportType === 'summary') {
-      const totalTasks = enrichedTasks.length;
-      const completedTasks = enrichedTasks.filter(t => t.status === 'done').length;
-      const inProgressTasks = enrichedTasks.filter(t => t.status === 'in_progress').length;
-      
-      console.log(`[ROUTES DEBUG] Preparing summary report data:`);
-      console.log(`[ROUTES DEBUG] - Total Tasks: ${totalTasks}`);
-      console.log(`[ROUTES DEBUG] - Completed Tasks: ${completedTasks}`);
-      console.log(`[ROUTES DEBUG] - In Progress Tasks: ${inProgressTasks}`);
-      
-      // Get manager name
-      const manager = project.managerId ? userMap.get(project.managerId) : null;
-      const managerName = manager 
-        ? `${manager.firstName || ''} ${manager.lastName || ''}`.trim() || manager.email || 'N/A'
-        : 'N/A';
-      
-      reportData = {
-        description: project.description,
-        status: project.status,
-        manager: managerName,
-        startDate: project.startDate,
-        endDate: project.endDate,
-        budget: project.budget,
-        totalTasks,
-        completedTasks,
-        inProgressTasks,
-        tasks: enrichedTasks  // IMPORTANT: Include the tasks array
-      };
-      
-      console.log(`[ROUTES DEBUG] Final reportData structure:`);
-      console.log(`[ROUTES DEBUG] - Has tasks property: ${'tasks' in reportData}`);
-      console.log(`[ROUTES DEBUG] - Tasks is array: ${Array.isArray(reportData.tasks)}`);
-      console.log(`[ROUTES DEBUG] - Tasks count: ${reportData.tasks?.length || 0}`);
-    } else if (reportType === 'status') {
-      const totalTasks = enrichedTasks.length;
-      const completedTasks = enrichedTasks.filter(t => t.status === 'done').length;
-      const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
-      
-      // Get risks
-      const risks = await storage.getRisks(projectId);
-      
-      // Get recent completed and upcoming tasks with details
-      const recentCompleted = enrichedTasks
-        .filter(t => t.status === 'done')
-        .sort((a, b) => (b.updatedAt?.getTime() || 0) - (a.updatedAt?.getTime() || 0))
-        .slice(0, 5);
-      
-      const upcomingTasks = enrichedTasks
-        .filter(t => t.status === 'todo' || t.status === 'in_progress')
-        .sort((a, b) => {
-          if (a.dueDate && b.dueDate) return a.dueDate.getTime() - b.dueDate.getTime();
-          if (a.dueDate) return -1;
-          if (b.dueDate) return 1;
-          return 0;
-        })
-        .slice(0, 5);
-      
-      reportData = {
-        overallStatus: progress >= 80 ? 'on_track' : progress >= 50 ? 'at_risk' : 'delayed',
-        progress,
-        accomplishments: recentCompleted,
-        upcoming: upcomingTasks,
-        risks: risks.slice(0, 5),
-        tasks: enrichedTasks // Include all tasks for detailed reporting
-      };
-    } else {
-      // For gantt/kanban reports, send enriched tasks
-      reportData = enrichedTasks;
-    }
-
-    await sendProjectReport(project.name, reportType, reportData, recipients);
-    
-    res.json({ 
-      message: "Report sent successfully",
-      recipientCount: recipients.length 
-    });
   }));
 
   // ============= DEBUG ROUTES =============

@@ -1,6 +1,16 @@
 import type { IStorage } from '../storage';
 import type { User, Project, Task } from '@shared/schema';
 
+export class ReportServiceError extends Error {
+  constructor(
+    message: string,
+    public statusCode: number = 500
+  ) {
+    super(message);
+    this.name = 'ReportServiceError';
+  }
+}
+
 export interface EnrichedTask extends Task {
   assigneeName: string;
   assigneeEmail: string | null;
@@ -96,7 +106,7 @@ export class ReportService {
     console.log(`[PORTFOLIO SERVICE] Active projects found: ${activeProjects.length}`);
     
     if (activeProjects.length === 0) {
-      throw new Error("No active projects found");
+      throw new ReportServiceError("No active projects found", 404);
     }
 
     const allUsers = await this.storage.getAllUsers();
@@ -109,7 +119,7 @@ export class ReportService {
         console.log(`[PORTFOLIO SERVICE] Project ${project.id} has ${tasks.length} tasks`);
         
         if (!tasks || !Array.isArray(tasks)) {
-          throw new Error(`Failed to fetch tasks for project ${project.id} ("${project.name}")`);
+          throw new ReportServiceError(`Failed to fetch tasks for project ${project.id} ("${project.name}")`, 500);
         }
         
         const enrichedTasks = this.enrichTasksWithAssigneeNames(tasks, userMap);
@@ -146,7 +156,7 @@ export class ReportService {
     
     const project = await this.storage.getProject(projectId);
     if (!project) {
-      throw new Error("Project not found");
+      throw new ReportServiceError("Project not found", 404);
     }
 
     const tasks = await this.storage.getTasks(projectId);
