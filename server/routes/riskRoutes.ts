@@ -6,13 +6,6 @@ import { insertRiskSchema } from "@shared/schema";
 
 const router = Router();
 
-// Get risks for project
-router.get('/projects/:projectId/risks', isAuthenticated, asyncHandler(async (req, res) => {
-  const projectId = parseInt(req.params.projectId);
-  const risks = await storage.getRisks(projectId);
-  res.json(risks);
-}));
-
 // Create risk
 router.post('/', isAuthenticated, asyncHandler(async (req, res) => {
   const data = insertRiskSchema.parse(req.body);

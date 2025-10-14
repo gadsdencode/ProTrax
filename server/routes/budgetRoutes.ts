@@ -6,13 +6,6 @@ import { insertBudgetItemSchema } from "@shared/schema";
 
 const router = Router();
 
-// Get budget items for project
-router.get('/projects/:projectId/budget-items', isAuthenticated, asyncHandler(async (req, res) => {
-  const projectId = parseInt(req.params.projectId);
-  const items = await storage.getBudgetItems(projectId);
-  res.json(items);
-}));
-
 // Create budget item
 router.post('/', isAuthenticated, asyncHandler(async (req, res) => {
   const data = insertBudgetItemSchema.parse(req.body);

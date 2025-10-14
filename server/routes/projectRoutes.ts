@@ -200,4 +200,65 @@ router.post('/create-from-sow', isAuthenticated, upload.single('file'), asyncHan
   }
 }));
 
+// Get custom fields for project
+router.get('/:projectId/custom-fields', isAuthenticated, asyncHandler(async (req, res) => {
+  const projectId = parseInt(req.params.projectId);
+  const fields = await storage.getCustomFields(projectId);
+  res.json(fields);
+}));
+
+// Get risks for project
+router.get('/:projectId/risks', isAuthenticated, asyncHandler(async (req, res) => {
+  const projectId = parseInt(req.params.projectId);
+  const risks = await storage.getRisks(projectId);
+  res.json(risks);
+}));
+
+// Get budget items for project
+router.get('/:projectId/budget-items', isAuthenticated, asyncHandler(async (req, res) => {
+  const projectId = parseInt(req.params.projectId);
+  const items = await storage.getBudgetItems(projectId);
+  res.json(items);
+}));
+
+// Get expenses for project
+router.get('/:projectId/expenses', isAuthenticated, asyncHandler(async (req, res) => {
+  const projectId = parseInt(req.params.projectId);
+  const expenses = await storage.getExpenses(projectId);
+  res.json(expenses);
+}));
+
+// Get automation rules for project
+router.get('/:projectId/automation-rules', isAuthenticated, asyncHandler(async (req, res) => {
+  const projectId = parseInt(req.params.projectId);
+  const rules = await storage.getAutomationRules(projectId);
+  res.json(rules);
+}));
+
+// Calculate and return critical path for a project
+router.get('/:projectId/critical-path', isAuthenticated, asyncHandler(async (req: any, res) => {
+  const { SchedulingEngine } = await import('../scheduling');
+  const projectId = parseInt(req.params.projectId);
+  const userId = req.user.claims.sub;
+  
+  const tasks = await storage.getTasks(projectId);
+  const dependencies = await storage.getProjectDependencies(projectId);
+  
+  const scheduler = new SchedulingEngine(tasks, dependencies);
+  const criticalPath = scheduler.calculateCriticalPath();
+  const updatedTasks = scheduler.getUpdatedTasks();
+  
+  // Update critical path flags in database
+  for (const task of updatedTasks) {
+    if (task.isOnCriticalPath !== tasks.find(t => t.id === task.id)?.isOnCriticalPath) {
+      await storage.updateTask(task.id, { isOnCriticalPath: task.isOnCriticalPath }, userId);
+    }
+  }
+  
+  res.json({
+    criticalPath,
+    criticalTasks: updatedTasks.filter(t => t.isOnCriticalPath),
+  });
+}));
+
 export default router;

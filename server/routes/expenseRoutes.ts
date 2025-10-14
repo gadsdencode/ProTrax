@@ -6,13 +6,6 @@ import { insertExpenseSchema } from "@shared/schema";
 
 const router = Router();
 
-// Get expenses for project
-router.get('/projects/:projectId/expenses', isAuthenticated, asyncHandler(async (req, res) => {
-  const projectId = parseInt(req.params.projectId);
-  const expenses = await storage.getExpenses(projectId);
-  res.json(expenses);
-}));
-
 // Create expense
 router.post('/', isAuthenticated, asyncHandler(async (req: any, res) => {
   const userId = req.user.claims.sub;
