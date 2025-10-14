@@ -6,6 +6,13 @@ ProjectHub is a comprehensive enterprise project management platform designed fo
 
 ### Recent Updates (October 2025)
 
+- **Authentication Implementation**: Successfully implemented and verified Replit Auth (OpenID Connect) for secure user authentication:
+  - OIDC integration with support for Google, GitHub, X, Apple, and email/password login
+  - PostgreSQL-backed session management with 7-day session TTL
+  - Protected routes and API endpoints with `isAuthenticated` middleware
+  - Frontend authentication hooks and automatic routing based on auth status
+  - User profile persistence with id, email, firstName, lastName, and profileImageUrl
+
 - **Express Routes Refactoring**: Successfully refactored the monolithic server/routes.ts file (previously 1567 lines) into 25 separate, feature-based route modules following Express best practices. Each major feature now has its own router file using express.Router(), organized in the server/routes directory. All complex logic including SOW document parsing, dependency validation with scheduling engine, sprint metrics, file handling with object storage, and AI integrations has been preserved. Nested routes are properly consolidated with parent resources to maintain original URL paths.
 
 ### Previous Updates (October 2024)
@@ -60,6 +67,40 @@ Preferred communication style: Simple, everyday language.
   - Layer 3: React Error Boundary catches unexpected runtime errors as last resort
 - **Backend Integration**: Works seamlessly with `server/errorHandler.ts` to parse standardized error responses
 
+### Authentication System
+
+**Authentication Provider:** Replit Auth (OpenID Connect) with support for:
+- Google login
+- GitHub login
+- X (Twitter) login
+- Apple login
+- Email/password login
+
+**Backend Authentication:**
+- OIDC integration implemented in `server/replitAuth.ts`
+- Passport.js with openid-client for OAuth flow
+- Session management using PostgreSQL (`sessions` table)
+- Automatic token refresh for expired sessions
+- User profile synchronization on login
+
+**Authentication Routes:**
+- `/api/login` - Initiates OAuth login flow
+- `/api/logout` - Logs out user and clears session
+- `/api/callback` - OAuth callback handler
+- `/api/auth/user` - Returns current authenticated user (protected)
+
+**Frontend Authentication:**
+- `useAuth` hook (`client/src/hooks/useAuth.ts`) for checking auth status
+- Automatic routing: Landing page for unauthenticated, Dashboard for authenticated users
+- Protected routes that redirect to landing if not authenticated
+- `isUnauthorizedError` utility for handling 401 responses
+
+**Session Configuration:**
+- 7-day session TTL (Time To Live)
+- Secure, HttpOnly cookies in production
+- PostgreSQL-backed session storage for reliability
+- Automatic session refresh using refresh tokens
+
 ### Backend Architecture
 
 **Server Framework:** Express.js for HTTP, WebSocket server for real-time features, and session-based authentication with Replit Auth.
@@ -73,6 +114,10 @@ Preferred communication style: Simple, everyday language.
 ### Database Schema
 
 **Core Entities:** Users, Projects, Tasks (hierarchical with dependencies), Custom Fields, Kanban Columns.
+
+**Authentication Tables:**
+- `users`: Stores user profiles (id, email, firstName, lastName, profileImageUrl)
+- `sessions`: PostgreSQL session storage for authentication
 
 **Project Management Features:** Comments, File Attachments, Risks, Budget Items, Time Entries, Expenses, Resource Capacity, Automation Rules, Dashboard Widgets, Project Templates, and Notifications.
 
@@ -93,9 +138,20 @@ Preferred communication style: Simple, everyday language.
 - **Database ORM**: Drizzle ORM.
 - **Styling**: Tailwind CSS.
 - **Validation**: Zod.
+- **Authentication**: Passport.js with openid-client.
 
 **Development Tools:** TypeScript, ESBuild, Vite plugins, and 'ws' for WebSockets.
 
 **Font Services:** Google Fonts (Inter, JetBrains Mono).
 
 **Data Export:** CSV/Excel export for various reports.
+
+## Security Features
+
+- Secure authentication with Replit OIDC
+- Session-based authentication with PostgreSQL storage
+- Protected API endpoints with `isAuthenticated` middleware
+- Automatic token refresh for expired sessions
+- HttpOnly, Secure cookies in production
+- CSRF protection through SameSite cookie attribute
+- Proper error handling without exposing sensitive information
