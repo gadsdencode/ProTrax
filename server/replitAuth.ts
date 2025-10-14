@@ -46,7 +46,7 @@ export function getSession() {
     cookie: {
       httpOnly: true,
       secure: isProduction,
-      sameSite: isProduction ? 'lax' : 'strict',
+      sameSite: 'lax', // Must be 'lax' to allow OAuth callbacks
       maxAge: sessionTtl,
     },
   });
