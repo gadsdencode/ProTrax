@@ -27,8 +27,8 @@ export function EmptyState({
           <Icon className="h-10 w-10 text-muted-foreground" />
         </div>
         <div className="space-y-2">
-          <h3 className="text-lg font-semibold">{title}</h3>
-          <p className="text-sm text-muted-foreground max-w-md mx-auto">
+          <h3 className="text-lg font-semibold" data-testid="text-empty-state-title">{title}</h3>
+          <p className="text-sm text-muted-foreground max-w-md mx-auto" data-testid="text-empty-state-description">
             {description}
           </p>
         </div>
