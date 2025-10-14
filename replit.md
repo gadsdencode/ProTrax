@@ -4,7 +4,11 @@
 
 ProjectHub is a comprehensive enterprise project management platform designed for modern teams, offering a full-featured project management suite with various visualization options like Gantt charts, Kanban boards, calendar, and list views. It supports Waterfall, Agile, and Hybrid methodologies, includes portfolio management, AI-powered insights via Google Gemini, and extensive project tracking capabilities. The platform aims to unify project, task, dependency, risk, budget, time, expense, and team collaboration management within a single interface, providing real-time updates and comprehensive reporting.
 
-### Recent Updates (October 2024)
+### Recent Updates (October 2025)
+
+- **Express Routes Refactoring**: Successfully refactored the monolithic server/routes.ts file (previously 1567 lines) into 25 separate, feature-based route modules following Express best practices. Each major feature now has its own router file using express.Router(), organized in the server/routes directory. All complex logic including SOW document parsing, dependency validation with scheduling engine, sprint metrics, file handling with object storage, and AI integrations has been preserved. Nested routes are properly consolidated with parent resources to maintain original URL paths.
+
+### Previous Updates (October 2024)
 
 - **Comprehensive Error Handling**: Implemented multi-layered error handling architecture with React Error Boundary for runtime errors, global mutation error handlers in React Query, enhanced error parsing utilities, and user-friendly error display system.
 - **Complete State Management Refactoring**: Successfully unified all global UI state management using Zustand with zero regressions:
