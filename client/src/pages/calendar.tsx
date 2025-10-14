@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { useParams } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -11,14 +11,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { TaskForm } from "@/components/task-form";
 import { useUIStore } from "@/stores/useUIStore";
-import type { Task, Project } from "@shared/schema";
+import type { Task, Project, InsertTask } from "@shared/schema";
 
 export default function Calendar() {
   const params = useParams();
   const projectIdFromUrl = params.id ? parseInt(params.id) : null;
   const [currentDate, setCurrentDate] = useState(new Date());
+  const { toast } = useToast();
   
   // Use centralized store for dialog management
   const { 
@@ -36,12 +39,37 @@ export default function Calendar() {
   }, [projectIdFromUrl, setSelectedProjectId]);
 
   const { data: project } = useQuery<Project>({
-    queryKey: [`/api/projects/${projectIdFromUrl}`],
-    enabled: !!projectIdFromUrl,
+    queryKey: [`/api/projects/${selectedProjectId}`],
+    enabled: !!selectedProjectId,
   });
 
   const { data: tasks, isLoading } = useQuery<Task[]>({
-    queryKey: ["/api/tasks", projectIdFromUrl ? { projectId: projectIdFromUrl } : {}],
+    queryKey: selectedProjectId ? ["/api/tasks", { projectId: selectedProjectId }] : ["/api/tasks"],
+  });
+
+  const createTaskMutation = useMutation({
+    mutationFn: async (data: InsertTask) => {
+      const response = await apiRequest("POST", "/api/tasks", data);
+      return await response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+      if (selectedProjectId) {
+        queryClient.invalidateQueries({ queryKey: ["/api/tasks", { projectId: selectedProjectId }] });
+      }
+      setActiveDialog(null);
+      toast({
+        title: "Success",
+        description: "Task created successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
   });
 
   const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
@@ -188,6 +216,11 @@ export default function Calendar() {
           </DialogHeader>
           <TaskForm
             projectId={selectedProjectId || undefined}
+            onSubmit={async (data) => {
+              const result = await createTaskMutation.mutateAsync(data);
+              return result;
+            }}
+            isLoading={createTaskMutation.isPending}
           />
         </DialogContent>
       </Dialog>
