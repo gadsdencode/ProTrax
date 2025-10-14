@@ -95,8 +95,18 @@ export async function setupAuth(app: Express) {
   // Support both development and production domains
   const domains = process.env.REPLIT_DOMAINS!.split(",");
   
-  for (const domain of domains) {
-    // Use appropriate protocol based on environment
+  // Register strategies for all possible domains
+  const allDomains = new Set(domains);
+  
+  // Add .replit.app versions for each .replit.dev domain
+  domains.forEach(domain => {
+    if (domain.includes('.replit.dev')) {
+      allDomains.add(domain.replace('.replit.dev', '.replit.app'));
+    }
+  });
+  
+  // Register a strategy for each domain
+  for (const domain of Array.from(allDomains)) {
     const protocol = domain.includes('localhost') ? 'http' : 'https';
     
     const strategy = new Strategy(
@@ -110,28 +120,34 @@ export async function setupAuth(app: Express) {
     );
     passport.use(strategy);
     
-    // Also register strategy for .replit.app domain in production
-    if (!domain.includes('localhost') && !domain.includes('.replit.app')) {
-      const appDomain = domain.replace('.replit.dev', '.replit.app');
-      const appStrategy = new Strategy(
-        {
-          name: `replitauth:${appDomain}`,
-          config,
-          scope: "openid email profile offline_access",
-          callbackURL: `https://${appDomain}/api/callback`,
-        },
-        verify,
-      );
-      passport.use(appStrategy);
-    }
+    console.log(`[AUTH SETUP] Registered strategy for domain: ${domain}`);
   }
 
   passport.serializeUser((user: Express.User, cb) => cb(null, user));
   passport.deserializeUser((user: Express.User, cb) => cb(null, user));
 
   app.get("/api/login", (req, res, next) => {
-    const strategyName = `replitauth:${req.hostname}`;
-    console.log(`[AUTH] Login attempt with strategy: ${strategyName}`);
+    // Try to find a matching strategy, or use the first available one
+    let strategyName = `replitauth:${req.hostname}`;
+    
+    // List of possible strategy names to try
+    const possibleStrategies = [
+      `replitauth:${req.hostname}`,
+      `replitauth:${req.hostname.replace('.replit.app', '.replit.dev')}`,
+      `replitauth:${req.hostname.replace('.replit.dev', '.replit.app')}`,
+      ...domains.map(d => `replitauth:${d}`)
+    ];
+    
+    // Find the first strategy that exists
+    const availableStrategy = possibleStrategies.find(name => 
+      (passport as any)._strategies[name] !== undefined
+    );
+    
+    if (availableStrategy) {
+      strategyName = availableStrategy;
+    }
+    
+    console.log(`[AUTH] Login attempt with hostname: ${req.hostname}, using strategy: ${strategyName}`);
     
     passport.authenticate(strategyName, {
       prompt: "login consent",
@@ -140,8 +156,27 @@ export async function setupAuth(app: Express) {
   });
 
   app.get("/api/callback", (req, res, next) => {
-    const strategyName = `replitauth:${req.hostname}`;
-    console.log(`[AUTH] Callback attempt with strategy: ${strategyName}`);
+    // Try to find a matching strategy, or use the first available one
+    let strategyName = `replitauth:${req.hostname}`;
+    
+    // List of possible strategy names to try
+    const possibleStrategies = [
+      `replitauth:${req.hostname}`,
+      `replitauth:${req.hostname.replace('.replit.app', '.replit.dev')}`,
+      `replitauth:${req.hostname.replace('.replit.dev', '.replit.app')}`,
+      ...domains.map(d => `replitauth:${d}`)
+    ];
+    
+    // Find the first strategy that exists
+    const availableStrategy = possibleStrategies.find(name => 
+      (passport as any)._strategies[name] !== undefined
+    );
+    
+    if (availableStrategy) {
+      strategyName = availableStrategy;
+    }
+    
+    console.log(`[AUTH] Callback attempt with hostname: ${req.hostname}, using strategy: ${strategyName}`);
     
     passport.authenticate(strategyName, {
       successReturnToOrRedirect: "/",
