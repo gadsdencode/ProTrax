@@ -3,10 +3,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { TrendingUp, TrendingDown, AlertTriangle, DollarSign } from "lucide-react";
+import { TrendingUp, TrendingDown, AlertTriangle, DollarSign, Briefcase, Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/empty-state";
+import { useLocation } from "wouter";
 import type { Project } from "@shared/schema";
 
 export default function Portfolio() {
+  const [, setLocation] = useLocation();
   const { data: projects, isLoading } = useQuery<Project[]>({
     queryKey: ["/api/projects"],
   });
@@ -100,17 +104,52 @@ export default function Portfolio() {
       {/* Projects List */}
       <Card>
         <CardHeader>
-          <CardTitle>All Projects</CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle>All Projects</CardTitle>
+            {projects && projects.length > 0 && (
+              <Button 
+                size="sm"
+                onClick={() => setLocation('/projects')}
+                data-testid="button-new-project"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                New Project
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           {isLoading ? (
             <div className="space-y-3">
-              {[1, 2, 3].map(i => <Skeleton key={i} className="h-20 w-full" />)}
+              {[1, 2, 3].map(i => (
+                <div key={i} className="p-4 rounded-lg border">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex-1">
+                      <Skeleton className="h-5 w-32 mb-2" />
+                      <Skeleton className="h-3 w-48" />
+                    </div>
+                    <Skeleton className="h-6 w-20" />
+                  </div>
+                  <div className="grid grid-cols-3 gap-4">
+                    <Skeleton className="h-8 w-full" />
+                    <Skeleton className="h-8 w-full" />
+                    <Skeleton className="h-8 w-full" />
+                  </div>
+                </div>
+              ))}
             </div>
           ) : !projects || projects.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-8 text-center">
-              No projects in portfolio
-            </p>
+            <div className="py-8">
+              <EmptyState
+                icon={Briefcase}
+                title="No projects yet"
+                description="Start building your portfolio by creating your first project."
+                action={{
+                  label: "Create Project",
+                  onClick: () => setLocation('/projects')
+                }}
+              />
+            </div>
           ) : (
             <div className="space-y-3">
               {projects.map(project => (
