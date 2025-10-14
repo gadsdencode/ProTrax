@@ -6,6 +6,7 @@ ProjectHub is a comprehensive enterprise project management platform designed fo
 
 ### Recent Updates (October 2024)
 
+- **Comprehensive Error Handling**: Implemented multi-layered error handling architecture with React Error Boundary for runtime errors, global mutation error handlers in React Query, enhanced error parsing utilities, and user-friendly error display system.
 - **State Management Consolidation**: Unified all global UI state management using Zustand. All dialog visibility, project/task selection, and view preferences now managed through a centralized store for consistency and predictability.
 - **Architecture Cleanup**: Eliminated duplicate state between local useState and Zustand store across Kanban, Gantt, and Calendar components, reducing potential bugs and state synchronization issues.
 
@@ -34,6 +35,16 @@ Preferred communication style: Simple, everyday language.
 - **Local Component State**: useState for component-specific UI (calendar navigation, drag states, form inputs)
 
 **Key Features:** Drag-and-drop with @dnd-kit, form validation with React Hook Form and Zod, real-time updates via WebSockets, and responsive design.
+
+**Error Handling Architecture:**
+- **React Error Boundary** (`client/src/components/error-boundary.tsx`): Catches unexpected runtime errors and prevents app crashes with user-friendly fallback UI
+- **Reusable Mutation Error Handler** (`client/src/lib/queryClient.ts`): Exported `handleMutationError` function provides consistent error handling for mutations. Import and use in `onError` to avoid duplicate toast notifications
+- **Enhanced Error Parsing** (`client/src/lib/errorUtils.ts`): Parses structured backend error responses (validation errors, database errors, custom errors) with HTTP status code context (401/403/404/500) into user-friendly messages
+- **Layered Error Strategy**: 
+  - Layer 1: Import `handleMutationError` from `@/lib/queryClient` and use in mutation `onError` for standard error handling
+  - Layer 2: Custom `onError` logic for mutations requiring special error handling
+  - Layer 3: React Error Boundary catches unexpected runtime errors as last resort
+- **Backend Integration**: Works seamlessly with `server/errorHandler.ts` to parse standardized error responses
 
 ### Backend Architecture
 

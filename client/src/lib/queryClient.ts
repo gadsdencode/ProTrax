@@ -1,10 +1,37 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { parseErrorResponse } from "./errorUtils";
+import { toast } from "@/hooks/use-toast";
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
     throw new Error(`${res.status}: ${text}`);
   }
+}
+
+/**
+ * Standard mutation error handler
+ * Use this in mutations that need default error handling behavior
+ * 
+ * Example:
+ * ```ts
+ * const mutation = useMutation({
+ *   mutationFn: async (data) => apiRequest("POST", "/api/endpoint", data),
+ *   onError: handleMutationError,
+ *   onSuccess: () => { ... }
+ * });
+ * ```
+ */
+export async function handleMutationError(error: unknown) {
+  const parsedError = await parseErrorResponse(error);
+  
+  toast({
+    title: parsedError.title,
+    description: parsedError.details 
+      ? `${parsedError.message}\n\n${parsedError.details}`
+      : parsedError.message,
+    variant: "destructive",
+  });
 }
 
 export async function apiRequest(
@@ -72,6 +99,9 @@ export const queryClient = new QueryClient({
     },
     mutations: {
       retry: false,
+      // Note: Use the exported handleMutationError function in individual mutations
+      // for consistent error handling. Not set globally to avoid duplicate toasts
+      // when mutations define their own onError handlers.
     },
   },
 });

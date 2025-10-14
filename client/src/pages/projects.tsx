@@ -13,7 +13,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, handleMutationError } from "@/lib/queryClient";
 import { StaggeredList, StaggeredItem } from "@/components/staggered-list";
 import type { Project, InsertProject, InsertTask } from "@shared/schema";
 import { ProjectForm } from "@/components/project-form";
@@ -57,13 +57,8 @@ export default function Projects() {
         description: "Project created successfully",
       });
     },
-    onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
+    // Use the standard error handler for consistent error display
+    onError: handleMutationError,
   });
 
   const createTaskMutation = useMutation({
@@ -79,13 +74,8 @@ export default function Projects() {
         description: "Task created successfully",
       });
     },
-    onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
+    // Use the standard error handler for consistent error display
+    onError: handleMutationError,
   });
 
   const filteredProjects = projects;
