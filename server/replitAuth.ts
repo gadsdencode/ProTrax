@@ -32,6 +32,12 @@ export function getSession() {
     ttl: sessionTtl,
     tableName: "sessions",
   });
+  
+  // In production, use secure cookies. In development, allow non-secure.
+  const isProduction = process.env.NODE_ENV === 'production' || 
+                       process.env.REPLIT_DEPLOYMENT === '1' ||
+                       process.env.REPLIT_DOMAINS?.includes('.replit.app');
+  
   return session({
     secret: process.env.SESSION_SECRET!,
     store: sessionStore,
@@ -39,7 +45,8 @@ export function getSession() {
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      secure: true,
+      secure: isProduction,
+      sameSite: isProduction ? 'lax' : 'strict',
       maxAge: sessionTtl,
     },
   });
@@ -85,34 +92,61 @@ export async function setupAuth(app: Express) {
     verified(null, user);
   };
 
-  for (const domain of process.env
-    .REPLIT_DOMAINS!.split(",")) {
+  // Support both development and production domains
+  const domains = process.env.REPLIT_DOMAINS!.split(",");
+  
+  for (const domain of domains) {
+    // Use appropriate protocol based on environment
+    const protocol = domain.includes('localhost') ? 'http' : 'https';
+    
     const strategy = new Strategy(
       {
         name: `replitauth:${domain}`,
         config,
         scope: "openid email profile offline_access",
-        callbackURL: `https://${domain}/api/callback`,
+        callbackURL: `${protocol}://${domain}/api/callback`,
       },
       verify,
     );
     passport.use(strategy);
+    
+    // Also register strategy for .replit.app domain in production
+    if (!domain.includes('localhost') && !domain.includes('.replit.app')) {
+      const appDomain = domain.replace('.replit.dev', '.replit.app');
+      const appStrategy = new Strategy(
+        {
+          name: `replitauth:${appDomain}`,
+          config,
+          scope: "openid email profile offline_access",
+          callbackURL: `https://${appDomain}/api/callback`,
+        },
+        verify,
+      );
+      passport.use(appStrategy);
+    }
   }
 
   passport.serializeUser((user: Express.User, cb) => cb(null, user));
   passport.deserializeUser((user: Express.User, cb) => cb(null, user));
 
   app.get("/api/login", (req, res, next) => {
-    passport.authenticate(`replitauth:${req.hostname}`, {
+    const strategyName = `replitauth:${req.hostname}`;
+    console.log(`[AUTH] Login attempt with strategy: ${strategyName}`);
+    
+    passport.authenticate(strategyName, {
       prompt: "login consent",
       scope: ["openid", "email", "profile", "offline_access"],
     })(req, res, next);
   });
 
   app.get("/api/callback", (req, res, next) => {
-    passport.authenticate(`replitauth:${req.hostname}`, {
+    const strategyName = `replitauth:${req.hostname}`;
+    console.log(`[AUTH] Callback attempt with strategy: ${strategyName}`);
+    
+    passport.authenticate(strategyName, {
       successReturnToOrRedirect: "/",
       failureRedirect: "/api/login",
+      failureMessage: true,
     })(req, res, next);
   });
 
