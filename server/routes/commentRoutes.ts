@@ -19,12 +19,6 @@ router.get('/', isAuthenticated, asyncHandler(async (req, res) => {
   res.json(comments);
 }));
 
-// Get comments for task
-router.get('/tasks/:taskId/comments', isAuthenticated, asyncHandler(async (req, res) => {
-  const taskId = parseInt(req.params.taskId);
-  const comments = await storage.getComments(taskId);
-  res.json(comments);
-}));
 
 // Create comment
 router.post('/', isAuthenticated, asyncHandler(async (req: any, res) => {
