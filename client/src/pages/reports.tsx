@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Download, FileText, BarChart3, PieChart, TrendingUp, Loader2, Mail } from "lucide-react";
+import { Download, FileText, BarChart3, PieChart, TrendingUp, Loader2, Mail, FolderKanban, Brain, ChartBar } from "lucide-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -9,6 +9,9 @@ import type { Project } from "@shared/schema";
 import { EmailReportDialog } from "@/components/email-report-dialog";
 import { AgileMetrics } from "@/components/agile-metrics";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { EmptyState } from "@/components/empty-state";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useLocation } from "wouter";
 
 interface PredictionResult {
   prediction: string;
@@ -18,11 +21,12 @@ interface PredictionResult {
 
 export default function Reports() {
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const [summary, setSummary] = useState<string>("");
   const [predictions, setPredictions] = useState<PredictionResult | null>(null);
   const [emailDialogOpen, setEmailDialogOpen] = useState(false);
 
-  const { data: projects } = useQuery<Project[]>({
+  const { data: projects, isLoading: projectsLoading } = useQuery<Project[]>({
     queryKey: ['/api/projects'],
   });
 
@@ -136,16 +140,40 @@ export default function Reports() {
         </TabsList>
 
         <TabsContent value="metrics" className="space-y-6">
-          {projects && projects.length > 0 ? (
-            <AgileMetrics projectId={projects[0].id} />
-          ) : (
+          {projectsLoading ? (
             <Card>
-              <CardContent className="p-6">
-                <p className="text-muted-foreground text-center">
-                  No projects found. Create a project to view agile metrics.
-                </p>
+              <CardHeader>
+                <Skeleton className="h-6 w-32" />
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-4">
+                  {[1, 2, 3, 4].map(i => (
+                    <Card key={i}>
+                      <CardContent className="pt-6">
+                        <Skeleton className="h-4 w-20 mb-2" />
+                        <Skeleton className="h-8 w-12" />
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+                <div className="grid gap-6 md:grid-cols-2">
+                  <Skeleton className="h-80" />
+                  <Skeleton className="h-80" />
+                </div>
               </CardContent>
             </Card>
+          ) : projects && projects.length > 0 ? (
+            <AgileMetrics projectId={projects[0].id} />
+          ) : (
+            <EmptyState
+              icon={ChartBar}
+              title="No projects found"
+              description="Create a project with sprints to view agile metrics and track team progress."
+              action={{
+                label: "Create Project",
+                onClick: () => setLocation('/projects')
+              }}
+            />
           )}
         </TabsContent>
 
@@ -186,11 +214,40 @@ export default function Reports() {
         </TabsContent>
 
         <TabsContent value="ai" className="space-y-6">
-          <Card>
-        <CardHeader>
-          <CardTitle>AI-Powered Insights</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
+          {projectsLoading ? (
+            <Card>
+              <CardHeader>
+                <Skeleton className="h-6 w-48" />
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="p-4 rounded-lg border">
+                  <Skeleton className="h-5 w-32 mb-2" />
+                  <Skeleton className="h-4 w-full mb-3" />
+                  <Skeleton className="h-9 w-36" />
+                </div>
+                <div className="p-4 rounded-lg border">
+                  <Skeleton className="h-5 w-32 mb-2" />
+                  <Skeleton className="h-4 w-full mb-3" />
+                  <Skeleton className="h-9 w-36" />
+                </div>
+              </CardContent>
+            </Card>
+          ) : !projects || projects.length === 0 ? (
+            <EmptyState
+              icon={Brain}
+              title="No projects for AI analysis"
+              description="Create a project with tasks to unlock AI-powered predictions and summaries."
+              action={{
+                label: "Create Project",
+                onClick: () => setLocation('/projects')
+              }}
+            />
+          ) : (
+            <Card>
+              <CardHeader>
+                <CardTitle>AI-Powered Insights</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
           <div className="p-4 rounded-lg border bg-primary/5">
             <h3 className="font-semibold mb-2">Predictive Analytics</h3>
             <p className="text-sm text-muted-foreground mb-3">
@@ -263,8 +320,9 @@ export default function Reports() {
               </div>
             )}
           </div>
-          </CardContent>
-        </Card>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
       </Tabs>
 
