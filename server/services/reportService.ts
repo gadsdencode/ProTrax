@@ -55,6 +55,26 @@ export class ReportService {
     return new Map(users.map((u) => [u.id, u]));
   }
 
+  /**
+   * Fetches all users and returns a user map.
+   * This method can be used to avoid redundant user fetching when generating multiple reports.
+   * 
+   * Usage example for efficient batch report generation:
+   * ```typescript
+   * const reportService = new ReportService(storage);
+   * const userMap = await reportService.getUserMap(); // Fetch users once
+   * 
+   * // Generate multiple reports reusing the same user map
+   * const portfolioData = await reportService.getPortfolioSummaryData(userMap);
+   * const project1Data = await reportService.getSingleProjectReportData(1, 'summary', userMap);
+   * const project2Data = await reportService.getSingleProjectReportData(2, 'status', userMap);
+   * ```
+   */
+  async getUserMap(): Promise<Map<string, User>> {
+    const allUsers = await this.storage.getAllUsers();
+    return this.createUserMap(allUsers);
+  }
+
   private enrichTasksWithAssigneeNames(
     tasks: Task[],
     userMap: Map<string, User>
@@ -96,7 +116,9 @@ export class ReportService {
     return `${manager.firstName || ''} ${manager.lastName || ''}`.trim() || manager.email || 'N/A';
   }
 
-  async getPortfolioSummaryData(): Promise<ProjectReportData[]> {
+  async getPortfolioSummaryData(
+    providedUserMap?: Map<string, User>
+  ): Promise<ProjectReportData[]> {
     console.log('[PORTFOLIO SERVICE] Starting portfolio data collection...');
     
     const allProjects = await this.storage.getProjects();
@@ -109,8 +131,8 @@ export class ReportService {
       throw new ReportServiceError("No active projects found", 404);
     }
 
-    const allUsers = await this.storage.getAllUsers();
-    const userMap = this.createUserMap(allUsers);
+    // Only fetch users if not provided
+    const userMap = providedUserMap || await this.getUserMap();
 
     const projectsData = await Promise.all(
       activeProjects.map(async (project) => {
@@ -150,7 +172,8 @@ export class ReportService {
 
   async getSingleProjectReportData(
     projectId: number,
-    reportType: string
+    reportType: string,
+    providedUserMap?: Map<string, User>
   ): Promise<any> {
     console.log(`[REPORT SERVICE] Fetching data for project ${projectId}, report type: ${reportType}`);
     
@@ -162,8 +185,8 @@ export class ReportService {
     const tasks = await this.storage.getTasks(projectId);
     console.log(`[REPORT SERVICE] Found ${tasks.length} tasks for project ${projectId}`);
     
-    const allUsers = await this.storage.getAllUsers();
-    const userMap = this.createUserMap(allUsers);
+    // Only fetch users if not provided
+    const userMap = providedUserMap || await this.getUserMap();
     
     const enrichedTasks = this.enrichTasksWithAssigneeNames(tasks, userMap);
     console.log(`[REPORT SERVICE] Successfully enriched ${enrichedTasks.length} tasks`);
