@@ -431,6 +431,7 @@ export class DatabaseStorage implements IStorage {
   async getTasks(projectId?: number, searchQuery?: string): Promise<Task[]> {
     console.log(`[STORAGE DEBUG] getTasks called with projectId: ${projectId}, searchQuery: ${searchQuery}`);
     
+    // Optimize direct query when only projectId is provided
     if (projectId && !searchQuery) {
       console.log(`[STORAGE DEBUG] Using direct query for projectId: ${projectId}`);
       const result = await db
@@ -442,37 +443,50 @@ export class DatabaseStorage implements IStorage {
       return result;
     }
 
-    const conditions = [];
-    
-    if (projectId) {
-      conditions.push(eq(tasks.projectId, projectId));
-      console.log(`[STORAGE DEBUG] Adding condition for projectId: ${projectId}`);
-    }
-    
-    if (searchQuery) {
+    // Optimize query when both projectId and searchQuery are present
+    if (projectId && searchQuery) {
+      console.log(`[STORAGE DEBUG] Using optimized query for projectId: ${projectId} and searchQuery: ${searchQuery}`);
       const searchPattern = `%${searchQuery}%`;
-      conditions.push(
-        or(
-          ilike(tasks.title, searchPattern),
-          ilike(tasks.description, searchPattern)
-        )
-      );
-    }
-    
-    if (conditions.length > 0) {
-      const whereClause = conditions.length === 1 ? conditions[0] : and(...conditions);
       const result = await db
         .select()
         .from(tasks)
-        .where(whereClause)
-        .orderBy(projectId ? asc(tasks.sortOrder) : desc(tasks.createdAt));
-      console.log(`[STORAGE DEBUG] Query with conditions returned ${result.length} tasks`);
+        .where(
+          and(
+            eq(tasks.projectId, projectId),
+            or(
+              ilike(tasks.title, searchPattern),
+              ilike(tasks.description, searchPattern)
+            )
+          )
+        )
+        .orderBy(asc(tasks.sortOrder));
+      console.log(`[STORAGE DEBUG] Optimized combined query returned ${result.length} tasks`);
       if (result.length > 0) {
         console.log(`[STORAGE DEBUG] First task: id=${result[0].id}, projectId=${result[0].projectId}, title=${result[0].title}`);
       }
       return result;
     }
     
+    // Query when only searchQuery is provided
+    if (searchQuery) {
+      console.log(`[STORAGE DEBUG] Using search-only query for searchQuery: ${searchQuery}`);
+      const searchPattern = `%${searchQuery}%`;
+      const result = await db
+        .select()
+        .from(tasks)
+        .where(
+          or(
+            ilike(tasks.title, searchPattern),
+            ilike(tasks.description, searchPattern)
+          )
+        )
+        .orderBy(desc(tasks.createdAt));
+      console.log(`[STORAGE DEBUG] Search-only query returned ${result.length} tasks`);
+      return result;
+    }
+    
+    // Return all tasks when no filters are provided
+    console.log(`[STORAGE DEBUG] Returning all tasks`);
     const allTasks = await db.select().from(tasks).orderBy(desc(tasks.createdAt));
     console.log(`[STORAGE DEBUG] Query without conditions returned ${allTasks.length} tasks`);
     return allTasks;
