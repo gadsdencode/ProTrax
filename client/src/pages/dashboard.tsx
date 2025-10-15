@@ -6,7 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertCircle, CheckCircle2, Clock, FolderKanban, Mail, ChevronDown, ArrowRight, ListTodo, Plus, UserCheck, Upload } from "lucide-react";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from "@/hooks/use-auth";
 import { EmailReportDialog } from "@/components/email-report-dialog";
 import { EmptyState } from "@/components/empty-state";
 import { useUIStore } from "@/stores/useUIStore";

@@ -190,9 +190,11 @@ export class DatabaseStorage implements IStorage {
   sessionStore: session.Store;
 
   constructor() {
+    // Use existing sessions table from schema (blueprint: javascript_auth_all_persistance)
     this.sessionStore = new PostgresSessionStore({ 
       pool: pool as any, 
-      createTableIfMissing: true 
+      createTableIfMissing: false,
+      tableName: 'sessions' // Match our schema table name
     });
   }
 

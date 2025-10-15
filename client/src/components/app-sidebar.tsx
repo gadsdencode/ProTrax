@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from "@/hooks/use-auth";
 
 const menuItems = [
   { title: "Dashboard", icon: Layout, url: "/" },
@@ -44,13 +44,17 @@ const viewItems = [
 
 export function AppSidebar() {
   const [location, setLocation] = useLocation();
-  const { user } = useAuth();
+  const { user, logoutMutation } = useAuth();
 
   const getUserInitials = () => {
     if (!user) return "U";
     const first = user.firstName?.charAt(0) || "";
     const last = user.lastName?.charAt(0) || "";
     return (first + last).toUpperCase() || user.email?.charAt(0).toUpperCase() || "U";
+  };
+
+  const handleLogout = () => {
+    logoutMutation.mutate();
   };
 
   return (
@@ -137,7 +141,8 @@ export function AppSidebar() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => window.location.href = '/api/logout'}
+            onClick={handleLogout}
+            disabled={logoutMutation.isPending}
             data-testid="button-logout"
             className="h-8 w-8"
             title="Log out"

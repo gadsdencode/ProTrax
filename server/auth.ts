@@ -16,6 +16,12 @@ declare global {
 
 const scryptAsync = promisify(scrypt);
 
+// Security: Remove password from user object before sending to client
+function sanitizeUser(user: SelectUser): Omit<SelectUser, 'password'> {
+  const { password, ...sanitizedUser } = user;
+  return sanitizedUser;
+}
+
 async function hashPassword(password: string) {
   const salt = randomBytes(16).toString("hex");
   const buf = (await scryptAsync(password, salt, 64)) as Buffer;
@@ -79,12 +85,14 @@ export function setupAuth(app: express.Application) {
 
     req.login(user, (err) => {
       if (err) return next(err);
-      res.status(201).json(user);
+      // Security: Never send password to client
+      res.status(201).json(sanitizeUser(user));
     });
   });
 
   app.post("/api/login", passport.authenticate("local"), (req, res) => {
-    res.status(200).json(req.user);
+    // Security: Never send password to client
+    res.status(200).json(sanitizeUser(req.user!));
   });
 
   app.post("/api/logout", (req, res, next) => {
@@ -96,6 +104,7 @@ export function setupAuth(app: express.Application) {
 
   app.get("/api/user", (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
-    res.json(req.user);
+    // Security: Never send password to client
+    res.json(sanitizeUser(req.user!));
   });
 }
