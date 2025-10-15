@@ -25,6 +25,7 @@ export default function Reports() {
   const [summary, setSummary] = useState<string>("");
   const [predictions, setPredictions] = useState<PredictionResult | null>(null);
   const [emailDialogOpen, setEmailDialogOpen] = useState(false);
+  const [exportingReport, setExportingReport] = useState<string | null>(null);
 
   const { data: projects, isLoading: projectsLoading } = useQuery<Project[]>({
     queryKey: ['/api/projects'],
@@ -79,6 +80,78 @@ export default function Reports() {
       });
     },
   });
+
+  const handleExport = async (reportType: string) => {
+    try {
+      setExportingReport(reportType);
+      
+      const projectId = projects?.[0]?.id;
+      if (!projectId) {
+        toast({
+          title: "No project selected",
+          description: "Please select a project to export",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Fetch tasks data for the project
+      const tasksResponse = await fetch(`/api/tasks?projectId=${projectId}`);
+      if (!tasksResponse.ok) throw new Error("Failed to fetch tasks");
+      const tasks = await tasksResponse.json();
+
+      // Determine the export type based on report title
+      let exportType = 'gantt';
+      let exportData = tasks;
+      
+      if (reportType.toLowerCase().includes('gantt')) {
+        exportType = 'gantt';
+      } else if (reportType.toLowerCase().includes('kanban')) {
+        exportType = 'kanban';
+      } else {
+        // For now, other reports will default to Gantt format
+        exportType = 'gantt';
+      }
+
+      // Send export request
+      const response = await fetch('/api/export/excel', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          reportType: exportType,
+          data: exportData,
+        }),
+      });
+
+      if (!response.ok) throw new Error("Export failed");
+
+      // Download the file
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${exportType}-export-${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+
+      toast({
+        title: "Export successful",
+        description: `${reportType} has been downloaded`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Export failed",
+        description: error.message || "Failed to export report",
+        variant: "destructive",
+      });
+    } finally {
+      setExportingReport(null);
+    }
+  };
 
   const reports = [
     {
@@ -202,8 +275,14 @@ export default function Reports() {
                       variant="outline"
                       size="sm"
                       data-testid={`button-export-${report.title.toLowerCase().replace(/\s+/g, '-')}`}
+                      onClick={() => handleExport(report.title)}
+                      disabled={exportingReport === report.title}
                     >
-                      <Download className="h-4 w-4 mr-2" />
+                      {exportingReport === report.title ? (
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <Download className="h-4 w-4 mr-2" />
+                      )}
                       Export
                     </Button>
                   </div>
