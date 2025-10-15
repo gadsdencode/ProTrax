@@ -22,6 +22,7 @@ import {
   projectStakeholders,
   type User,
   type UpsertUser,
+  type InsertUser,
   type Project,
   type InsertProject,
   type Sprint,
@@ -61,14 +62,21 @@ import {
   type InsertNotification,
   type Notification,
 } from "@shared/schema";
-import { db } from "./db";
+import { db, pool } from "./db";
 import { eq, and, desc, asc, or, ilike, gte, lte } from "drizzle-orm";
+import session from "express-session";
+import connectPg from "connect-pg-simple";
 
 export interface IStorage {
-  // User operations (required for Replit Auth)
+  // User operations (blueprint: javascript_auth_all_persistance)
   getUser(id: string): Promise<User | undefined>;
+  getUserByUsername(username: string): Promise<User | undefined>;
+  createUser(user: InsertUser): Promise<User>;
   upsertUser(user: UpsertUser): Promise<User>;
   getAllUsers(): Promise<User[]>;
+  
+  // Session store for authentication (blueprint: javascript_auth_all_persistance)
+  sessionStore: session.Store;
   
   // Project operations
   getProjects(searchQuery?: string): Promise<Project[]>;
@@ -175,10 +183,32 @@ export interface IStorage {
   markNotificationRead(id: number): Promise<void>;
 }
 
+const PostgresSessionStore = connectPg(session);
+
 export class DatabaseStorage implements IStorage {
-  // User operations
+  // Session store for authentication (blueprint: javascript_auth_all_persistance)
+  sessionStore: session.Store;
+
+  constructor() {
+    this.sessionStore = new PostgresSessionStore({ 
+      pool: pool as any, 
+      createTableIfMissing: true 
+    });
+  }
+
+  // User operations (blueprint: javascript_auth_all_persistance)
   async getUser(id: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user;
+  }
+
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user;
+  }
+
+  async createUser(userData: InsertUser): Promise<User> {
+    const [user] = await db.insert(users).values(userData).returning();
     return user;
   }
 

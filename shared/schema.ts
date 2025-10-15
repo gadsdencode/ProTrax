@@ -46,6 +46,8 @@ export const sessions = pgTable(
 
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  username: varchar("username").unique().notNull(),
+  password: varchar("password").notNull(),
   email: varchar("email").unique(),
   firstName: varchar("first_name"),
   lastName: varchar("last_name"),
@@ -57,6 +59,14 @@ export const users = pgTable("users", {
 
 export type User = typeof users.$inferSelect;
 export type UpsertUser = typeof users.$inferInsert;
+
+// Insert schema for user registration (blueprint: javascript_auth_all_persistance)
+export const insertUserSchema = createInsertSchema(users).omit({ 
+  id: true, 
+  createdAt: true, 
+  updatedAt: true 
+});
+export type InsertUser = z.infer<typeof insertUserSchema>;
 
 // ============= PROJECT MANAGEMENT TABLES =============
 
