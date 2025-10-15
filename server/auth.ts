@@ -97,21 +97,35 @@ export function setupAuth(app: express.Application) {
   });
 
   app.post("/api/register", async (req, res, next) => {
-    const existingUser = await storage.getUserByUsername(req.body.username);
-    if (existingUser) {
-      return res.status(400).send("Username already exists");
+    try {
+      const existingUser = await storage.getUserByUsername(req.body.username);
+      if (existingUser) {
+        return res.status(400).json({ error: "Username already exists" });
+      }
+
+      const user = await storage.createUser({
+        ...req.body,
+        password: await hashPassword(req.body.password),
+      });
+
+      req.login(user, (err) => {
+        if (err) return next(err);
+        // Security: Never send password to client
+        res.status(201).json(sanitizeUser(user));
+      });
+    } catch (error: any) {
+      // Handle database errors (e.g., duplicate email)
+      if (error.code === '23505') {
+        if (error.constraint === 'users_email_unique') {
+          return res.status(400).json({ error: "Email already exists" });
+        }
+        if (error.constraint === 'users_username_unique') {
+          return res.status(400).json({ error: "Username already exists" });
+        }
+      }
+      console.error("Registration error:", error);
+      res.status(500).json({ error: "Registration failed", message: error.message });
     }
-
-    const user = await storage.createUser({
-      ...req.body,
-      password: await hashPassword(req.body.password),
-    });
-
-    req.login(user, (err) => {
-      if (err) return next(err);
-      // Security: Never send password to client
-      res.status(201).json(sanitizeUser(user));
-    });
   });
 
   app.post("/api/login", passport.authenticate("local"), (req, res) => {

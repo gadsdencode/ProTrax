@@ -1,0 +1,13 @@
+Sample Statement of Work
+
+Project: Website Redesign
+
+Scope:
+1. Redesign homepage with modern UI
+2. Implement responsive design for mobile
+3. Create new product catalog page
+4. Integrate payment gateway
+5. Setup analytics dashboard
+
+Timeline: 3 months
+Budget: 0,000
