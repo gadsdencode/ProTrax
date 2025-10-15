@@ -49,7 +49,7 @@ router.post('/', isAuthenticated, asyncHandler(async (req, res) => {
 // Update task
 router.patch('/:id', isAuthenticated, asyncHandler(async (req: any, res) => {
   const id = parseInt(req.params.id);
-  const userId = req.user.claims.sub;
+  const userId = req.user.id;
   
   // Validate input with partial schema (allows updating only some fields)
   const validatedData = insertTaskSchema.partial().parse(req.body);

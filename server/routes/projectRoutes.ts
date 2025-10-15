@@ -38,7 +38,7 @@ router.get('/:id', isAuthenticated, asyncHandler(async (req, res) => {
 
 // Create project
 router.post('/', isAuthenticated, asyncHandler(async (req: any, res) => {
-  const userId = req.user.claims.sub;
+  const userId = req.user.id;
   const data = insertProjectSchema.parse({ ...req.body, managerId: userId });
   const project = await storage.createProject(data);
   res.status(201).json(project);
@@ -239,7 +239,7 @@ router.get('/:projectId/automation-rules', isAuthenticated, asyncHandler(async (
 router.get('/:projectId/critical-path', isAuthenticated, asyncHandler(async (req: any, res) => {
   const { SchedulingEngine } = await import('../scheduling');
   const projectId = parseInt(req.params.projectId);
-  const userId = req.user.claims.sub;
+  const userId = req.user.id;
   
   const tasks = await storage.getTasks(projectId);
   const dependencies = await storage.getProjectDependencies(projectId);
@@ -272,7 +272,7 @@ router.get('/:id/stakeholders', isAuthenticated, asyncHandler(async (req, res) =
 router.post('/:id/stakeholders', isAuthenticated, asyncHandler(async (req: any, res) => {
   const { insertProjectStakeholderSchema } = await import('@shared/schema');
   const projectId = parseInt(req.params.id);
-  const userId = req.user.claims.sub;
+  const userId = req.user.id;
   
   // Validate input
   const data = insertProjectStakeholderSchema.parse({
