@@ -3,7 +3,7 @@ import multer from "multer";
 import path from "path";
 import { Client } from "@replit/object-storage";
 import { storage } from "../storage";
-import { isAuthenticated } from "../replitAuth";
+import { isAuthenticated } from "../auth";
 import { asyncHandler, createError } from "../errorHandler";
 
 const router = Router();
@@ -30,7 +30,7 @@ router.post('/upload', isAuthenticated, upload.single('file'), asyncHandler(asyn
     throw createError.badRequest("No file uploaded");
   }
 
-  const userId = req.user.claims.sub;
+  const userId = req.user.id;
   const { projectId, taskId } = req.body;
   
   // Generate unique filename with folder structure
@@ -151,7 +151,7 @@ router.delete('/:id', isAuthenticated, asyncHandler(async (req: any, res) => {
   }
   
   // Check if user has permission to delete (must be uploader or project manager)
-  const userId = req.user.claims.sub;
+  const userId = req.user.id;
   if (attachment.userId !== userId) {
     if (attachment.projectId) {
       const project = await storage.getProject(attachment.projectId);

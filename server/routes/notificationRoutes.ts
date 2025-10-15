@@ -1,13 +1,13 @@
 import { Router } from "express";
 import { storage } from "../storage";
-import { isAuthenticated } from "../replitAuth";
+import { isAuthenticated } from "../auth";
 import { asyncHandler } from "../errorHandler";
 
 const router = Router();
 
 // Get notifications for user
 router.get('/', isAuthenticated, asyncHandler(async (req: any, res) => {
-  const userId = req.user.claims.sub;
+  const userId = req.user.id;
   const notifications = await storage.getNotifications(userId);
   res.json(notifications);
 }));

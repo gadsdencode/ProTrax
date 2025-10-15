@@ -4,7 +4,7 @@ import * as mammoth from "mammoth";
 import * as pdfParseModule from "pdf-parse";
 const pdfParse = (pdfParseModule as any).default || pdfParseModule;
 import { storage } from "../storage";
-import { isAuthenticated } from "../replitAuth";
+import { isAuthenticated } from "../auth";
 import { asyncHandler, createError } from "../errorHandler";
 import { extractProjectDataFromSOW } from "../gemini";
 import { insertProjectSchema } from "@shared/schema";
@@ -149,7 +149,7 @@ router.post('/create-from-sow', isAuthenticated, upload.single('file'), asyncHan
   console.log(`[SOW Upload] Tasks to create: ${tasks?.length || 0}`);
 
   // Create the project with the extracted data
-  const userId = req.user.claims.sub;
+  const userId = req.user.id;
   const data = insertProjectSchema.parse({ 
     ...projectFields, 
     managerId: userId,

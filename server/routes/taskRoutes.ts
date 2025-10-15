@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { storage } from "../storage";
-import { isAuthenticated } from "../replitAuth";
+import { isAuthenticated } from "../auth";
 import { asyncHandler, createError } from "../errorHandler";
 import { insertTaskSchema } from "@shared/schema";
 import { SchedulingEngine } from "../scheduling";
@@ -17,7 +17,7 @@ router.get('/', isAuthenticated, asyncHandler(async (req, res) => {
 
 // Get my tasks (must be before /:id to avoid route conflicts)
 router.get('/my-tasks', isAuthenticated, asyncHandler(async (req: any, res) => {
-  const userId = req.user.claims.sub;
+  const userId = req.user.id;
   const tasks = await storage.getMyTasks(userId);
   res.json(tasks);
 }));

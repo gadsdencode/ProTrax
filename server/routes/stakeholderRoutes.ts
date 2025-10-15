@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { storage } from "../storage";
-import { isAuthenticated } from "../replitAuth";
+import { isAuthenticated } from "../auth";
 import { asyncHandler, createError } from "../errorHandler";
 import { insertProjectStakeholderSchema } from "@shared/schema";
 

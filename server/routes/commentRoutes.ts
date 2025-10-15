@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { storage } from "../storage";
-import { isAuthenticated } from "../replitAuth";
+import { isAuthenticated } from "../auth";
 import { asyncHandler, createError } from "../errorHandler";
 import { insertCommentSchema } from "@shared/schema";
 
@@ -22,7 +22,7 @@ router.get('/', isAuthenticated, asyncHandler(async (req, res) => {
 
 // Create comment
 router.post('/', isAuthenticated, asyncHandler(async (req: any, res) => {
-  const userId = req.user.claims.sub;
+  const userId = req.user.id;
   const data = insertCommentSchema.parse({ ...req.body, userId });
   const comment = await storage.createComment(data);
   res.status(201).json(comment);

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { storage } from "../storage";
-import { isAuthenticated } from "../replitAuth";
+import { isAuthenticated } from "../auth";
 import { asyncHandler } from "../errorHandler";
 import { insertProjectTemplateSchema } from "@shared/schema";
 
@@ -14,7 +14,7 @@ router.get('/', isAuthenticated, asyncHandler(async (req, res) => {
 
 // Create project template
 router.post('/', isAuthenticated, asyncHandler(async (req: any, res) => {
-  const userId = req.user.claims.sub;
+  const userId = req.user.id;
   const data = insertProjectTemplateSchema.parse({ ...req.body, createdBy: userId });
   const template = await storage.createProjectTemplate(data);
   res.status(201).json(template);
