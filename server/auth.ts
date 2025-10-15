@@ -68,8 +68,23 @@ export function setupAuth(app: express.Application) {
   // Adapted for string IDs (UUID)
   passport.serializeUser((user, done) => done(null, user.id));
   passport.deserializeUser(async (id: string, done) => {
-    const user = await storage.getUser(id);
-    done(null, user);
+    try {
+      // Validate that id is a string (protect against old OIDC session format)
+      if (typeof id !== 'string') {
+        console.log('Invalid session format detected, clearing session');
+        return done(null, false);
+      }
+      
+      const user = await storage.getUser(id);
+      if (!user) {
+        // User not found - session is invalid
+        return done(null, false);
+      }
+      done(null, user);
+    } catch (error) {
+      console.error('Error deserializing user:', error);
+      done(null, false);
+    }
   });
 
   app.post("/api/register", async (req, res, next) => {
