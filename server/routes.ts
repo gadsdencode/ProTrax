@@ -3,7 +3,7 @@ import { createServer } from "http";
 import { WebSocketServer } from "ws";
 import WebSocket from "ws";
 import { errorHandler } from "./errorHandler";
-import { setupAuth } from "./replitAuth";
+import { setupAuth } from "./auth";
 
 // Import all route modules
 import authRoutes from "./routes/authRoutes";
@@ -32,8 +32,8 @@ import debugRoutes from "./routes/debugRoutes";
 import recurringTaskRoutes from "./routes/recurringTaskRoutes";
 
 export async function setupRoutes(app: express.Application) {
-  // Setup authentication middleware first
-  await setupAuth(app);
+  // Setup authentication middleware first (blueprint: javascript_auth_all_persistance)
+  setupAuth(app);
 
   // Health check
   app.get('/api/health', (req, res) => {
