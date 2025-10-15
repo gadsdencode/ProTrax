@@ -9,9 +9,10 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { PageTransition } from "@/components/page-transition";
 import { ErrorBoundary } from "@/components/error-boundary";
-import { useAuth } from "@/hooks/useAuth";
+import { AuthProvider, useAuth } from "@/hooks/use-auth";
+import { ProtectedRoute } from "@/lib/protected-route";
 import { useUIStore } from "@/stores/useUIStore";
-import Landing from "@/pages/landing";
+import AuthPage from "@/pages/auth-page";
 import Dashboard from "@/pages/dashboard";
 import Projects from "@/pages/projects";
 import ProjectSettings from "@/pages/project-settings";
@@ -25,51 +26,35 @@ import Reports from "@/pages/reports";
 import NotFound from "@/pages/not-found";
 
 function Router() {
-  const { isAuthenticated, isLoading } = useAuth();
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="h-8 w-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-muted-foreground">Loading...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!isAuthenticated) {
-    return (
-      <Switch>
-        <Route path="/" component={Landing} />
-        <Route component={Landing} />
-      </Switch>
-    );
-  }
-
   return (
     <Switch>
-      <Route path="/" component={Dashboard} />
-      <Route path="/projects" component={Projects} />
-      <Route path="/projects/:id/settings" component={ProjectSettings} />
-      <Route path="/projects/:id/gantt" component={Gantt} />
-      <Route path="/projects/:id/kanban" component={Kanban} />
-      <Route path="/projects/:id/calendar" component={Calendar} />
-      <Route path="/projects/:id/list" component={ListView} />
-      <Route path="/gantt" component={Gantt} />
-      <Route path="/kanban" component={Kanban} />
-      <Route path="/calendar" component={Calendar} />
-      <Route path="/list" component={ListView} />
-      <Route path="/portfolio" component={Portfolio} />
-      <Route path="/team" component={Team} />
-      <Route path="/reports" component={Reports} />
+      {/* Blueprint: javascript_auth_all_persistance - Protected routes */}
+      <ProtectedRoute path="/" component={Dashboard} />
+      <ProtectedRoute path="/projects" component={Projects} />
+      <ProtectedRoute path="/projects/:id/settings" component={ProjectSettings} />
+      <ProtectedRoute path="/projects/:id/gantt" component={Gantt} />
+      <ProtectedRoute path="/projects/:id/kanban" component={Kanban} />
+      <ProtectedRoute path="/projects/:id/calendar" component={Calendar} />
+      <ProtectedRoute path="/projects/:id/list" component={ListView} />
+      <ProtectedRoute path="/gantt" component={Gantt} />
+      <ProtectedRoute path="/kanban" component={Kanban} />
+      <ProtectedRoute path="/calendar" component={Calendar} />
+      <ProtectedRoute path="/list" component={ListView} />
+      <ProtectedRoute path="/portfolio" component={Portfolio} />
+      <ProtectedRoute path="/team" component={Team} />
+      <ProtectedRoute path="/reports" component={Reports} />
+      
+      {/* Auth page - public */}
+      <Route path="/auth" component={AuthPage} />
+      
+      {/* 404 */}
       <Route component={NotFound} />
     </Switch>
   );
 }
 
 function AppContent() {
-  const { isAuthenticated } = useAuth();
+  const { user } = useAuth();
   const { isSidebarOpen, setSidebarOpen } = useUIStore();
   
   // Sidebar width configuration
@@ -80,7 +65,7 @@ function AppContent() {
 
   return (
     <>
-      {isAuthenticated ? (
+      {user ? (
         <SidebarProvider 
           style={style as React.CSSProperties}
           open={isSidebarOpen}
@@ -114,8 +99,11 @@ export default function App() {
       <QueryClientProvider client={queryClient}>
         <ThemeProvider defaultTheme="light">
           <TooltipProvider>
-            <AppContent />
-            <Toaster />
+            {/* Blueprint: javascript_auth_all_persistance */}
+            <AuthProvider>
+              <AppContent />
+              <Toaster />
+            </AuthProvider>
           </TooltipProvider>
         </ThemeProvider>
       </QueryClientProvider>
