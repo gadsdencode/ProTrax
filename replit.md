@@ -6,12 +6,14 @@ ProjectHub is a comprehensive enterprise project management platform designed fo
 
 ### Recent Updates (October 2025)
 
-- **Authentication Implementation**: Successfully implemented and verified Replit Auth (OpenID Connect) for secure user authentication:
-  - OIDC integration with support for Google, GitHub, X, Apple, and email/password login
+- **Username/Password Authentication**: Successfully implemented and verified secure username/password authentication:
+  - Local authentication using Passport.js with LocalStrategy
   - PostgreSQL-backed session management with 7-day session TTL
+  - Secure password hashing using scrypt with salt
   - Protected routes and API endpoints with `isAuthenticated` middleware
-  - Frontend authentication hooks and automatic routing based on auth status
-  - User profile persistence with id, email, firstName, lastName, and profileImageUrl
+  - Frontend authentication hooks with login, register, and logout mutations
+  - Security-hardened API responses that never expose password hashes
+  - User profile persistence with id, username, email, firstName, lastName fields
 
 - **Express Routes Refactoring**: Successfully refactored the monolithic server/routes.ts file (previously 1567 lines) into 25 separate, feature-based route modules following Express best practices. Each major feature now has its own router file using express.Router(), organized in the server/routes directory. All complex logic including SOW document parsing, dependency validation with scheduling engine, sprint metrics, file handling with object storage, and AI integrations has been preserved. Nested routes are properly consolidated with parent resources to maintain original URL paths.
 
@@ -69,54 +71,51 @@ Preferred communication style: Simple, everyday language.
 
 ### Authentication System
 
-**Authentication Provider:** Replit Auth (OpenID Connect) with support for:
-- Google login
-- GitHub login
-- X (Twitter) login
-- Apple login
-- Email/password login
+**Authentication Provider:** Local username/password authentication using Passport.js LocalStrategy
 
 **Backend Authentication:**
-- OIDC integration implemented in `server/replitAuth.ts`
-- Passport.js with openid-client for OAuth flow
-- Session management using PostgreSQL (`sessions` table)
-- Automatic token refresh for expired sessions
-- User profile synchronization on login
+- Passport.js with LocalStrategy for username/password authentication
+- Session management using PostgreSQL (`sessions` table) via connect-pg-simple
+- Secure password hashing using scrypt with random salt generation
+- Security-hardened responses: password hashes are never exposed to client
+- Implemented in `server/auth.ts` with setupAuth function
 
 **Authentication Routes:**
-- `/api/login` - Initiates OAuth login flow
-- `/api/logout` - Logs out user and clears session
-- `/api/callback` - OAuth callback handler
-- `/api/auth/user` - Returns current authenticated user (protected)
+- `POST /api/register` - Register new user with username/password (auto-login, returns sanitized user)
+- `POST /api/login` - Login with username/password (returns sanitized user)
+- `POST /api/logout` - Logout current user and clear session
+- `GET /api/user` - Returns current authenticated user (sanitized, 401 if not authenticated)
 
 **Frontend Authentication:**
-- `useAuth` hook (`client/src/hooks/useAuth.ts`) for checking auth status
-- Automatic routing: Landing page for unauthenticated, Dashboard for authenticated users
-- Protected routes that redirect to landing if not authenticated
+- `useAuth` hook (`client/src/hooks/use-auth.tsx`) provides auth state and mutations
+- `AuthProvider` wraps the app and manages authentication context
+- `ProtectedRoute` component redirects unauthenticated users to /auth
+- Auth page at `/auth` with tabbed login/registration forms
+- Automatic routing: Auth page for unauthenticated, Dashboard for authenticated users
 - `isUnauthorizedError` utility for handling 401 responses
 
 **Session Configuration:**
 - 7-day session TTL (Time To Live)
 - Secure, HttpOnly cookies in production
 - PostgreSQL-backed session storage for reliability
-- Automatic session refresh using refresh tokens
+- Session table: `sessions` (plural)
 
 ### Backend Architecture
 
-**Server Framework:** Express.js for HTTP, WebSocket server for real-time features, and session-based authentication with Replit Auth.
+**Server Framework:** Express.js for HTTP, WebSocket server for real-time features, and session-based authentication with username/password.
 
 **API Design:** RESTful endpoints, business logic in a storage layer, and authentication middleware for protected routes.
 
 **Data Access Layer:** Drizzle ORM for type-safe database operations, schema definitions shared between client and server, and Zod schemas for validation.
 
-**Authentication & Authorization:** Replit OpenID Connect (OIDC) integration using Passport.js, session management with PostgreSQL, and user profiles.
+**Authentication & Authorization:** Username/password authentication using Passport.js LocalStrategy, session management with PostgreSQL, and user profiles.
 
 ### Database Schema
 
 **Core Entities:** Users, Projects, Tasks (hierarchical with dependencies), Custom Fields, Kanban Columns.
 
 **Authentication Tables:**
-- `users`: Stores user profiles (id, email, firstName, lastName, profileImageUrl)
+- `users`: Stores user profiles (id, username, password, email, firstName, lastName)
 - `sessions`: PostgreSQL session storage for authentication
 
 **Project Management Features:** Comments, File Attachments, Risks, Budget Items, Time Entries, Expenses, Resource Capacity, Automation Rules, Dashboard Widgets, Project Templates, and Notifications.
@@ -128,7 +127,6 @@ Preferred communication style: Simple, everyday language.
 **Primary Services:**
 - **Neon Database**: PostgreSQL serverless database.
 - **Google Gemini AI**: AI-powered summaries and predictions using `gemini-2.5-flash` and `gemini-2.5-pro`.
-- **Replit Authentication**: OpenID Connect provider.
 
 **Third-Party Libraries:**
 - **UI Components**: Radix UI primitives.
@@ -138,7 +136,7 @@ Preferred communication style: Simple, everyday language.
 - **Database ORM**: Drizzle ORM.
 - **Styling**: Tailwind CSS.
 - **Validation**: Zod.
-- **Authentication**: Passport.js with openid-client.
+- **Authentication**: Passport.js with LocalStrategy for username/password authentication.
 
 **Development Tools:** TypeScript, ESBuild, Vite plugins, and 'ws' for WebSockets.
 
@@ -148,10 +146,11 @@ Preferred communication style: Simple, everyday language.
 
 ## Security Features
 
-- Secure authentication with Replit OIDC
+- Secure username/password authentication with Passport.js LocalStrategy
+- Password hashing using scrypt with random salt generation
+- Password fields never exposed in API responses (sanitized before sending to client)
 - Session-based authentication with PostgreSQL storage
 - Protected API endpoints with `isAuthenticated` middleware
-- Automatic token refresh for expired sessions
 - HttpOnly, Secure cookies in production
 - CSRF protection through SameSite cookie attribute
 - Proper error handling without exposing sensitive information
