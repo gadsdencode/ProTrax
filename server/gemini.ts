@@ -10,6 +10,50 @@ import { eq, and, sql, desc } from "drizzle-orm";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
 
+// Retry configuration for handling API overload errors
+const MAX_RETRIES = 3;
+const INITIAL_DELAY = 1000; // Start with 1 second delay
+const BACKOFF_FACTOR = 2; // Double the delay each time
+
+// Helper function to sleep for a given number of milliseconds
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Wrapper function to handle retries with exponential backoff
+async function retryWithBackoff<T>(
+  operation: () => Promise<T>,
+  operationName: string = "AI operation"
+): Promise<T> {
+  let lastError: any;
+  
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      return await operation();
+    } catch (error: any) {
+      lastError = error;
+      
+      // Check if it's a retryable error (503 or overloaded message)
+      const isRetryable = 
+        error.status === 503 || 
+        error.message?.toLowerCase().includes('overloaded') ||
+        error.message?.toLowerCase().includes('unavailable');
+      
+      if (isRetryable && attempt < MAX_RETRIES) {
+        const delay = INITIAL_DELAY * Math.pow(BACKOFF_FACTOR, attempt - 1);
+        console.log(`[${operationName}] Attempt ${attempt} failed with overload error. Retrying in ${delay}ms...`);
+        await sleep(delay);
+        continue;
+      }
+      
+      // Non-retryable error or max retries reached
+      break;
+    }
+  }
+  
+  // If we've exhausted retries, throw the last error
+  console.error(`[${operationName}] Failed after ${MAX_RETRIES} attempts:`, lastError);
+  throw lastError;
+}
+
 interface UserPerformanceData {
   userId: string;
   userName: string;
@@ -135,12 +179,20 @@ Timeline: ${projectData.startDate} to ${projectData.endDate}
 
 Provide a 2-3 paragraph summary highlighting key objectives, current status, and any notable points.`;
 
-  const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash",
-    contents: prompt,
-  });
+  try {
+    const response = await retryWithBackoff(
+      async () => ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: prompt,
+      }),
+      "generateProjectSummary"
+    );
 
-  return response.text || "Unable to generate summary";
+    return response.text || "Unable to generate summary";
+  } catch (error: any) {
+    console.error("Error generating project summary (after retries):", error);
+    return "Unable to generate summary at this time";
+  }
 }
 
 export async function predictProjectDeadline(
@@ -205,26 +257,30 @@ Respond with JSON in this format:
       }
     };
 
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-pro",
-      config: {
-        systemInstruction: systemPrompt,
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: "object",
-          properties: {
-            prediction: { type: "string" },
-            confidence: { type: "number" },
-            riskFactors: {
-              type: "array",
-              items: { type: "string" },
+    // Use retry wrapper for the API call
+    const response = await retryWithBackoff(
+      async () => ai.models.generateContent({
+        model: "gemini-2.5-pro",
+        config: {
+          systemInstruction: systemPrompt,
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: "object",
+            properties: {
+              prediction: { type: "string" },
+              confidence: { type: "number" },
+              riskFactors: {
+                type: "array",
+                items: { type: "string" },
+              },
             },
+            required: ["prediction", "confidence", "riskFactors"],
           },
-          required: ["prediction", "confidence", "riskFactors"],
         },
-      },
-      contents: JSON.stringify(contextData, null, 2),
-    });
+        contents: JSON.stringify(contextData, null, 2),
+      }),
+      "predictProjectDeadline"
+    );
 
     const rawJson = response.text;
     if (rawJson) {
@@ -233,17 +289,13 @@ Respond with JSON in this format:
       throw new Error("Empty response from model");
     }
   } catch (error: any) {
-    console.error("Error predicting deadline:", error);
+    console.error("Error predicting deadline (after retries):", error);
     
-    // Check if it's an API overload error
-    if (error.message?.includes('overloaded') || error.status === 503) {
-      throw new Error("AI service is temporarily overloaded. Please try again in a moment.");
-    }
-    
+    // Return a graceful fallback instead of throwing
     return {
       prediction: "unknown",
       confidence: 0,
-      riskFactors: ["Unable to analyze - insufficient data"],
+      riskFactors: ["Unable to analyze at this time - AI service temporarily unavailable"],
     };
   }
 }
@@ -263,12 +315,20 @@ Provide a concise summary highlighting:
 - Action items
 - Any blockers or concerns`;
 
-  const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash",
-    contents: prompt,
-  });
+  try {
+    const response = await retryWithBackoff(
+      async () => ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: prompt,
+      }),
+      "summarizeComments"
+    );
 
-  return response.text || "Unable to summarize comments";
+    return response.text || "Unable to summarize comments";
+  } catch (error: any) {
+    console.error("Error summarizing comments (after retries):", error);
+    return "Unable to summarize comments at this time";
+  }
 }
 
 export async function assessRisk(riskDescription: string): Promise<{
@@ -292,24 +352,27 @@ Respond with JSON in this format:
   'mitigation': string
 }`;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-pro",
-      config: {
-        systemInstruction: systemPrompt,
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: "object",
-          properties: {
-            probability: { type: "string" },
-            impact: { type: "string" },
-            score: { type: "number" },
-            mitigation: { type: "string" },
+    const response = await retryWithBackoff(
+      async () => ai.models.generateContent({
+        model: "gemini-2.5-pro",
+        config: {
+          systemInstruction: systemPrompt,
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: "object",
+            properties: {
+              probability: { type: "string" },
+              impact: { type: "string" },
+              score: { type: "number" },
+              mitigation: { type: "string" },
+            },
+            required: ["probability", "impact", "score", "mitigation"],
           },
-          required: ["probability", "impact", "score", "mitigation"],
         },
-      },
-      contents: riskDescription,
-    });
+        contents: riskDescription,
+      }),
+      "assessRisk"
+    );
 
     const rawJson = response.text;
     if (rawJson) {
@@ -318,7 +381,7 @@ Respond with JSON in this format:
       throw new Error("Empty response from model");
     }
   } catch (error) {
-    console.error("Error assessing risk:", error);
+    console.error("Error assessing risk (after retries):", error);
     return {
       probability: "medium",
       impact: "medium",
@@ -400,10 +463,13 @@ Provide your response as a valid JSON object with this exact structure:
 
 Be thorough - extract EVERY work item. It's better to have too many tasks than too few.`;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: prompt,
-    });
+    const response = await retryWithBackoff(
+      async () => ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: prompt,
+      }),
+      "extractProjectDataFromSOW"
+    );
     
     const text = response.text || "";
     
