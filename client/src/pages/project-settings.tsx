@@ -1,5 +1,5 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useParams, useLocation } from "wouter";
+import { useLocation } from "wouter";
 import { ArrowLeft, Save, Settings as SettingsIcon, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -24,15 +24,20 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useUIStore } from "@/stores/useUIStore";
+import { useProjectSync } from "@/hooks/use-project-sync";
 import type { Project, InsertProject } from "@shared/schema";
 import { ProjectForm } from "@/components/project-form";
 import { CustomFieldsSettings } from "@/components/custom-fields-settings";
 
 export default function ProjectSettings() {
-  const params = useParams();
-  const projectId = params.id ? parseInt(params.id) : null;
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  
+  // Use single source of truth for project selection
+  const { selectedProjectId: projectId, isValidProjectId } = useProjectSync({ 
+    updateUrl: true,
+    onInvalidRedirect: '/projects' 
+  });
   
   // Use centralized store for tab state
   const { projectSettingsActiveTab, setProjectSettingsActiveTab } = useUIStore();
@@ -89,7 +94,7 @@ export default function ProjectSettings() {
     updateProjectMutation.mutate(data);
   };
 
-  if (!projectId) {
+  if (!projectId || !isValidProjectId) {
     return (
       <div className="container mx-auto py-8">
         <div className="text-center">
