@@ -151,12 +151,17 @@ export function FilePreviewDialog({
       }
       // For old .doc files (not .docx)
       else if (fileName.endsWith('.doc') && !fileName.endsWith('.docx')) {
-        setError('Classic .doc files cannot be previewed. Please save as .docx format or download the file.');
+        setError('Legacy Microsoft Word (.doc) files are not supported for preview. Please convert to .docx format or download the file to view in Microsoft Word.');
+      }
+      // Special handling for CSV files
+      else if (fileName.endsWith('.csv') || mimeType?.includes('csv')) {
+        const text = await blob.text();
+        setPreviewContent(text);
       }
       // For text-based files and HTML
       else if (isTextFile(mimeType) || mimeType?.includes('html') || 
                // Also check common text file extensions
-               fileName.match(/\.(txt|log|md|json|xml|yaml|yml|csv|js|ts|jsx|tsx|py|java|c|cpp|h|hpp|cs|php|rb|go|rs|sh|bash|sql|css|scss|sass|less)$/)) {
+               fileName.match(/\.(txt|log|md|json|xml|yaml|yml|js|ts|jsx|tsx|py|java|c|cpp|h|hpp|cs|php|rb|go|rs|sh|bash|sql|css|scss|sass|less)$/)) {
         
         const text = await blob.text();
         
@@ -561,8 +566,106 @@ export function FilePreviewDialog({
       );
     }
 
-    // Text/Code preview
-    if (isTextFile(mimeType) && previewContent !== null) {
+    // CSV preview - render as table
+    if (currentAttachment.fileName.toLowerCase().endsWith('.csv') && previewContent !== null) {
+      const rows = previewContent.split('\n').filter(row => row.trim());
+      const maxRows = 100; // Limit preview to first 100 rows for performance
+      const hasMoreRows = rows.length > maxRows;
+      const displayRows = rows.slice(0, maxRows);
+      
+      let csvTable;
+      try {
+        // Try to parse CSV data for table display
+        const parseRow = (row: string) => {
+          const cells: string[] = [];
+          let current = '';
+          let inQuotes = false;
+          
+          for (let i = 0; i < row.length; i++) {
+            const char = row[i];
+            const nextChar = row[i + 1];
+            
+            if (char === '"') {
+              if (inQuotes && nextChar === '"') {
+                current += '"';
+                i++; // Skip next quote
+              } else {
+                inQuotes = !inQuotes;
+              }
+            } else if (char === ',' && !inQuotes) {
+              cells.push(current);
+              current = '';
+            } else {
+              current += char;
+            }
+          }
+          cells.push(current);
+          return cells;
+        };
+        
+        const headers = displayRows.length > 0 ? parseRow(displayRows[0]) : [];
+        const data = displayRows.slice(1).map(parseRow);
+        
+        csvTable = (
+          <div className="p-4">
+            <div className="flex items-center justify-between mb-4">
+              <Badge variant="secondary">CSV Spreadsheet</Badge>
+              {hasMoreRows && (
+                <span className="text-xs text-muted-foreground">
+                  Showing first {maxRows} rows of {rows.length}
+                </span>
+              )}
+            </div>
+            <div className="overflow-auto border rounded-md">
+              <table className="w-full">
+                <thead className="bg-muted/50 sticky top-0">
+                  <tr>
+                    {headers.map((header, i) => (
+                      <th key={i} className="text-left px-3 py-2 text-sm font-medium border-r last:border-r-0">
+                        {header}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.map((row, rowIndex) => (
+                    <tr key={rowIndex} className="border-t hover-elevate">
+                      {row.map((cell, cellIndex) => (
+                        <td key={cellIndex} className="px-3 py-2 text-sm border-r last:border-r-0">
+                          {cell}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {hasMoreRows && (
+              <p className="text-xs text-muted-foreground mt-2">
+                Download file to view all {rows.length} rows
+              </p>
+            )}
+          </div>
+        );
+      } catch {
+        // Fall back to text view if CSV parsing fails
+        csvTable = null;
+      }
+      
+      if (csvTable) {
+        return (
+          <ScrollArea className={cn(
+            "w-full",
+            isFullscreen ? "h-full" : "h-[60vh]"
+          )}>
+            {csvTable}
+          </ScrollArea>
+        );
+      }
+    }
+    
+    // Text/Code preview (including CSV fallback)
+    if ((isTextFile(mimeType) || currentAttachment.fileName.toLowerCase().endsWith('.csv')) && previewContent !== null) {
       const language = getLanguageFromFile(currentAttachment.fileName, mimeType);
       
       return (
@@ -600,13 +703,36 @@ export function FilePreviewDialog({
 
     // Excel, PowerPoint and other office files
     if (isOfficeDocument(mimeType, currentAttachment.fileName)) {
-      const isExcel = mimeType?.includes('sheet') || currentAttachment.fileName.match(/\.(xls|xlsx|ods|csv)$/i);
+      const isExcel = mimeType?.includes('sheet') || currentAttachment.fileName.match(/\.(xls|xlsx|ods)$/i);
       const isPowerPoint = mimeType?.includes('presentation') || currentAttachment.fileName.match(/\.(ppt|pptx|odp)$/i);
       
       let fileType = 'Office Document';
-      if (isExcel) fileType = 'Spreadsheet';
-      else if (isPowerPoint) fileType = 'Presentation';
-      else if (currentAttachment.fileName.match(/\.doc$/i)) fileType = 'Word Document (Legacy)';
+      let specificFormat = '';
+      let previewMessage = '';
+      
+      if (isExcel) {
+        fileType = 'Spreadsheet';
+        if (currentAttachment.fileName.match(/\.xlsx?$/i)) {
+          specificFormat = 'Microsoft Excel';
+          previewMessage = 'Excel files require specialized libraries for preview. Please download to view in Excel or convert to CSV for basic preview support.';
+        } else if (currentAttachment.fileName.match(/\.ods$/i)) {
+          specificFormat = 'OpenDocument Spreadsheet';
+          previewMessage = 'OpenDocument spreadsheets are not supported for preview. Please download to view in LibreOffice or convert to CSV format.';
+        }
+      } else if (isPowerPoint) {
+        fileType = 'Presentation';
+        if (currentAttachment.fileName.match(/\.pptx?$/i)) {
+          specificFormat = 'Microsoft PowerPoint';
+          previewMessage = 'PowerPoint presentations require specialized libraries for preview. Please download to view in PowerPoint.';
+        } else if (currentAttachment.fileName.match(/\.odp$/i)) {
+          specificFormat = 'OpenDocument Presentation';
+          previewMessage = 'OpenDocument presentations are not supported for preview. Please download to view in LibreOffice.';
+        }
+      } else if (currentAttachment.fileName.match(/\.doc$/i)) {
+        fileType = 'Word Document';
+        specificFormat = 'Legacy Format';
+        previewMessage = 'Legacy .doc files (pre-2007) are not supported for preview due to proprietary binary format. Please save as .docx for preview support or download to view in Microsoft Word.';
+      }
       
       return (
         <div className="flex items-center justify-center h-96">
@@ -616,22 +742,18 @@ export function FilePreviewDialog({
             })}
             <div className="space-y-1">
               <Badge variant="outline">{fileType}</Badge>
+              {specificFormat && (
+                <Badge variant="secondary" className="ml-2">{specificFormat}</Badge>
+              )}
               <p className="font-medium mt-2">{currentAttachment.fileName}</p>
               <p className="text-sm text-muted-foreground">
                 {formatFileSize(currentAttachment.fileSize)}
               </p>
             </div>
-            <div className="space-y-2">
-              {currentAttachment.fileName.match(/\.doc$/i) && (
-                <p className="text-sm text-muted-foreground">
-                  Legacy .doc format. Save as .docx for preview support.
-                </p>
-              )}
-              {(isExcel || isPowerPoint) && (
-                <p className="text-sm text-muted-foreground">
-                  Direct preview coming soon. Download to view.
-                </p>
-              )}
+            <div className="max-w-md mx-auto space-y-3">
+              <p className="text-sm text-muted-foreground">
+                {previewMessage}
+              </p>
               <Button onClick={handleDownload} variant="default">
                 <Download className="h-4 w-4 mr-2" />
                 Download {fileType}
@@ -643,6 +765,22 @@ export function FilePreviewDialog({
     }
 
     // Default fallback for other unsupported file types
+    const fileExtension = currentAttachment.fileName.split('.').pop()?.toLowerCase();
+    let unsupportedMessage = 'This file type cannot be previewed in the browser.';
+    
+    // Add specific messages for common binary formats
+    if (fileExtension) {
+      if (['zip', 'rar', '7z', 'tar', 'gz'].includes(fileExtension)) {
+        unsupportedMessage = 'Archive files cannot be previewed. Please download and extract using appropriate software.';
+      } else if (['exe', 'dmg', 'app', 'deb', 'rpm'].includes(fileExtension)) {
+        unsupportedMessage = 'Executable files cannot be previewed for security reasons. Download at your own risk.';
+      } else if (['psd', 'ai', 'sketch', 'fig'].includes(fileExtension)) {
+        unsupportedMessage = 'Design files require specialized software for viewing. Please download to open in the appropriate application.';
+      } else if (['mov', 'avi', 'wmv', 'flv', 'mkv'].includes(fileExtension) && !mimeType?.startsWith('video/')) {
+        unsupportedMessage = 'This video format may not be supported by your browser. Please download to view in a media player.';
+      }
+    }
+    
     return (
       <div className="flex items-center justify-center h-96">
         <div className="text-center space-y-4">
@@ -650,18 +788,23 @@ export function FilePreviewDialog({
             className: "h-16 w-16 mx-auto text-muted-foreground"
           })}
           <div className="space-y-1">
-            <p className="font-medium">{currentAttachment.fileName}</p>
+            <Badge variant="outline">
+              {fileExtension ? fileExtension.toUpperCase() : 'Binary'} File
+            </Badge>
+            <p className="font-medium mt-2">{currentAttachment.fileName}</p>
             <p className="text-sm text-muted-foreground">
               {formatFileSize(currentAttachment.fileSize)}
             </p>
           </div>
-          <p className="text-sm text-muted-foreground">
-            Binary file - download to view
-          </p>
-          <Button onClick={handleDownload} variant="outline">
-            <Download className="h-4 w-4 mr-2" />
-            Download File
-          </Button>
+          <div className="max-w-md mx-auto space-y-3">
+            <p className="text-sm text-muted-foreground">
+              {unsupportedMessage}
+            </p>
+            <Button onClick={handleDownload} variant="default">
+              <Download className="h-4 w-4 mr-2" />
+              Download File
+            </Button>
+          </div>
         </div>
       </div>
     );
