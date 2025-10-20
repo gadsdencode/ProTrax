@@ -38,6 +38,8 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Task, Comment, InsertComment, InsertTask, User as UserType, CustomField, TaskCustomFieldValue } from "@shared/schema";
 import { TaskForm } from "./task-form";
+import { InlineSelectField, InlineDateField, InlineNumberField, InlineAssigneeField } from "@/components/inline-edit";
+import { InlineEstimatedHoursSimple } from "@/components/inline-edit/inline-estimated-hours-simple";
 
 interface TaskDetailProps {
   task: Task | null;
@@ -49,8 +51,6 @@ export function TaskDetail({ task, open, onOpenChange }: TaskDetailProps) {
   const [commentText, setCommentText] = useState("");
   const [showSubtaskDialog, setShowSubtaskDialog] = useState(false);
   const [quickSubtaskTitle, setQuickSubtaskTitle] = useState("");
-  const [editingField, setEditingField] = useState<string | null>(null);
-  const [tempValue, setTempValue] = useState<any>(null);
   const { toast } = useToast();
 
   const { data: comments } = useQuery<Comment[]>({
@@ -161,8 +161,6 @@ export function TaskDetail({ task, open, onOpenChange }: TaskDetailProps) {
         title: "Task updated",
         description: "Task has been updated successfully",
       });
-      setEditingField(null);
-      setTempValue(null);
     },
     onError: (error: Error) => {
       toast({
@@ -170,8 +168,6 @@ export function TaskDetail({ task, open, onOpenChange }: TaskDetailProps) {
         description: error.message,
         variant: "destructive",
       });
-      setEditingField(null);
-      setTempValue(null);
     },
   });
 
@@ -209,30 +205,6 @@ export function TaskDetail({ task, open, onOpenChange }: TaskDetailProps) {
     updateCustomFieldValueMutation.mutate({ fieldId, value });
   };
 
-  const startEditing = (field: string, currentValue: any) => {
-    setEditingField(field);
-    setTempValue(currentValue);
-  };
-
-  const cancelEditing = () => {
-    setEditingField(null);
-    setTempValue(null);
-  };
-
-  const saveField = (field: string, value: any) => {
-    const updates: any = {};
-    
-    if (field === 'status' || field === 'priority' || field === 'assigneeId') {
-      updates[field] = value;
-    } else if (field === 'dueDate') {
-      updates.dueDate = value ? value.toISOString() : null;
-    } else if (field === 'estimatedHours') {
-      updates.estimatedHours = value ? parseFloat(value) : null;
-    }
-    
-    updateTaskMutation.mutate(updates);
-  };
-
   return (
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
@@ -245,64 +217,48 @@ export function TaskDetail({ task, open, onOpenChange }: TaskDetailProps) {
           {/* Status & Priority */}
           <div className="flex items-center gap-2">
             {/* Status inline editing */}
-            {editingField === 'status' ? (
-              <Select
-                value={tempValue}
-                onValueChange={(value) => {
-                  setTempValue(value);
-                  saveField('status', value);
-                }}
-              >
-                <SelectTrigger className="w-[140px] h-7" data-testid="select-status">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todo">To Do</SelectItem>
-                  <SelectItem value="in_progress">In Progress</SelectItem>
-                  <SelectItem value="done">Done</SelectItem>
-                  <SelectItem value="cancelled">Cancelled</SelectItem>
-                </SelectContent>
-              </Select>
-            ) : (
-              <Badge 
-                variant={task.status === 'done' ? 'default' : 'secondary'}
-                className="cursor-pointer hover-elevate"
-                onClick={() => startEditing('status', task.status)}
-                data-testid="badge-status"
-              >
-                {task.status?.replace('_', ' ')}
-              </Badge>
-            )}
+            <InlineSelectField
+              value={task.status || 'todo'}
+              options={[
+                { value: 'todo', label: 'To Do' },
+                { value: 'in_progress', label: 'In Progress' },
+                { value: 'done', label: 'Done' },
+                { value: 'cancelled', label: 'Cancelled' }
+              ]}
+              onSave={(value) => updateTaskMutation.mutate({ status: value as any })}
+              renderDisplay={(value) => (
+                <Badge 
+                  variant={value === 'done' ? 'default' : 'secondary'}
+                  data-testid="badge-status"
+                >
+                  {value?.replace('_', ' ')}
+                </Badge>
+              )}
+              testId="status"
+              label="Status"
+            />
             
             {/* Priority inline editing */}
-            {editingField === 'priority' ? (
-              <Select
-                value={tempValue}
-                onValueChange={(value) => {
-                  setTempValue(value);
-                  saveField('priority', value);
-                }}
-              >
-                <SelectTrigger className="w-[120px] h-7" data-testid="select-priority">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="low">Low</SelectItem>
-                  <SelectItem value="medium">Medium</SelectItem>
-                  <SelectItem value="high">High</SelectItem>
-                  <SelectItem value="urgent">Urgent</SelectItem>
-                </SelectContent>
-              </Select>
-            ) : (
-              <Badge 
-                variant={task.priority === 'urgent' ? 'destructive' : 'outline'}
-                className="cursor-pointer hover-elevate"
-                onClick={() => startEditing('priority', task.priority)}
-                data-testid="badge-priority"
-              >
-                {task.priority}
-              </Badge>
-            )}
+            <InlineSelectField
+              value={task.priority || 'medium'}
+              options={[
+                { value: 'low', label: 'Low' },
+                { value: 'medium', label: 'Medium' },
+                { value: 'high', label: 'High' },
+                { value: 'urgent', label: 'Urgent' }
+              ]}
+              onSave={(value) => updateTaskMutation.mutate({ priority: value as any })}
+              renderDisplay={(value) => (
+                <Badge 
+                  variant={value === 'urgent' ? 'destructive' : 'outline'}
+                  data-testid="badge-priority"
+                >
+                  {value}
+                </Badge>
+              )}
+              testId="priority"
+              label="Priority"
+            />
           </div>
 
           {/* Description */}
@@ -319,133 +275,40 @@ export function TaskDetail({ task, open, onOpenChange }: TaskDetailProps) {
             <div className="flex items-center gap-2 text-sm">
               <User className="h-4 w-4 text-muted-foreground" />
               <span className="text-muted-foreground">Assignee:</span>
-              {editingField === 'assigneeId' ? (
-                <Select
-                  value={tempValue || ""}
-                  onValueChange={(value) => {
-                    setTempValue(value);
-                    saveField('assigneeId', value === "unassigned" ? null : value);
-                  }}
-                >
-                  <SelectTrigger className="w-[200px] h-7" data-testid="select-assignee">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="unassigned">Unassigned</SelectItem>
-                    {users?.map(user => (
-                      <SelectItem key={user.id} value={user.id}>
-                        <div className="flex items-center gap-2">
-                          {user.firstName && user.lastName 
-                            ? `${user.firstName} ${user.lastName}` 
-                            : user.email}
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : (
-                <div 
-                  className="flex items-center gap-2 cursor-pointer hover-elevate px-2 py-0.5 rounded-md -ml-2"
-                  onClick={() => startEditing('assigneeId', task.assigneeId || "unassigned")}
-                  data-testid="assignee-display"
-                >
-                  {assignee ? (
-                    <>
-                      <Avatar className="h-6 w-6">
-                        <AvatarImage src={assignee.profileImageUrl || undefined} />
-                        <AvatarFallback>{assignee.email?.[0]}</AvatarFallback>
-                      </Avatar>
-                      <span>{assignee.firstName && assignee.lastName 
-                        ? `${assignee.firstName} ${assignee.lastName}` 
-                        : assignee.email}</span>
-                    </>
-                  ) : (
-                    <span className="text-muted-foreground">Unassigned</span>
-                  )}
-                  <Edit2 className="h-3 w-3 ml-1 text-muted-foreground" />
-                </div>
-              )}
+              <InlineAssigneeField
+                value={task.assigneeId || null}
+                users={users || []}
+                onSave={(value) => updateTaskMutation.mutate({ assigneeId: value })}
+                testId="assignee"
+                label="Assign to"
+              />
             </div>
 
             {/* Due Date inline editing */}
             <div className="flex items-center gap-2 text-sm">
               <CalendarIcon className="h-4 w-4 text-muted-foreground" />
               <span className="text-muted-foreground">Due:</span>
-              {editingField === 'dueDate' ? (
-                <Popover open={true} onOpenChange={(open) => {
-                  if (!open) {
-                    saveField('dueDate', tempValue);
-                  }
-                }}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className="h-7 px-2 justify-start text-left font-normal"
-                      data-testid="button-due-date"
-                    >
-                      {tempValue ? format(tempValue, "MMM dd, yyyy") : "Pick a date"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
-                    <Calendar
-                      mode="single"
-                      selected={tempValue}
-                      onSelect={(date) => {
-                        setTempValue(date);
-                        saveField('dueDate', date);
-                      }}
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
-              ) : (
-                <div 
-                  className="flex items-center gap-1 cursor-pointer hover-elevate px-2 py-0.5 rounded-md -ml-2"
-                  onClick={() => startEditing('dueDate', task.dueDate ? new Date(task.dueDate) : null)}
-                  data-testid="due-date-display"
-                >
-                  <span>{task.dueDate ? format(new Date(task.dueDate), "MMM dd, yyyy") : "No due date"}</span>
-                  <Edit2 className="h-3 w-3 ml-1 text-muted-foreground" />
-                </div>
-              )}
+              <InlineDateField
+                value={task.dueDate ? new Date(task.dueDate as string) : null}
+                onSave={(value) => updateTaskMutation.mutate({ 
+                  dueDate: value ? value.toISOString() : null 
+                })}
+                placeholder="No due date"
+                testId="due-date"
+                label="Due Date"
+              />
             </div>
 
             {/* Estimated Hours inline editing */}
             <div className="flex items-center gap-2 text-sm">
               <Clock className="h-4 w-4 text-muted-foreground" />
               <span className="text-muted-foreground">Estimated:</span>
-              {editingField === 'estimatedHours' ? (
-                <div className="flex items-center gap-1">
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.5"
-                    value={tempValue || ""}
-                    onChange={(e) => setTempValue(e.target.value)}
-                    onBlur={() => saveField('estimatedHours', tempValue)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        saveField('estimatedHours', tempValue);
-                      } else if (e.key === 'Escape') {
-                        cancelEditing();
-                      }
-                    }}
-                    className="w-20 h-7"
-                    data-testid="input-estimated-hours"
-                    autoFocus
-                  />
-                  <span className="text-muted-foreground">hours</span>
-                </div>
-              ) : (
-                <div 
-                  className="flex items-center gap-1 cursor-pointer hover-elevate px-2 py-0.5 rounded-md -ml-2"
-                  onClick={() => startEditing('estimatedHours', task.estimatedHours || "")}
-                  data-testid="estimated-hours-display"
-                >
-                  <span>{task.estimatedHours ? `${task.estimatedHours}h` : "No estimate"}</span>
-                  <Edit2 className="h-3 w-3 ml-1 text-muted-foreground" />
-                </div>
-              )}
+              <InlineEstimatedHoursSimple
+                value={task.estimatedHours}
+                onSave={(value) => updateTaskMutation.mutate({ 
+                  estimatedHours: value 
+                } as any)}
+              />
             </div>
           </div>
 
