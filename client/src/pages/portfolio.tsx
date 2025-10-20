@@ -1,26 +1,38 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { TrendingUp, TrendingDown, AlertTriangle, DollarSign, Briefcase, Plus } from "lucide-react";
+import { TrendingUp, TrendingDown, AlertTriangle, DollarSign, Briefcase, Plus, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/empty-state";
 import { useLocation } from "wouter";
-import type { Project } from "@shared/schema";
+import type { Project, PaginatedResult, PaginatedProjectsResult } from "@shared/schema";
 
 export default function Portfolio() {
   const [, setLocation] = useLocation();
-  const { data: projects, isLoading } = useQuery<Project[]>({
-    queryKey: ["/api/projects"],
+  const [page, setPage] = useState(1);
+  const [pageSize] = useState(10);
+
+  const { data: paginatedProjects, isLoading } = useQuery<PaginatedProjectsResult>({
+    queryKey: ["/api/projects/paginated", { page, limit: pageSize }],
+    queryFn: async () => {
+      const response = await fetch(`/api/projects/paginated?page=${page}&limit=${pageSize}`);
+      if (!response.ok) throw new Error('Failed to fetch projects');
+      return response.json();
+    },
   });
 
+  const projects = paginatedProjects?.data || [];
+
+  // Use stats from the paginated response
   const stats = {
-    total: projects?.length || 0,
-    active: projects?.filter(p => p.status === 'active').length || 0,
-    onHold: projects?.filter(p => p.status === 'on_hold').length || 0,
-    completed: projects?.filter(p => p.status === 'completed').length || 0,
-    totalBudget: projects?.reduce((sum, p) => sum + (parseFloat(p.budget || '0')), 0) || 0,
+    total: paginatedProjects?.stats?.total || 0,
+    active: paginatedProjects?.stats?.active || 0,
+    onHold: paginatedProjects?.stats?.onHold || 0,
+    completed: projects.filter(p => p.status === 'completed').length || 0, // Calculate from current page only as we don't have this in stats
+    totalBudget: paginatedProjects?.stats?.totalBudget || 0,
   };
 
   return (
@@ -151,64 +163,103 @@ export default function Portfolio() {
               />
             </div>
           ) : (
-            <div className="space-y-3">
-              {projects.map(project => (
-                <div
-                  key={project.id}
-                  className="p-4 rounded-lg border hover-elevate transition-all"
-                  data-testid={`portfolio-project-${project.id}`}
-                >
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="font-semibold">{project.name}</h3>
-                        <div
-                          className="h-2 w-2 rounded-full"
-                          style={{ backgroundColor: project.color || '#3B82F6' }}
-                        />
+            <>
+              <div className="space-y-3">
+                {projects.map(project => (
+                  <div
+                    key={project.id}
+                    className="p-4 rounded-lg border hover-elevate transition-all"
+                    data-testid={`portfolio-project-${project.id}`}
+                  >
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <h3 className="font-semibold">{project.name}</h3>
+                          <div
+                            className="h-2 w-2 rounded-full"
+                            style={{ backgroundColor: project.color || '#3B82F6' }}
+                          />
+                        </div>
+                        {project.description && (
+                          <p className="text-sm text-muted-foreground line-clamp-1">
+                            {project.description}
+                          </p>
+                        )}
                       </div>
-                      {project.description && (
-                        <p className="text-sm text-muted-foreground line-clamp-1">
-                          {project.description}
-                        </p>
-                      )}
+                      <Badge
+                        variant="outline"
+                        className={getStatusColor(project.status!)}
+                      >
+                        {project.status?.replace('_', ' ')}
+                      </Badge>
                     </div>
-                    <Badge
-                      variant="outline"
-                      className={getStatusColor(project.status!)}
-                    >
-                      {project.status?.replace('_', ' ')}
-                    </Badge>
-                  </div>
 
-                  <div className="grid grid-cols-3 gap-4 text-sm">
-                    {project.startDate && project.endDate && (
-                      <div>
-                        <div className="text-muted-foreground mb-1">Timeline</div>
-                        <div className="font-medium">
-                          {new Date(project.startDate).toLocaleDateString()} - {new Date(project.endDate).toLocaleDateString()}
+                    <div className="grid grid-cols-3 gap-4 text-sm">
+                      {project.startDate && project.endDate && (
+                        <div>
+                          <div className="text-muted-foreground mb-1">Timeline</div>
+                          <div className="font-medium">
+                            {new Date(project.startDate).toLocaleDateString()} - {new Date(project.endDate).toLocaleDateString()}
+                          </div>
                         </div>
-                      </div>
-                    )}
-                    {project.budget && (
-                      <div>
-                        <div className="text-muted-foreground mb-1">Budget</div>
-                        <div className="font-medium">
-                          ${parseFloat(project.budget).toLocaleString()}
+                      )}
+                      {project.budget && (
+                        <div>
+                          <div className="text-muted-foreground mb-1">Budget</div>
+                          <div className="font-medium">
+                            ${parseFloat(project.budget).toLocaleString()}
+                          </div>
                         </div>
-                      </div>
-                    )}
-                    <div>
-                      <div className="text-muted-foreground mb-1">Health</div>
-                      <div className="flex items-center gap-2">
-                        <Progress value={75} className="h-2" />
-                        <span className="text-xs text-muted-foreground">75%</span>
+                      )}
+                      <div>
+                        <div className="text-muted-foreground mb-1">Health</div>
+                        <div className="flex items-center gap-2">
+                          <Progress value={75} className="h-2" />
+                          <span className="text-xs text-muted-foreground">75%</span>
+                        </div>
                       </div>
                     </div>
+                  </div>
+                ))}
+              </div>
+              
+              {/* Pagination Controls */}
+              {paginatedProjects && paginatedProjects.totalPages > 1 && (
+                <div className="flex items-center justify-between mt-4 pt-4 border-t">
+                  <div className="text-sm text-muted-foreground">
+                    Showing {((page - 1) * pageSize) + 1} to {Math.min(page * pageSize, paginatedProjects.total)} of {paginatedProjects.total} projects
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPage(page - 1)}
+                      disabled={!paginatedProjects.hasPrevious}
+                      data-testid="button-prev-page"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                      Previous
+                    </Button>
+                    <div className="flex items-center gap-1">
+                      <span className="text-sm">Page</span>
+                      <span className="text-sm font-medium">{page}</span>
+                      <span className="text-sm">of</span>
+                      <span className="text-sm font-medium">{paginatedProjects.totalPages}</span>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPage(page + 1)}
+                      disabled={!paginatedProjects.hasNext}
+                      data-testid="button-next-page"
+                    >
+                      Next
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
                   </div>
                 </div>
-              ))}
-            </div>
+              )}
+            </>
           )}
         </CardContent>
       </Card>

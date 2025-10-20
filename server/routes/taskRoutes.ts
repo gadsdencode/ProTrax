@@ -7,12 +7,31 @@ import { SchedulingEngine } from "../scheduling";
 
 const router = Router();
 
-// Get all tasks
+// Get all tasks (backward compatible)
 router.get('/', isAuthenticated, asyncHandler(async (req, res) => {
   const projectId = req.query.projectId ? parseInt(req.query.projectId as string) : undefined;
   const searchQuery = req.query.searchQuery as string | undefined;
   const tasks = await storage.getTasks(projectId, searchQuery);
   res.json(tasks);
+}));
+
+// Get paginated tasks
+router.get('/paginated', isAuthenticated, asyncHandler(async (req, res) => {
+  const projectId = req.query.projectId ? parseInt(req.query.projectId as string) : undefined;
+  const searchQuery = req.query.searchQuery as string | undefined;
+  const page = req.query.page ? parseInt(req.query.page as string) : 1;
+  const limit = req.query.limit ? parseInt(req.query.limit as string) : 20;
+  const sortBy = req.query.sortBy as string | undefined;
+  const sortOrder = req.query.sortOrder as 'asc' | 'desc' | undefined;
+
+  const paginatedTasks = await storage.getTasksPaginated(projectId, searchQuery, {
+    page,
+    limit,
+    sortBy,
+    sortOrder
+  });
+
+  res.json(paginatedTasks);
 }));
 
 // Get my tasks (must be before /:id to avoid route conflicts)

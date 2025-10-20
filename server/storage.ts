@@ -61,6 +61,8 @@ import {
   type ProjectStakeholder,
   type InsertNotification,
   type Notification,
+  type PaginationParams,
+  type PaginatedResult,
 } from "@shared/schema";
 import { db, pool } from "./db";
 import { eq, and, desc, asc, or, ilike, gte, lte } from "drizzle-orm";
@@ -80,6 +82,7 @@ export interface IStorage {
   
   // Project operations
   getProjects(searchQuery?: string): Promise<Project[]>;
+  getProjectsPaginated(searchQuery?: string, pagination?: PaginationParams): Promise<PaginatedProjectsResult>;
   getProject(id: number): Promise<Project | undefined>;
   createProject(project: InsertProject): Promise<Project>;
   createProjectWithTasks(project: InsertProject, tasks: any[]): Promise<{
@@ -99,6 +102,7 @@ export interface IStorage {
   
   // Task operations
   getTasks(projectId?: number, searchQuery?: string): Promise<Task[]>;
+  getTasksPaginated(projectId?: number, searchQuery?: string, pagination?: PaginationParams): Promise<PaginatedResult<Task>>;
   getTask(id: number): Promise<Task | undefined>;
   getMyTasks(userId: string): Promise<Task[]>;
   getSubtasks(parentId: number): Promise<Task[]>;
@@ -249,6 +253,87 @@ export class DatabaseStorage implements IStorage {
         .orderBy(desc(projects.createdAt));
     }
     return await db.select().from(projects).orderBy(desc(projects.createdAt));
+  }
+
+  async getProjectsPaginated(searchQuery?: string, pagination?: PaginationParams): Promise<PaginatedProjectsResult> {
+    // Set default pagination values
+    const page = pagination?.page || 1;
+    const limit = pagination?.limit || 10;
+    const sortBy = pagination?.sortBy || 'createdAt';
+    const sortOrder = pagination?.sortOrder || 'desc';
+    const offset = (page - 1) * limit;
+
+    // Build the where clause
+    let query = db.select().from(projects);
+    let countQuery = db.select({ count: db.$count(projects) }).from(projects);
+
+    if (searchQuery) {
+      const searchPattern = `%${searchQuery}%`;
+      const whereClause = or(
+        ilike(projects.name, searchPattern),
+        ilike(projects.description, searchPattern)
+      );
+      query = query.where(whereClause);
+      countQuery = countQuery.where(whereClause);
+    }
+
+    // Apply sorting
+    const sortColumn = sortBy === 'name' ? projects.name : 
+                      sortBy === 'status' ? projects.status :
+                      sortBy === 'startDate' ? projects.startDate :
+                      sortBy === 'endDate' ? projects.endDate :
+                      projects.createdAt;
+    
+    if (sortOrder === 'asc') {
+      query = query.orderBy(asc(sortColumn));
+    } else {
+      query = query.orderBy(desc(sortColumn));
+    }
+
+    // Apply pagination
+    query = query.limit(limit).offset(offset);
+
+    // Calculate statistics for all projects (not just paginated results)
+    const statsQuery = db.select({
+      total: db.$count(projects),
+      active: sql<number>`COUNT(CASE WHEN ${projects.status} = 'active' THEN 1 END)`,
+      onHold: sql<number>`COUNT(CASE WHEN ${projects.status} = 'on_hold' THEN 1 END)`,
+      totalBudget: sql<number>`COALESCE(SUM(${projects.budget}), 0)`
+    }).from(projects);
+
+    // Execute queries in parallel
+    const [data, countResult, statsResult] = await Promise.all([
+      query,
+      countQuery,
+      statsQuery
+    ]);
+
+    const total = countResult[0]?.count || 0;
+    const totalPages = Math.ceil(total / limit);
+    
+    // Parse stats with proper type conversions
+    const stats = statsResult[0] ? {
+      total: Number(statsResult[0].total) || 0,
+      active: Number(statsResult[0].active) || 0,
+      onHold: Number(statsResult[0].onHold) || 0,
+      totalBudget: Number(statsResult[0].totalBudget) || 0
+    } : {
+      total: 0,
+      active: 0,
+      onHold: 0,
+      totalBudget: 0
+    };
+
+    return {
+      data,
+      total,
+      page,
+      limit,
+      totalPages,
+      hasNext: page < totalPages,
+      hasPrevious: page > 1,
+      stats
+    };
   }
 
   async getProject(id: number): Promise<Project | undefined> {
@@ -490,6 +575,80 @@ export class DatabaseStorage implements IStorage {
     const allTasks = await db.select().from(tasks).orderBy(desc(tasks.createdAt));
     console.log(`[STORAGE DEBUG] Query without conditions returned ${allTasks.length} tasks`);
     return allTasks;
+  }
+
+  async getTasksPaginated(projectId?: number, searchQuery?: string, pagination?: PaginationParams): Promise<PaginatedResult<Task>> {
+    // Set default pagination values
+    const page = pagination?.page || 1;
+    const limit = pagination?.limit || 20; // Higher default limit for tasks
+    const sortBy = pagination?.sortBy || 'sortOrder'; 
+    const sortOrder = pagination?.sortOrder || 'asc';
+    const offset = (page - 1) * limit;
+
+    // Build the query
+    let query = db.select().from(tasks);
+    let countQuery = db.select({ count: db.$count(tasks) }).from(tasks);
+    
+    // Build where clause conditions
+    const conditions = [];
+    
+    if (projectId) {
+      conditions.push(eq(tasks.projectId, projectId));
+    }
+    
+    if (searchQuery) {
+      const searchPattern = `%${searchQuery}%`;
+      conditions.push(
+        or(
+          ilike(tasks.title, searchPattern),
+          ilike(tasks.description, searchPattern)
+        )
+      );
+    }
+    
+    // Apply where conditions if any
+    if (conditions.length > 0) {
+      const whereClause = conditions.length === 1 ? conditions[0] : and(...conditions);
+      query = query.where(whereClause);
+      countQuery = countQuery.where(whereClause);
+    }
+
+    // Apply sorting
+    const sortColumn = sortBy === 'title' ? tasks.title :
+                      sortBy === 'status' ? tasks.status :
+                      sortBy === 'priority' ? tasks.priority :
+                      sortBy === 'dueDate' ? tasks.dueDate :
+                      sortBy === 'createdAt' ? tasks.createdAt :
+                      sortBy === 'progress' ? tasks.progress :
+                      tasks.sortOrder;
+    
+    if (sortOrder === 'asc') {
+      query = query.orderBy(asc(sortColumn));
+    } else {
+      query = query.orderBy(desc(sortColumn));
+    }
+
+    // Apply pagination
+    query = query.limit(limit).offset(offset);
+
+    // Execute queries
+    const [data, countResult] = await Promise.all([
+      query,
+      countQuery
+    ]);
+
+    const total = countResult[0]?.count || 0;
+    const totalPages = Math.ceil(total / limit);
+
+    return {
+      data,
+      total,
+      page,
+      limit,
+      totalPages,
+      hasNext: page < totalPages,
+      hasPrevious: page > 1,
+    };
   }
 
   async getTask(id: number): Promise<Task | undefined> {

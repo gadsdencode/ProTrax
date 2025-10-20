@@ -19,11 +19,29 @@ const upload = multer({
   },
 });
 
-// Get all projects
+// Get all projects (backward compatible)
 router.get('/', isAuthenticated, asyncHandler(async (req, res) => {
   const searchQuery = req.query.searchQuery as string | undefined;
   const projects = await storage.getProjects(searchQuery);
   res.json(projects);
+}));
+
+// Get paginated projects
+router.get('/paginated', isAuthenticated, asyncHandler(async (req, res) => {
+  const searchQuery = req.query.searchQuery as string | undefined;
+  const page = req.query.page ? parseInt(req.query.page as string) : 1;
+  const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
+  const sortBy = req.query.sortBy as string | undefined;
+  const sortOrder = req.query.sortOrder as 'asc' | 'desc' | undefined;
+
+  const paginatedProjects = await storage.getProjectsPaginated(searchQuery, {
+    page,
+    limit,
+    sortBy,
+    sortOrder
+  });
+
+  res.json(paginatedProjects);
 }));
 
 // Get single project

@@ -54,6 +54,7 @@ export default function ProjectSettings() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}`] });
       queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/projects/paginated"] });
       toast({
         title: "Project updated",
         description: "Project settings have been saved successfully",
@@ -79,6 +80,7 @@ export default function ProjectSettings() {
       });
       // Invalidate and redirect
       queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/projects/paginated"] });
       setLocation("/projects");
     },
     onError: (error: Error) => {

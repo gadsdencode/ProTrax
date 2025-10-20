@@ -51,6 +51,7 @@ export default function Projects() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/projects"], refetchType: 'all' });
+      queryClient.invalidateQueries({ queryKey: ["/api/projects/paginated"] });
       setActiveDialog(null);
       toast({
         title: "Success",
@@ -68,6 +69,7 @@ export default function Projects() {
     onSuccess: () => {
       // Invalidate all task queries including those with search params
       queryClient.invalidateQueries({ queryKey: ["/api/tasks"], refetchType: 'all' });
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks/paginated"] });
       setActiveDialog(null);
       toast({
         title: "Success",

@@ -426,6 +426,34 @@ export const insertTaskCustomFieldValueSchema = createInsertSchema(taskCustomFie
 
 // ============= TYPES =============
 
+// Pagination types
+export interface PaginationParams {
+  page?: number;
+  limit?: number;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
+}
+
+export interface PaginatedResult<T> {
+  data: T[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+  hasNext: boolean;
+  hasPrevious: boolean;
+}
+
+// Extended pagination result with statistics for projects
+export interface PaginatedProjectsResult extends PaginatedResult<Project> {
+  stats?: {
+    total: number;
+    active: number;
+    onHold: number;
+    totalBudget: number;
+  };
+}
+
 export type InsertProject = z.infer<typeof insertProjectSchema>;
 export type Project = typeof projects.$inferSelect;
 

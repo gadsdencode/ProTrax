@@ -109,6 +109,7 @@ export function TaskDetail({ task, open, onOpenChange }: TaskDetailProps) {
       queryClient.invalidateQueries({ queryKey: [`/api/tasks/${task?.id}/subtasks`] });
       queryClient.invalidateQueries({ queryKey: [`/api/tasks/${task?.id}`] });
       queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks/paginated"] });
       setShowSubtaskDialog(false);
       setQuickSubtaskTitle("");
       toast({
@@ -153,6 +154,7 @@ export function TaskDetail({ task, open, onOpenChange }: TaskDetailProps) {
       // Invalidate all task-related queries to ensure fresh data
       queryClient.invalidateQueries({ queryKey: [`/api/tasks/${task?.id}`] });
       queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks/paginated"] });
       queryClient.invalidateQueries({ queryKey: [`/api/projects/${task?.projectId}/tasks`] });
       queryClient.invalidateQueries({ queryKey: [`/api/sprints/${task?.sprintId}/tasks`] });
       toast({

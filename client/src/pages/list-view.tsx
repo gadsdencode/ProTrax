@@ -1,6 +1,6 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Search, Filter, Download, ArrowUpDown, Plus, List } from "lucide-react";
+import { Search, Filter, Download, ArrowUpDown, Plus, List, ChevronLeft, ChevronRight } from "lucide-react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,11 +23,13 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useUIStore } from "@/stores/useUIStore";
 import { useProjectSync } from "@/hooks/use-project-sync";
-import type { Task, Project, InsertTask } from "@shared/schema";
+import type { Task, Project, InsertTask, PaginatedResult } from "@shared/schema";
 
 export default function ListView() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
+  const [page, setPage] = useState(1);
+  const [pageSize] = useState(25); // More items per page for list view
   
   // Use single source of truth for project selection
   const { selectedProjectId, setSelectedProjectId } = useProjectSync({ updateUrl: true });
@@ -51,7 +53,13 @@ export default function ListView() {
   // Clear selected tasks when project changes to prevent operating on wrong tasks
   useEffect(() => {
     setListViewSelectedTasks([]);
+    setPage(1); // Reset to first page when project changes
   }, [selectedProjectId, setListViewSelectedTasks]);
+
+  // Reset page when search changes
+  useEffect(() => {
+    setPage(1);
+  }, [globalSearchQuery]);
 
   const { data: project } = useQuery<Project>({
     queryKey: [`/api/projects/${selectedProjectId}`],
@@ -62,12 +70,24 @@ export default function ListView() {
   if (selectedProjectId) queryParams.projectId = selectedProjectId;
   if (globalSearchQuery) queryParams.searchQuery = globalSearchQuery;
 
-  const { data: tasks, isLoading } = useQuery<Task[]>({
-    queryKey: 
-      Object.keys(queryParams).length > 0 
-        ? ["/api/tasks", queryParams]
-        : ["/api/tasks"],
+  const { data: paginatedTasks, isLoading } = useQuery<PaginatedResult<Task>>({
+    queryKey: ["/api/tasks/paginated", { ...queryParams, page, limit: pageSize, sortBy: listViewSortField, sortOrder: listViewSortDirection }],
+    queryFn: async () => {
+      const searchParams = new URLSearchParams();
+      if (selectedProjectId) searchParams.append('projectId', selectedProjectId.toString());
+      if (globalSearchQuery) searchParams.append('searchQuery', globalSearchQuery);
+      searchParams.append('page', page.toString());
+      searchParams.append('limit', pageSize.toString());
+      searchParams.append('sortBy', listViewSortField);
+      searchParams.append('sortOrder', listViewSortDirection);
+      
+      const response = await fetch(`/api/tasks/paginated?${searchParams}`);
+      if (!response.ok) throw new Error('Failed to fetch tasks');
+      return response.json();
+    },
   });
+
+  const tasks = paginatedTasks?.data || [];
 
   // Create task mutation
   const createTaskMutation = useMutation({
@@ -78,7 +98,9 @@ export default function ListView() {
       return taskData as Task;
     },
     onSuccess: (createdTask) => {
+      // Invalidate both legacy and paginated queries
       queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks/paginated"] });
       queryClient.invalidateQueries({ queryKey: [`/api/tasks/${createdTask.id}`] });
       setActiveDialog(null);
       toast({
@@ -95,18 +117,8 @@ export default function ListView() {
     },
   });
 
-  const filteredAndSortedTasks = tasks?.sort((a, b) => {
-    const aValue = a[listViewSortField as keyof Task];
-    const bValue = b[listViewSortField as keyof Task];
-    const direction = listViewSortDirection === "asc" ? 1 : -1;
-    
-    if (aValue === null || aValue === undefined) return 1;
-    if (bValue === null || bValue === undefined) return -1;
-    
-    if (aValue < bValue) return -direction;
-    if (aValue > bValue) return direction;
-    return 0;
-  });
+  // No need for client-side sorting as we're doing server-side sorting now
+  const filteredAndSortedTasks = tasks;
 
   const toggleSort = (field: keyof Task) => {
     if (listViewSortField === field) {
@@ -115,6 +127,7 @@ export default function ListView() {
       setListViewSortField(field);
       setListViewSortDirection("asc");
     }
+    setPage(1); // Reset to first page when sorting changes
   };
 
   const toggleTaskSelection = (taskId: number) => {
@@ -394,6 +407,43 @@ export default function ListView() {
               ))}
             </TableBody>
           </Table>
+          
+          {/* Pagination Controls */}
+          {paginatedTasks && paginatedTasks.totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-4 border-t">
+              <div className="text-sm text-muted-foreground">
+                Showing {((page - 1) * pageSize) + 1} to {Math.min(page * pageSize, paginatedTasks.total)} of {paginatedTasks.total} tasks
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage(page - 1)}
+                  disabled={!paginatedTasks.hasPrevious}
+                  data-testid="button-prev-page"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Previous
+                </Button>
+                <div className="flex items-center gap-1">
+                  <span className="text-sm">Page</span>
+                  <span className="text-sm font-medium">{page}</span>
+                  <span className="text-sm">of</span>
+                  <span className="text-sm font-medium">{paginatedTasks.totalPages}</span>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage(page + 1)}
+                  disabled={!paginatedTasks.hasNext}
+                  data-testid="button-next-page"
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

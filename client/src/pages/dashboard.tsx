@@ -10,7 +10,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { EmailReportDialog } from "@/components/email-report-dialog";
 import { EmptyState } from "@/components/empty-state";
 import { useUIStore } from "@/stores/useUIStore";
-import type { Project, Task } from "@shared/schema";
+import type { Project, Task, PaginatedResult } from "@shared/schema";
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -27,10 +27,17 @@ export default function Dashboard() {
     queryKey: ["/api/tasks/my-tasks"],
   });
 
-  // Fetch ALL recent tasks (not just assigned to user)
-  const { data: allTasks, isLoading: allTasksLoading } = useQuery<Task[]>({
-    queryKey: ["/api/tasks"],
+  // Fetch recent tasks with pagination - just the first page for dashboard
+  const { data: recentTasksPaginated, isLoading: allTasksLoading } = useQuery<PaginatedResult<Task>>({
+    queryKey: ["/api/tasks/paginated", { page: 1, limit: 10, sortBy: 'createdAt', sortOrder: 'desc' }],
+    queryFn: async () => {
+      const response = await fetch(`/api/tasks/paginated?page=1&limit=10&sortBy=createdAt&sortOrder=desc`);
+      if (!response.ok) throw new Error('Failed to fetch recent tasks');
+      return response.json();
+    },
   });
+
+  const allTasks = recentTasksPaginated?.data || [];
 
   const handleEmailReport = (reportType: string) => {
     setSelectedReportType(reportType);
@@ -179,9 +186,9 @@ export default function Dashboard() {
           ) : (
             <div className="space-y-2">
               <div className="text-xs text-muted-foreground mb-2">
-                Showing {Math.min(10, allTasks.length)} of {allTasks.length} total tasks
+                Showing {allTasks.length} of {recentTasksPaginated?.total || 0} total tasks
               </div>
-              {allTasks.slice(0, 10).map(task => (
+              {allTasks.map(task => (
                 <div
                   key={task.id}
                   className="flex items-center justify-between p-3 rounded-lg border hover-elevate transition-all cursor-pointer"
@@ -211,14 +218,14 @@ export default function Dashboard() {
                   </div>
                 </div>
               ))}
-              {allTasks.length > 10 && (
+              {recentTasksPaginated && recentTasksPaginated.total > 10 && (
                 <Button
                   variant="outline"
                   className="w-full mt-2"
                   onClick={() => setLocation('/list')}
                   data-testid="button-see-more-tasks"
                 >
-                  See all {allTasks.length} tasks
+                  See all {recentTasksPaginated.total} tasks
                   <ArrowRight className="h-4 w-4 ml-2" />
                 </Button>
               )}
