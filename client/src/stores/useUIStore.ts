@@ -17,6 +17,10 @@ interface UIState {
   // Project selection
   selectedProjectId: number | null;
   setSelectedProjectId: (projectId: number | null) => void;
+  syncProjectFromUrl: (projectId: number) => void;
+  syncProjectToUrl: () => void;
+  getLastSyncTimestamp: () => number | null;
+  lastProjectSyncTimestamp: number | null;
   
   // Sidebar state
   isSidebarOpen: boolean;
@@ -68,10 +72,19 @@ interface UIState {
 
 export const useUIStore = create<UIState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       // Project selection
       selectedProjectId: null,
+      lastProjectSyncTimestamp: null,
       setSelectedProjectId: (projectId) => set({ selectedProjectId: projectId }),
+      syncProjectFromUrl: (projectId) => set({ 
+        selectedProjectId: projectId,
+        lastProjectSyncTimestamp: Date.now()
+      }),
+      syncProjectToUrl: () => set({ 
+        lastProjectSyncTimestamp: Date.now()
+      }),
+      getLastSyncTimestamp: () => get().lastProjectSyncTimestamp,
       
       // Sidebar state
       isSidebarOpen: true,
