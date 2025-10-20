@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Download, ZoomIn, ZoomOut, Plus, AlertCircle, Calendar, BarChart } from "lucide-react";
-import { useParams, useLocation } from "wouter";
+import { useLocation } from "wouter";
 import { DndContext, DragEndEvent } from "@dnd-kit/core";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -19,32 +19,25 @@ import { TaskForm } from "@/components/task-form";
 import { GanttRow } from "@/components/gantt-row";
 import { useUIStore } from "@/stores/useUIStore";
 import { EmptyState } from "@/components/empty-state";
+import { useProjectSync } from "@/hooks/use-project-sync";
 import type { Task, Project, InsertTask } from "@shared/schema";
 
 export default function Gantt() {
-  const params = useParams();
-  const projectIdFromUrl = params.id ? parseInt(params.id) : null;
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   
-  // Use centralized store for all state management
+  // Use single source of truth for project selection
+  const { selectedProjectId } = useProjectSync({ updateUrl: true });
+  
+  // Use centralized store for other state management
   const { 
     activeDialog, 
     setActiveDialog,
     ganttZoomLevel,
     setGanttZoomLevel,
-    selectedProjectId,
-    setSelectedProjectId,
     selectedTaskId,
     setSelectedTaskId
   } = useUIStore();
-
-  // Initialize project from URL
-  useEffect(() => {
-    if (projectIdFromUrl) {
-      setSelectedProjectId(projectIdFromUrl);
-    }
-  }, [projectIdFromUrl, setSelectedProjectId]);
 
   const { data: project } = useQuery<Project>({
     queryKey: [`/api/projects/${selectedProjectId}`],
