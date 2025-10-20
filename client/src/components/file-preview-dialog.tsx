@@ -1,3 +1,25 @@
+/**
+ * FilePreviewDialog - Provides preview support for various file formats
+ * 
+ * Supported formats for preview:
+ * - Images: jpg, jpeg, png, gif, svg, webp, bmp
+ * - Videos: mp4, webm, ogg (browser-supported formats)
+ * - Audio: mp3, wav, ogg (browser-supported formats)
+ * - Documents: 
+ *   - PDF (native browser support)
+ *   - DOCX (converted to HTML using mammoth)
+ *   - DOC (legacy format - NOT supported, download required)
+ * - Spreadsheets:
+ *   - CSV (rendered as table)
+ *   - XLS/XLSX (NOT supported, download required)
+ * - Presentations:
+ *   - PPT/PPTX (NOT supported, download required)
+ * - Code/Text: js, ts, py, java, json, xml, yaml, md, etc (syntax highlighted)
+ * - HTML: rendered with syntax highlighting
+ * 
+ * Files not explicitly supported will show a download option with specific
+ * messaging based on file type (archive, executable, design files, etc.)
+ */
 import { useState, useEffect, createElement } from "react";
 import { 
   X, 
@@ -13,7 +35,11 @@ import {
   Minimize2,
   Eye,
   FileSpreadsheet,
-  FileX
+  FileX,
+  FileArchive,
+  FileCode,
+  Presentation,
+  Table
 } from "lucide-react";
 import {
   Dialog,
@@ -293,16 +319,30 @@ export function FilePreviewDialog({
       if (mimeType.includes('pdf')) return FileText;
       if (mimeType.includes('word') || mimeType.includes('document')) return FileText;
       if (mimeType.includes('sheet') || mimeType.includes('excel')) return FileSpreadsheet;
-      if (mimeType.includes('presentation') || mimeType.includes('powerpoint')) return FileText;
+      if (mimeType.includes('presentation') || mimeType.includes('powerpoint')) return Presentation;
+      if (mimeType.includes('zip') || mimeType.includes('compressed') || mimeType.includes('archive')) return FileArchive;
     }
     
     // Check by file extension
     if (fileName) {
       const ext = fileName.toLowerCase().split('.').pop();
-      if (['doc', 'docx', 'odt', 'rtf'].includes(ext || '')) return FileText;
-      if (['xls', 'xlsx', 'ods', 'csv'].includes(ext || '')) return FileSpreadsheet;
-      if (['ppt', 'pptx', 'odp'].includes(ext || '')) return FileText;
-      if (['pdf'].includes(ext || '')) return FileText;
+      // Document files
+      if (['doc', 'docx', 'odt', 'rtf', 'pdf'].includes(ext || '')) return FileText;
+      // Spreadsheet files
+      if (['xls', 'xlsx', 'ods'].includes(ext || '')) return FileSpreadsheet;
+      if (ext === 'csv') return Table;
+      // Presentation files
+      if (['ppt', 'pptx', 'odp'].includes(ext || '')) return Presentation;
+      // Archive files
+      if (['zip', 'rar', '7z', 'tar', 'gz', 'bz2', 'xz'].includes(ext || '')) return FileArchive;
+      // Code files
+      if (['js', 'ts', 'jsx', 'tsx', 'py', 'java', 'cpp', 'c', 'cs', 'php', 'rb', 'go', 'rs', 'swift', 'kt'].includes(ext || '')) return FileCode;
+      // Image files
+      if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'svg', 'webp', 'ico'].includes(ext || '')) return FileImage;
+      // Video files
+      if (['mp4', 'avi', 'mov', 'wmv', 'flv', 'mkv', 'webm'].includes(ext || '')) return FileVideo;
+      // Audio files
+      if (['mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a', 'wma'].includes(ext || '')) return FileAudio;
     }
     
     return File;
