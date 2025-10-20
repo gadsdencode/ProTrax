@@ -159,9 +159,9 @@ export class SchedulingEngine {
           node.earlyStart.setDate(node.earlyStart.getDate() - duration);
           
           // Also check if start constraint pushes us later
-          if (maxConstraintStart) {
+          if (maxConstraintStart && node.earlyStart) {
             const startTime = node.earlyStart.getTime();
-            const constraintTime = maxConstraintStart.getTime();
+            const constraintTime = (maxConstraintStart as Date).getTime();
             if (startTime < constraintTime) {
               node.earlyStart = maxConstraintStart;
               node.earlyFinish = new Date(node.earlyStart);
@@ -276,8 +276,8 @@ export class SchedulingEngine {
           node.lateStart.setDate(node.lateStart.getDate() - duration);
           
           // Check if start constraint is tighter
-          const startTime = node.lateStart.getTime();
-          const constraintTime = minConstraintStart.getTime();
+          const startTime = (node.lateStart as Date).getTime();
+          const constraintTime = (minConstraintStart as Date).getTime();
           if (startTime > constraintTime) {
             node.lateStart = minConstraintStart;
             node.lateFinish = new Date(node.lateStart);
