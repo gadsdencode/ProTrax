@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Plus, MoreVertical, GripVertical, Columns3, FolderKanban } from "lucide-react";
-import { useParams, useLocation } from "wouter";
+import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -20,25 +20,28 @@ import { TaskForm } from "@/components/task-form";
 import { TaskDetail } from "@/components/task-detail";
 import { useUIStore } from "@/stores/useUIStore";
 import { EmptyState } from "@/components/empty-state";
+import { useProjectSync } from "@/hooks/use-project-sync";
 import type { Task, KanbanColumn, InsertTask, Project } from "@shared/schema";
 
 export default function Kanban() {
-  const params = useParams();
-  const projectIdFromUrl = params.id ? parseInt(params.id) : null;
   const [activeId, setActiveId] = useState<number | null>(null);
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   
-  // Use centralized store for all state management
+  // Use single source of truth for project selection
+  const { selectedProjectId, setSelectedProjectId } = useProjectSync({ 
+    updateUrl: true,
+    autoSelectFirst: true 
+  });
+  
+  // Use centralized store for other state management
   const { 
     activeDialog, 
     setActiveDialog, 
     createTaskStatus, 
     setCreateTaskStatus,
     selectedTaskId,
-    setSelectedTaskId,
-    selectedProjectId,
-    setSelectedProjectId
+    setSelectedTaskId
   } = useUIStore();
 
   // Fetch all projects for auto-selection
@@ -46,14 +49,12 @@ export default function Kanban() {
     queryKey: ["/api/projects"],
   });
 
-  // Initialize project from URL or auto-select first project
+  // Auto-select first project if none selected
   useEffect(() => {
-    if (projectIdFromUrl) {
-      setSelectedProjectId(projectIdFromUrl);
-    } else if (!selectedProjectId && projects && projects.length > 0) {
+    if (!selectedProjectId && projects && projects.length > 0) {
       setSelectedProjectId(projects[0].id);
     }
-  }, [projectIdFromUrl, selectedProjectId, projects, setSelectedProjectId]);
+  }, [selectedProjectId, projects, setSelectedProjectId]);
 
   const { data: project } = useQuery<Project>({
     queryKey: [`/api/projects/${selectedProjectId}`],
