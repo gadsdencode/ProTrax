@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Search, Filter, Download, ArrowUpDown, Plus, List } from "lucide-react";
-import { useParams, useLocation } from "wouter";
+import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -22,15 +22,17 @@ import { TaskDetail } from "@/components/task-detail";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useUIStore } from "@/stores/useUIStore";
+import { useProjectSync } from "@/hooks/use-project-sync";
 import type { Task, Project, InsertTask } from "@shared/schema";
 
 export default function ListView() {
-  const params = useParams();
-  const projectIdFromUrl = params.id ? parseInt(params.id) : null;
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   
-  // Use centralized store for all state management
+  // Use single source of truth for project selection
+  const { selectedProjectId, setSelectedProjectId } = useProjectSync({ updateUrl: true });
+  
+  // Use centralized store for other state management
   const {
     activeDialog,
     setActiveDialog,
@@ -38,8 +40,6 @@ export default function ListView() {
     setSelectedTaskId,
     globalSearchQuery,
     setGlobalSearchQuery,
-    selectedProjectId,
-    setSelectedProjectId,
     listViewSelectedTasks,
     setListViewSelectedTasks,
     listViewSortField,
@@ -51,15 +51,15 @@ export default function ListView() {
   // Clear selected tasks when project changes to prevent operating on wrong tasks
   useEffect(() => {
     setListViewSelectedTasks([]);
-  }, [projectIdFromUrl, setListViewSelectedTasks]);
+  }, [selectedProjectId, setListViewSelectedTasks]);
 
   const { data: project } = useQuery<Project>({
-    queryKey: [`/api/projects/${projectIdFromUrl}`],
-    enabled: !!projectIdFromUrl,
+    queryKey: [`/api/projects/${selectedProjectId}`],
+    enabled: !!selectedProjectId,
   });
 
   const queryParams: Record<string, number | string> = {};
-  if (projectIdFromUrl) queryParams.projectId = projectIdFromUrl;
+  if (selectedProjectId) queryParams.projectId = selectedProjectId;
   if (globalSearchQuery) queryParams.searchQuery = globalSearchQuery;
 
   const { data: tasks, isLoading } = useQuery<Task[]>({
@@ -141,10 +141,9 @@ export default function ListView() {
           {project ? `${project.name} - List View` : 'List View'}
         </h1>
         <div className="flex items-center gap-2">
-          {projectIdFromUrl && (
+          {selectedProjectId && (
             <Button
               onClick={() => {
-                setSelectedProjectId(projectIdFromUrl);
                 setActiveDialog('createTask');
               }}
               data-testid="button-new-task"
@@ -227,7 +226,7 @@ export default function ListView() {
             </TableBody>
           </Table>
         </div>
-      ) : !projectIdFromUrl ? (
+      ) : !selectedProjectId ? (
         <EmptyState
           icon={List}
           title="No project selected"
@@ -256,7 +255,6 @@ export default function ListView() {
             action={{
               label: "Create Task",
               onClick: () => {
-                setSelectedProjectId(projectIdFromUrl);
                 setActiveDialog('createTask');
               }
             }}
@@ -409,7 +407,7 @@ export default function ListView() {
             <DialogTitle>Create New Task</DialogTitle>
           </DialogHeader>
           <TaskForm
-            projectId={projectIdFromUrl || undefined}
+            projectId={selectedProjectId || undefined}
             onSubmit={async (data) => {
               try {
                 const result = await createTaskMutation.mutateAsync(data);
