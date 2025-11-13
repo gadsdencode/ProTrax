@@ -10,37 +10,81 @@ import { debugLogTagged, log } from './utils/debug';
 let connectionSettings: any;
 
 async function getAccessToken() {
-  if (connectionSettings && connectionSettings.settings.expires_at && new Date(connectionSettings.settings.expires_at).getTime() > Date.now()) {
-    return connectionSettings.settings.access_token;
-  }
-  
-  const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME
-  const xReplitToken = process.env.REPL_IDENTITY 
-    ? 'repl ' + process.env.REPL_IDENTITY 
-    : process.env.WEB_REPL_RENEWAL 
-    ? 'depl ' + process.env.WEB_REPL_RENEWAL 
-    : null;
-
-  if (!xReplitToken) {
-    throw new Error('X_REPLIT_TOKEN not found for repl/depl');
-  }
-
-  connectionSettings = await fetch(
-    'https://' + hostname + '/api/v2/connection?include_secrets=true&connector_names=outlook',
-    {
-      headers: {
-        'Accept': 'application/json',
-        'X_REPLIT_TOKEN': xReplitToken
-      }
+  try {
+    // Check if we have a cached valid token
+    if (connectionSettings && connectionSettings.settings.expires_at && new Date(connectionSettings.settings.expires_at).getTime() > Date.now()) {
+      debugLogTagged('EMAIL DEBUG', 'Using cached access token');
+      return connectionSettings.settings.access_token;
     }
-  ).then(res => res.json()).then(data => data.items?.[0]);
+    
+    debugLogTagged('EMAIL DEBUG', 'Fetching new access token from Replit connectors');
+    
+    const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
+    const xReplitToken = process.env.REPL_IDENTITY 
+      ? 'repl ' + process.env.REPL_IDENTITY 
+      : process.env.WEB_REPL_RENEWAL 
+      ? 'depl ' + process.env.WEB_REPL_RENEWAL 
+      : null;
 
-  const accessToken = connectionSettings?.settings?.access_token ?? connectionSettings?.settings?.oauth?.credentials?.access_token;
+    if (!xReplitToken) {
+      const error = 'X_REPLIT_TOKEN not found for repl/depl';
+      log(`[EMAIL ERROR] ${error}`);
+      throw new Error(error);
+    }
 
-  if (!connectionSettings || !accessToken) {
-    throw new Error('Outlook not connected');
+    if (!hostname) {
+      const error = 'REPLIT_CONNECTORS_HOSTNAME not found';
+      log(`[EMAIL ERROR] ${error}`);
+      throw new Error(error);
+    }
+
+    debugLogTagged('EMAIL DEBUG', `Fetching connection settings from: https://${hostname}/api/v2/connection`);
+    
+    const response = await fetch(
+      `https://${hostname}/api/v2/connection?include_secrets=true&connector_names=outlook`,
+      {
+        headers: {
+          'Accept': 'application/json',
+          'X_REPLIT_TOKEN': xReplitToken
+        }
+      }
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      log(`[EMAIL ERROR] Failed to fetch connection settings: ${response.status} ${response.statusText}`);
+      log(`[EMAIL ERROR] Response body: ${errorText}`);
+      throw new Error(`Failed to fetch Outlook connection: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    connectionSettings = data.items?.[0];
+
+    if (!connectionSettings) {
+      const error = 'Outlook connector not found in connection settings';
+      log(`[EMAIL ERROR] ${error}`);
+      log(`[EMAIL ERROR] Available connectors: ${data.items?.map((item: any) => item.name).join(', ') || 'none'}`);
+      throw new Error(error);
+    }
+
+    const accessToken = connectionSettings?.settings?.access_token ?? connectionSettings?.settings?.oauth?.credentials?.access_token;
+
+    if (!accessToken) {
+      const error = 'Outlook access token not found in connection settings';
+      log(`[EMAIL ERROR] ${error}`);
+      log(`[EMAIL ERROR] Connection settings keys: ${Object.keys(connectionSettings?.settings || {}).join(', ')}`);
+      throw new Error(error);
+    }
+
+    debugLogTagged('EMAIL DEBUG', 'Access token obtained successfully');
+    log(`[EMAIL] Outlook connection authenticated successfully`);
+    
+    return accessToken;
+  } catch (error: any) {
+    log(`[EMAIL ERROR] Failed to get Outlook access token: ${error.message}`);
+    console.error('[EMAIL ERROR] Access token error details:', error);
+    throw error;
   }
-  return accessToken;
 }
 
 export async function getUncachableOutlookClient() {
@@ -67,34 +111,65 @@ export interface SendEmailParams {
 }
 
 export async function sendEmail(params: SendEmailParams) {
-  const client = await getUncachableOutlookClient();
-  
-  const message = {
-    subject: params.subject,
-    body: {
-      contentType: params.isHtml ? 'HTML' : 'Text',
-      content: params.body
-    },
-    toRecipients: params.to.map(recipient => ({
-      emailAddress: {
-        address: recipient.email,
-        name: recipient.name || recipient.email
-      }
-    })),
-    ...(params.cc && params.cc.length > 0 ? {
-      ccRecipients: params.cc.map(recipient => ({
+  try {
+    log(`[EMAIL] Preparing to send email to ${params.to.length} recipient(s)`);
+    debugLogTagged('EMAIL DEBUG', 'Recipients:', params.to.map(r => r.email));
+    debugLogTagged('EMAIL DEBUG', 'Subject:', params.subject);
+    debugLogTagged('EMAIL DEBUG', 'Body length:', params.body.length);
+    debugLogTagged('EMAIL DEBUG', 'Is HTML:', params.isHtml);
+    
+    const client = await getUncachableOutlookClient();
+    debugLogTagged('EMAIL DEBUG', 'Outlook client obtained successfully');
+    
+    const message = {
+      subject: params.subject,
+      body: {
+        contentType: params.isHtml ? 'HTML' : 'Text',
+        content: params.body
+      },
+      toRecipients: params.to.map(recipient => ({
         emailAddress: {
           address: recipient.email,
           name: recipient.name || recipient.email
         }
-      }))
-    } : {})
-  };
+      })),
+      ...(params.cc && params.cc.length > 0 ? {
+        ccRecipients: params.cc.map(recipient => ({
+          emailAddress: {
+            address: recipient.email,
+            name: recipient.name || recipient.email
+          }
+        }))
+      } : {})
+    };
 
-  await client.api('/me/sendMail').post({
-    message,
-    saveToSentItems: true
-  });
+    debugLogTagged('EMAIL DEBUG', 'Sending email via Microsoft Graph API...');
+    const response = await client.api('/me/sendMail').post({
+      message,
+      saveToSentItems: true
+    });
+    
+    debugLogTagged('EMAIL DEBUG', 'Email API response:', response);
+    log(`[EMAIL] Email sent successfully to ${params.to.map(r => r.email).join(', ')}`);
+    
+    return response;
+  } catch (error: any) {
+    const errorMessage = error?.message || 'Unknown error';
+    const errorCode = error?.code || error?.statusCode || 'N/A';
+    const errorBody = error?.body ? JSON.stringify(error.body, null, 2) : 'N/A';
+    
+    log(`[EMAIL ERROR] Failed to send email: ${errorMessage}`);
+    log(`[EMAIL ERROR] Error code: ${errorCode}`);
+    log(`[EMAIL ERROR] Error details: ${errorBody}`);
+    log(`[EMAIL ERROR] Recipients: ${params.to.map(r => r.email).join(', ')}`);
+    log(`[EMAIL ERROR] Subject: ${params.subject}`);
+    
+    // Log full error for debugging
+    console.error('[EMAIL ERROR] Full error object:', error);
+    
+    // Re-throw with more context
+    throw new Error(`Failed to send email: ${errorMessage}. Code: ${errorCode}`);
+  }
 }
 
 export async function sendProjectReport(
