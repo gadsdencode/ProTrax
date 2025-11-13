@@ -169,13 +169,50 @@ export async function sendProjectReport(
       hasTasks: !!reportData.tasks,
       taskCount: reportData?.tasks?.length || 0,
       totalTasks: reportData.totalTasks,
-      completedTasks: reportData.completedTasks
+      completedTasks: reportData.completedTasks,
+      hasDescription: !!reportData.description,
+      description: reportData.description,
+      hasStatus: !!reportData.status,
+      status: reportData.status,
+      hasManager: !!reportData.manager,
+      manager: reportData.manager,
+      hasStartDate: !!reportData.startDate,
+      startDate: reportData.startDate,
+      hasEndDate: !!reportData.endDate,
+      endDate: reportData.endDate,
+      hasBudget: !!reportData.budget,
+      budget: reportData.budget,
+      allKeys: Object.keys(reportData)
     });
-    // Use the new template function
-    reportContent = generateProjectSummaryHTML({
+    
+    // Prepare data for template - ensure all fields are properly mapped
+    const templateData = {
       projectName,
-      ...reportData
+      description: reportData.description || null,
+      status: reportData.status || null,
+      manager: reportData.manager || null,
+      startDate: reportData.startDate || null,
+      endDate: reportData.endDate || null,
+      budget: reportData.budget || null,
+      totalTasks: reportData.totalTasks || 0,
+      completedTasks: reportData.completedTasks || 0,
+      inProgressTasks: reportData.inProgressTasks || 0,
+      tasks: reportData.tasks || []
+    };
+    
+    console.log(`[EMAIL DEBUG] Template data prepared:`, {
+      projectName: templateData.projectName,
+      hasDescription: !!templateData.description,
+      hasStatus: !!templateData.status,
+      hasManager: !!templateData.manager,
+      hasStartDate: !!templateData.startDate,
+      hasEndDate: !!templateData.endDate,
+      hasBudget: !!templateData.budget,
+      taskCount: templateData.tasks.length
     });
+    
+    // Use the new template function
+    reportContent = generateProjectSummaryHTML(templateData);
   } else if (reportType === 'status') {
     console.log(`[EMAIL DEBUG] Generating status HTML with data:`, {
       hasTasks: !!reportData.tasks,

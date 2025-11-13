@@ -59,6 +59,22 @@ export function formatStatus(status: string): string {
 }
 
 /**
+ * Format project status from internal representation to display format
+ */
+export function formatProjectStatus(status: string | null | undefined): string {
+  if (!status) return 'N/A';
+  
+  const statusMap: Record<string, string> = {
+    'planning': 'Planning',
+    'active': 'Active',
+    'on_hold': 'On Hold',
+    'completed': 'Completed',
+    'cancelled': 'Cancelled'
+  };
+  return statusMap[status] || status.charAt(0).toUpperCase() + status.slice(1);
+}
+
+/**
  * Get status color for display
  */
 export function getStatusColor(status: string): string {

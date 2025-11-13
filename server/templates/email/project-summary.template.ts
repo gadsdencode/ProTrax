@@ -5,6 +5,7 @@
 import {
   formatDate,
   formatStatus,
+  formatProjectStatus,
   formatPriorityWithColor,
   createProgressBar,
   truncateText,
@@ -14,15 +15,15 @@ import { wrapInHtmlDocument, baseStyles } from './shared-styles';
 
 export interface ProjectSummaryData {
   projectName: string;
-  description?: string;
-  status?: string;
-  manager?: string;
-  startDate?: string | Date;
-  endDate?: string | Date;
+  description?: string | null;
+  status?: string | null;
+  manager?: string | null;
+  startDate?: string | Date | null;
+  endDate?: string | Date | null;
   totalTasks?: number;
   completedTasks?: number;
   inProgressTasks?: number;
-  budget?: number;
+  budget?: number | string | null;
   tasks?: Array<{
     title: string;
     description?: string;
@@ -39,12 +40,17 @@ export interface ProjectSummaryData {
  * Generate the project overview section
  */
 function generateProjectOverviewSection(data: ProjectSummaryData): string {
+  // Ensure we have valid data to display
+  const description = data.description && data.description.trim() ? data.description : 'No description provided';
+  const status = formatProjectStatus(data.status);
+  const manager = data.manager && data.manager.trim() ? data.manager : 'N/A';
+  
   return `
     <div class="section">
       <h2>Project Overview</h2>
-      <p><strong>Description:</strong> ${data.description || 'N/A'}</p>
-      <p><strong>Status:</strong> ${data.status || 'N/A'}</p>
-      <p><strong>Manager:</strong> ${data.manager || 'N/A'}</p>
+      <p><strong>Description:</strong> ${description}</p>
+      <p><strong>Status:</strong> ${status}</p>
+      <p><strong>Manager:</strong> ${manager}</p>
       <p><strong>Start Date:</strong> ${formatDate(data.startDate)}</p>
       <p><strong>End Date:</strong> ${formatDate(data.endDate)}</p>
     </div>
@@ -72,7 +78,7 @@ function generateMetricsSection(data: ProjectSummaryData): string {
       </div>
       <div class="metric">
         <div class="metric-label">Budget</div>
-        <div class="metric-value">$${data.budget || 0}</div>
+        <div class="metric-value">$${data.budget ? (typeof data.budget === 'string' ? parseFloat(data.budget).toLocaleString() : data.budget.toLocaleString()) : '0'}</div>
       </div>
     </div>
   `;
@@ -142,6 +148,27 @@ export function generateProjectSummaryHTML(data: ProjectSummaryData): string {
       </div>
     `);
   }
+
+  // Debug logging to identify data issues
+  console.log('[TEMPLATE DEBUG] Project Summary Data received:', {
+    projectName: data.projectName,
+    hasDescription: !!data.description,
+    description: data.description,
+    hasStatus: !!data.status,
+    status: data.status,
+    hasManager: !!data.manager,
+    manager: data.manager,
+    hasStartDate: !!data.startDate,
+    startDate: data.startDate,
+    hasEndDate: !!data.endDate,
+    endDate: data.endDate,
+    hasBudget: !!data.budget,
+    budget: data.budget,
+    budgetType: typeof data.budget,
+    totalTasks: data.totalTasks,
+    completedTasks: data.completedTasks,
+    taskCount: data.tasks?.length || 0
+  });
 
   const content = `
     <div class="header">
