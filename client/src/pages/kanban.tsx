@@ -101,21 +101,47 @@ export default function Kanban() {
     mutationFn: async ({ taskId, status }: { taskId: number; status: string }) => {
       return await apiRequest("PATCH", `/api/tasks/${taskId}`, { status });
     },
+    // Optimistic update
+    onMutate: async ({ taskId, status }) => {
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ["/api/tasks", { projectId: selectedProjectId }] });
+      
+      // Snapshot the previous value
+      const previousTasks = queryClient.getQueryData<Task[]>(["/api/tasks", { projectId: selectedProjectId }]);
+      
+      // Optimistically update to the new value
+      if (previousTasks) {
+        const updatedTasks = previousTasks.map(task =>
+          task.id === taskId ? { ...task, status } : task
+        );
+        queryClient.setQueryData(["/api/tasks", { projectId: selectedProjectId }], updatedTasks);
+      }
+      
+      // Return a context object with the snapshotted value
+      return { previousTasks };
+    },
     onSuccess: () => {
-      // Invalidate with the correct query key pattern
-      queryClient.invalidateQueries({ queryKey: ["/api/tasks", { projectId: selectedProjectId }] });
-      queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
       toast({
         title: "Task moved",
         description: "Task status updated successfully",
       });
     },
-    onError: (error: Error) => {
+    onError: (error: Error, _variables, context) => {
+      // Rollback to the previous value on error
+      if (context?.previousTasks) {
+        queryClient.setQueryData(["/api/tasks", { projectId: selectedProjectId }], context.previousTasks);
+      }
+      
       toast({
         title: "Error",
         description: error.message,
         variant: "destructive",
       });
+    },
+    onSettled: () => {
+      // Always refetch after error or success
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks", { projectId: selectedProjectId }] });
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
     },
   });
 
@@ -228,6 +254,7 @@ export default function Kanban() {
                     column={column}
                     tasks={columnTasks}
                     isOverLimit={isOverLimit}
+                    activeId={activeId}
                     onAddTask={(status) => {
                       setCreateTaskStatus(status);
                       setActiveDialog('createTask');
@@ -242,7 +269,7 @@ export default function Kanban() {
             </div>
             <DragOverlay>
               {activeId ? (
-                <div className="opacity-75">
+                <div className="rotate-3 scale-105 opacity-90 pointer-events-none">
                   <TaskCard task={tasks?.find(t => t.id === activeId)!} isDragging />
                 </div>
               ) : null}
@@ -292,60 +319,93 @@ function KanbanColumnDroppable({
   tasks, 
   isOverLimit,
   onAddTask,
-  onTaskClick
+  onTaskClick,
+  activeId
 }: { 
   column: any; 
   tasks: Task[]; 
   isOverLimit: boolean;
   onAddTask: (status: string) => void;
   onTaskClick: (task: Task) => void;
+  activeId?: number | null;
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: column.taskStatus || column.name.toLowerCase().replace(' ', '_'),
   });
 
+  // Enhanced visual feedback for drag over
+  const isDragging = !!activeId;
+  const isActiveColumn = tasks.some(task => task.id === activeId);
+
   return (
     <div
       ref={setNodeRef}
-      className={`w-80 shrink-0 transition-all ${isOver ? 'ring-2 ring-primary' : ''}`}
+      className={`
+        w-80 shrink-0 transition-all duration-200 ease-in-out
+        ${isOver ? 'ring-2 ring-primary scale-[1.02]' : ''}
+        ${isDragging && !isActiveColumn ? 'opacity-100' : ''}
+        ${isDragging && isActiveColumn ? 'opacity-75' : ''}
+      `}
       data-testid={`kanban-column-${column.name.toLowerCase().replace(' ', '-')}`}
     >
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <div
-            className="h-3 w-3 rounded-full"
-            style={{ backgroundColor: column.color || '#94A3B8' }}
-          />
-          <h3 className="font-semibold">{column.name}</h3>
-          <Badge variant="secondary" className="ml-2">
-            {tasks.length}
-            {column.wipLimit && `/${column.wipLimit}`}
-          </Badge>
+      {/* Column background with enhanced hover state */}
+      <div 
+        className={`
+          rounded-lg p-4 transition-all duration-200
+          ${isOver ? 'bg-primary/5 shadow-lg' : 'bg-transparent'}
+        `}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <div
+              className={`h-3 w-3 rounded-full transition-all duration-200 ${
+                isOver ? 'scale-125' : ''
+              }`}
+              style={{ backgroundColor: column.color || '#94A3B8' }}
+            />
+            <h3 className="font-semibold">{column.name}</h3>
+            <Badge variant="secondary" className="ml-2">
+              {tasks.length}
+              {column.wipLimit && `/${column.wipLimit}`}
+            </Badge>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onAddTask(column.taskStatus || column.name.toLowerCase().replace(' ', '_'))}
+            data-testid={`button-add-task-${column.name.toLowerCase().replace(' ', '-')}`}
+          >
+            <Plus className="h-4 w-4" />
+          </Button>
         </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => onAddTask(column.taskStatus || column.name.toLowerCase().replace(' ', '_'))}
-          data-testid={`button-add-task-${column.name.toLowerCase().replace(' ', '-')}`}
-        >
-          <Plus className="h-4 w-4" />
-        </Button>
-      </div>
 
-      {isOverLimit && (
-        <div className="mb-2 p-2 bg-destructive/10 text-destructive text-xs rounded border border-destructive/20">
-          WIP limit exceeded
+        {isOverLimit && (
+          <div className="mb-2 p-2 bg-destructive/10 text-destructive text-xs rounded border border-destructive/20">
+            WIP limit exceeded
+          </div>
+        )}
+
+        <div className="space-y-3">
+          {/* Show placeholder when dragging over empty column */}
+          {isOver && tasks.length === 0 && (
+            <div className="border-2 border-dashed border-primary/30 rounded-lg h-32 flex items-center justify-center">
+              <span className="text-muted-foreground text-sm">Drop task here</span>
+            </div>
+          )}
+          
+          {tasks.map(task => (
+            <DraggableTaskCard 
+              key={task.id} 
+              task={task} 
+              onTaskClick={onTaskClick}
+            />
+          ))}
+          
+          {/* Show drop indicator between cards when dragging */}
+          {isOver && tasks.length > 0 && (
+            <div className="border-2 border-dashed border-primary/30 rounded-lg h-2 animate-pulse" />
+          )}
         </div>
-      )}
-
-      <div className="space-y-3">
-        {tasks.map(task => (
-          <DraggableTaskCard 
-            key={task.id} 
-            task={task} 
-            onTaskClick={onTaskClick}
-          />
-        ))}
       </div>
     </div>
   );
@@ -359,12 +419,17 @@ function DraggableTaskCard({ task, onTaskClick }: { task: Task; onTaskClick: (ta
   const style = transform
     ? {
         transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
-        opacity: isDragging ? 0.5 : 1,
+        opacity: isDragging ? 0.3 : 1,
+        transition: isDragging ? 'opacity 200ms' : undefined,
+        cursor: isDragging ? 'grabbing' : 'grab',
       }
-    : undefined;
+    : { 
+        transition: 'all 200ms ease',
+        cursor: 'grab' 
+      };
 
   return (
-    <div ref={setNodeRef} style={style}>
+    <div ref={setNodeRef} style={style} className={isDragging ? 'z-50' : ''}>
       <TaskCard 
         task={task} 
         isDragging={isDragging} 
@@ -379,12 +444,16 @@ function DraggableTaskCard({ task, onTaskClick }: { task: Task; onTaskClick: (ta
 function TaskCard({ task, isDragging, onClick, dragListeners, dragAttributes }: { task: Task; isDragging?: boolean; onClick?: () => void; dragListeners?: any; dragAttributes?: any }) {
   return (
     <Card 
-      className="hover-elevate transition-all" 
+      className={`hover-elevate transition-all ${isDragging ? 'rotate-2 shadow-xl' : ''}`}
       data-testid={`task-card-${task.id}`}
     >
       <CardHeader className="p-4">
         <div className="flex items-start gap-2">
-          <div className="cursor-grab" {...dragListeners} {...dragAttributes}>
+          <div 
+            className="cursor-grab hover:bg-muted/50 rounded p-0.5 transition-colors" 
+            {...dragListeners} 
+            {...dragAttributes}
+          >
             <GripVertical className="h-4 w-4 text-muted-foreground" />
           </div>
           <div className="flex-1 cursor-pointer" onClick={onClick}>
