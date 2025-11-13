@@ -68,6 +68,7 @@ import { db, pool } from "./db";
 import { eq, and, desc, asc, or, ilike, gte, lte } from "drizzle-orm";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
+import { debugLogTagged } from "./utils/debug";
 
 export interface IStorage {
   // User operations (blueprint: javascript_auth_all_persistance)
@@ -514,23 +515,23 @@ export class DatabaseStorage implements IStorage {
 
   // Task operations
   async getTasks(projectId?: number, searchQuery?: string): Promise<Task[]> {
-    console.log(`[STORAGE DEBUG] getTasks called with projectId: ${projectId}, searchQuery: ${searchQuery}`);
+    debugLogTagged('STORAGE DEBUG', `getTasks called with projectId: ${projectId}, searchQuery: ${searchQuery}`);
     
     // Optimize direct query when only projectId is provided
     if (projectId && !searchQuery) {
-      console.log(`[STORAGE DEBUG] Using direct query for projectId: ${projectId}`);
+      debugLogTagged('STORAGE DEBUG', `Using direct query for projectId: ${projectId}`);
       const result = await db
         .select()
         .from(tasks)
         .where(eq(tasks.projectId, projectId))
         .orderBy(asc(tasks.sortOrder));
-      console.log(`[STORAGE DEBUG] Direct query returned ${result.length} tasks`);
+      debugLogTagged('STORAGE DEBUG', `Direct query returned ${result.length} tasks`);
       return result;
     }
 
     // Optimize query when both projectId and searchQuery are present
     if (projectId && searchQuery) {
-      console.log(`[STORAGE DEBUG] Using optimized query for projectId: ${projectId} and searchQuery: ${searchQuery}`);
+      debugLogTagged('STORAGE DEBUG', `Using optimized query for projectId: ${projectId} and searchQuery: ${searchQuery}`);
       const searchPattern = `%${searchQuery}%`;
       const result = await db
         .select()
@@ -545,16 +546,16 @@ export class DatabaseStorage implements IStorage {
           )
         )
         .orderBy(asc(tasks.sortOrder));
-      console.log(`[STORAGE DEBUG] Optimized combined query returned ${result.length} tasks`);
+      debugLogTagged('STORAGE DEBUG', `Optimized combined query returned ${result.length} tasks`);
       if (result.length > 0) {
-        console.log(`[STORAGE DEBUG] First task: id=${result[0].id}, projectId=${result[0].projectId}, title=${result[0].title}`);
+        debugLogTagged('STORAGE DEBUG', `First task: id=${result[0].id}, projectId=${result[0].projectId}, title=${result[0].title}`);
       }
       return result;
     }
     
     // Query when only searchQuery is provided
     if (searchQuery) {
-      console.log(`[STORAGE DEBUG] Using search-only query for searchQuery: ${searchQuery}`);
+      debugLogTagged('STORAGE DEBUG', `Using search-only query for searchQuery: ${searchQuery}`);
       const searchPattern = `%${searchQuery}%`;
       const result = await db
         .select()
@@ -566,14 +567,14 @@ export class DatabaseStorage implements IStorage {
           )
         )
         .orderBy(desc(tasks.createdAt));
-      console.log(`[STORAGE DEBUG] Search-only query returned ${result.length} tasks`);
+      debugLogTagged('STORAGE DEBUG', `Search-only query returned ${result.length} tasks`);
       return result;
     }
     
     // Return all tasks when no filters are provided
-    console.log(`[STORAGE DEBUG] Returning all tasks`);
+    debugLogTagged('STORAGE DEBUG', 'Returning all tasks');
     const allTasks = await db.select().from(tasks).orderBy(desc(tasks.createdAt));
-    console.log(`[STORAGE DEBUG] Query without conditions returned ${allTasks.length} tasks`);
+    debugLogTagged('STORAGE DEBUG', `Query without conditions returned ${allTasks.length} tasks`);
     return allTasks;
   }
 

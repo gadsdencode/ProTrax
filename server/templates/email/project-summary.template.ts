@@ -12,6 +12,7 @@ import {
   generateTimestampFooter
 } from '../template-utils';
 import { wrapInHtmlDocument, baseStyles } from './shared-styles';
+import { debugLogTagged } from '../../utils/debug';
 
 export interface ProjectSummaryData {
   projectName: string;
@@ -149,8 +150,8 @@ export function generateProjectSummaryHTML(data: ProjectSummaryData): string {
     `);
   }
 
-  // Debug logging to identify data issues
-  console.log('[TEMPLATE DEBUG] Project Summary Data received:', {
+  // Debug logging to identify data issues (development only)
+  debugLogTagged('TEMPLATE DEBUG', 'Project Summary Data received:', {
     projectName: data.projectName,
     hasDescription: !!data.description,
     description: data.description,

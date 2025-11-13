@@ -5,6 +5,7 @@ import { generateProjectSummaryHTML } from './templates/email/project-summary.te
 import { generateStatusReportHTML } from './templates/email/status-report.template';
 import { generateTaskReportHTML } from './templates/email/task-report.template';
 import { generatePortfolioSummaryHTML } from './templates/email/portfolio-summary.template';
+import { debugLogTagged, log } from './utils/debug';
 
 let connectionSettings: any;
 
@@ -102,30 +103,34 @@ export async function sendProjectReport(
   reportData: any,
   recipients: EmailRecipient[]
 ) {
-  console.log(`[EMAIL DEBUG] ========== SEND PROJECT REPORT START ==========`);
-  console.log(`[EMAIL DEBUG] Project Name: ${projectName}`);
-  console.log(`[EMAIL DEBUG] Report Type: ${reportType}`);
-  console.log(`[EMAIL DEBUG] Recipients Count: ${recipients.length}`);
-  console.log(`[EMAIL DEBUG] reportData type:`, typeof reportData);
-  console.log(`[EMAIL DEBUG] reportData is array:`, Array.isArray(reportData));
+  // Always log important email operations
+  log(`[EMAIL] Sending ${reportType} report for project: ${projectName} to ${recipients.length} recipient(s)`);
   
-  // Deep inspection of reportData structure
+  // Verbose debug logging (development only)
+  debugLogTagged('EMAIL DEBUG', '========== SEND PROJECT REPORT START ==========');
+  debugLogTagged('EMAIL DEBUG', `Project Name: ${projectName}`);
+  debugLogTagged('EMAIL DEBUG', `Report Type: ${reportType}`);
+  debugLogTagged('EMAIL DEBUG', `Recipients Count: ${recipients.length}`);
+  debugLogTagged('EMAIL DEBUG', `reportData type:`, typeof reportData);
+  debugLogTagged('EMAIL DEBUG', `reportData is array:`, Array.isArray(reportData));
+  
+  // Deep inspection of reportData structure (development only)
   if (typeof reportData === 'object' && !Array.isArray(reportData)) {
-    console.log(`[EMAIL DEBUG] reportData keys:`, Object.keys(reportData));
-    console.log(`[EMAIL DEBUG] reportData.tasks exists:`, 'tasks' in reportData);
-    console.log(`[EMAIL DEBUG] reportData.tasks type:`, typeof reportData.tasks);
-    console.log(`[EMAIL DEBUG] reportData.tasks is array:`, Array.isArray(reportData.tasks));
-    console.log(`[EMAIL DEBUG] reportData.tasks length:`, reportData?.tasks?.length || 0);
+    debugLogTagged('EMAIL DEBUG', `reportData keys:`, Object.keys(reportData));
+    debugLogTagged('EMAIL DEBUG', `reportData.tasks exists:`, 'tasks' in reportData);
+    debugLogTagged('EMAIL DEBUG', `reportData.tasks type:`, typeof reportData.tasks);
+    debugLogTagged('EMAIL DEBUG', `reportData.tasks is array:`, Array.isArray(reportData.tasks));
+    debugLogTagged('EMAIL DEBUG', `reportData.tasks length:`, reportData?.tasks?.length || 0);
     
     // Log first task if exists for verification
     if (reportData.tasks && reportData.tasks.length > 0) {
-      console.log(`[EMAIL DEBUG] First task sample:`, JSON.stringify(reportData.tasks[0], null, 2));
+      debugLogTagged('EMAIL DEBUG', `First task sample:`, JSON.stringify(reportData.tasks[0], null, 2));
     }
     
     // Log other important fields
-    console.log(`[EMAIL DEBUG] reportData.totalTasks:`, reportData.totalTasks);
-    console.log(`[EMAIL DEBUG] reportData.completedTasks:`, reportData.completedTasks);
-    console.log(`[EMAIL DEBUG] reportData.inProgressTasks:`, reportData.inProgressTasks);
+    debugLogTagged('EMAIL DEBUG', `reportData.totalTasks:`, reportData.totalTasks);
+    debugLogTagged('EMAIL DEBUG', `reportData.completedTasks:`, reportData.completedTasks);
+    debugLogTagged('EMAIL DEBUG', `reportData.inProgressTasks:`, reportData.inProgressTasks);
   }
   
   // Add validation before generating HTML
@@ -165,7 +170,7 @@ export async function sendProjectReport(
   let reportContent = '';
   
   if (reportType === 'summary') {
-    console.log(`[EMAIL DEBUG] Generating summary HTML with data:`, {
+    debugLogTagged('EMAIL DEBUG', `Generating summary HTML with data:`, {
       hasTasks: !!reportData.tasks,
       taskCount: reportData?.tasks?.length || 0,
       totalTasks: reportData.totalTasks,
@@ -200,7 +205,7 @@ export async function sendProjectReport(
       tasks: reportData.tasks || []
     };
     
-    console.log(`[EMAIL DEBUG] Template data prepared:`, {
+    debugLogTagged('EMAIL DEBUG', `Template data prepared:`, {
       projectName: templateData.projectName,
       hasDescription: !!templateData.description,
       hasStatus: !!templateData.status,
@@ -214,7 +219,7 @@ export async function sendProjectReport(
     // Use the new template function
     reportContent = generateProjectSummaryHTML(templateData);
   } else if (reportType === 'status') {
-    console.log(`[EMAIL DEBUG] Generating status HTML with data:`, {
+    debugLogTagged('EMAIL DEBUG', `Generating status HTML with data:`, {
       hasTasks: !!reportData.tasks,
       taskCount: reportData?.tasks?.length || 0,
       accomplishments: reportData?.accomplishments?.length || 0,
@@ -226,7 +231,7 @@ export async function sendProjectReport(
       ...reportData
     });
   } else if (reportType === 'gantt' || reportType === 'kanban') {
-    console.log(`[EMAIL DEBUG] Generating ${reportType} HTML with task count:`, Array.isArray(reportData) ? reportData.length : 0);
+    debugLogTagged('EMAIL DEBUG', `Generating ${reportType} HTML with task count:`, Array.isArray(reportData) ? reportData.length : 0);
     // Use the new template function
     reportContent = generateTaskReportHTML({
       projectName,
@@ -235,10 +240,10 @@ export async function sendProjectReport(
     });
   }
   
-  console.log(`[EMAIL DEBUG] Generated HTML content length:`, reportContent.length);
-  console.log(`[EMAIL DEBUG] HTML contains 'Task Details':`, reportContent.includes('Task Details'));
-  console.log(`[EMAIL DEBUG] HTML contains '<table>':`, reportContent.includes('<table>'));
-  console.log(`[EMAIL DEBUG] ========== SEND PROJECT REPORT END ==========`);
+  debugLogTagged('EMAIL DEBUG', `Generated HTML content length:`, reportContent.length);
+  debugLogTagged('EMAIL DEBUG', `HTML contains 'Task Details':`, reportContent.includes('Task Details'));
+  debugLogTagged('EMAIL DEBUG', `HTML contains '<table>':`, reportContent.includes('<table>'));
+  debugLogTagged('EMAIL DEBUG', '========== SEND PROJECT REPORT END ==========');
 
   await sendEmail({
     to: recipients,
@@ -252,22 +257,26 @@ export async function sendPortfolioSummary(
   projectsData: any[],
   recipients: EmailRecipient[]
 ) {
-  console.log(`[PORTFOLIO EMAIL DEBUG] ========== SEND PORTFOLIO SUMMARY START ==========`);
-  console.log(`[PORTFOLIO EMAIL DEBUG] Projects count:`, projectsData.length);
-  console.log(`[PORTFOLIO EMAIL DEBUG] Recipients count:`, recipients.length);
+  // Always log important email operations
+  log(`[EMAIL] Sending portfolio summary for ${projectsData.length} project(s) to ${recipients.length} recipient(s)`);
+  
+  // Verbose debug logging (development only)
+  debugLogTagged('PORTFOLIO EMAIL DEBUG', '========== SEND PORTFOLIO SUMMARY START ==========');
+  debugLogTagged('PORTFOLIO EMAIL DEBUG', `Projects count:`, projectsData.length);
+  debugLogTagged('PORTFOLIO EMAIL DEBUG', `Recipients count:`, recipients.length);
   
   // Validate projectsData
   if (!projectsData || !Array.isArray(projectsData) || projectsData.length === 0) {
     throw new Error('Portfolio summary requires at least one project');
   }
   
-  // Log and validate task information for each project
+  // Log and validate task information for each project (development only)
   projectsData.forEach((project, index) => {
-    console.log(`[PORTFOLIO EMAIL DEBUG] Project ${index + 1} ("${project.name}"):`);
-    console.log(`  - Has tasks array:`, !!project.tasks);
-    console.log(`  - Tasks is array:`, Array.isArray(project.tasks));
-    console.log(`  - Task count:`, project.tasks?.length || 0);
-    console.log(`  - Total tasks (calculated):`, project.totalTasks);
+    debugLogTagged('PORTFOLIO EMAIL DEBUG', `Project ${index + 1} ("${project.name}"):`);
+    debugLogTagged('PORTFOLIO EMAIL DEBUG', `  - Has tasks array:`, !!project.tasks);
+    debugLogTagged('PORTFOLIO EMAIL DEBUG', `  - Tasks is array:`, Array.isArray(project.tasks));
+    debugLogTagged('PORTFOLIO EMAIL DEBUG', `  - Task count:`, project.tasks?.length || 0);
+    debugLogTagged('PORTFOLIO EMAIL DEBUG', `  - Total tasks (calculated):`, project.totalTasks);
     
     // Validate each project has tasks array - fail fast if missing
     if (!project.tasks) {
@@ -276,7 +285,7 @@ export async function sendPortfolioSummary(
     
     // Log first task if available
     if (project.tasks && project.tasks.length > 0) {
-      console.log(`  - First task:`, {
+      debugLogTagged('PORTFOLIO EMAIL DEBUG', `  - First task:`, {
         title: project.tasks[0].title,
         status: project.tasks[0].status,
         assignee: project.tasks[0].assigneeName
@@ -286,10 +295,10 @@ export async function sendPortfolioSummary(
   
   // Count total tasks across all projects
   const totalTasksAcrossPortfolio = projectsData.reduce((sum, p) => sum + (p.tasks?.length || 0), 0);
-  console.log(`[PORTFOLIO EMAIL DEBUG] Total tasks across all projects:`, totalTasksAcrossPortfolio);
+  debugLogTagged('PORTFOLIO EMAIL DEBUG', `Total tasks across all projects:`, totalTasksAcrossPortfolio);
   
   if (totalTasksAcrossPortfolio === 0) {
-    console.warn(`[WARNING] Portfolio has no tasks across any projects`);
+    log(`[EMAIL WARNING] Portfolio has no tasks across any projects`);
   }
   
   // Use the new template function
@@ -297,18 +306,18 @@ export async function sendPortfolioSummary(
     projects: projectsData
   });
   
-  console.log(`[PORTFOLIO EMAIL DEBUG] Generated HTML length:`, reportContent.length);
-  console.log(`[PORTFOLIO EMAIL DEBUG] HTML contains task tables:`, reportContent.includes('<th>Task</th>'));
+  debugLogTagged('PORTFOLIO EMAIL DEBUG', `Generated HTML length:`, reportContent.length);
+  debugLogTagged('PORTFOLIO EMAIL DEBUG', `HTML contains task tables:`, reportContent.includes('<th>Task</th>'));
   
-  // Check for actual task content in the HTML
+  // Check for actual task content in the HTML (development only)
   const taskSectionCount = (reportContent.match(/<h4[^>]*>Tasks<\/h4>/g) || []).length;
   const noTasksMessageCount = (reportContent.match(/No tasks found for this project/g) || []).length;
   const taskRowCount = (reportContent.match(/<tr style="border-bottom: 1px solid #e5e7eb;">/g) || []).length;
   
-  console.log(`[PORTFOLIO EMAIL DEBUG] Task sections in HTML: ${taskSectionCount}`);
-  console.log(`[PORTFOLIO EMAIL DEBUG] "No tasks" messages: ${noTasksMessageCount}`);
-  console.log(`[PORTFOLIO EMAIL DEBUG] Task data rows in HTML: ${taskRowCount}`);
-  console.log(`[PORTFOLIO EMAIL DEBUG] ========== SEND PORTFOLIO SUMMARY END ==========`);
+  debugLogTagged('PORTFOLIO EMAIL DEBUG', `Task sections in HTML: ${taskSectionCount}`);
+  debugLogTagged('PORTFOLIO EMAIL DEBUG', `"No tasks" messages: ${noTasksMessageCount}`);
+  debugLogTagged('PORTFOLIO EMAIL DEBUG', `Task data rows in HTML: ${taskRowCount}`);
+  debugLogTagged('PORTFOLIO EMAIL DEBUG', '========== SEND PORTFOLIO SUMMARY END ==========');
 
   await sendEmail({
     to: recipients,
