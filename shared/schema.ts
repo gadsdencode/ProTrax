@@ -87,6 +87,12 @@ export {
   type KanbanColumn,
   type ProjectStakeholder,
   type Notification,
+  type AsyncJob,
+  
+  // Async job enums
+  asyncJobStatusEnum,
+  asyncJobTypeEnum,
+  asyncJobs,
 } from "../server/db/schema";
 
 // ============= VALIDATION SCHEMAS =============

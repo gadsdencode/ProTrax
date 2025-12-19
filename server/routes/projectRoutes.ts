@@ -6,6 +6,7 @@ import { asyncHandler, createError } from "../errorHandler";
 import { extractProjectDataFromSOW } from "../gemini";
 import { insertProjectSchema } from "@shared/schema";
 import { documentService, DocumentParseError } from "../services/documentService";
+import { jobQueueService, SOWExtractionInput } from "../services/jobQueueService";
 
 const router = Router();
 
@@ -92,13 +93,13 @@ router.post('/test-sow-extraction', isAuthenticated, asyncHandler(async (req, re
   }
 }));
 
-// Create project from SOW document
+// Create project from SOW document (ASYNC - returns job ID immediately)
 router.post('/create-from-sow', isAuthenticated, upload.single('file'), asyncHandler(async (req: any, res) => {
   if (!req.file) {
     throw createError.badRequest("No file uploaded");
   }
 
-  // Extract text from the document using DocumentService
+  // Extract text from the document using DocumentService (quick operation)
   console.log(`[SOW Upload] Processing file: ${req.file.originalname}, type: ${req.file.mimetype}, size: ${req.file.size} bytes`);
   
   let extractionResult;
@@ -119,21 +120,75 @@ router.post('/create-from-sow', isAuthenticated, upload.single('file'), asyncHan
   // Log first 500 chars of extracted text for debugging
   console.log(`[SOW Upload] First 500 chars of extracted text: ${text.substring(0, 500)}`);
 
+  // Create async job for the heavy Gemini processing
+  const userId = req.user.id;
+  
+  const jobInput: SOWExtractionInput = {
+    fileName: req.file.originalname,
+    fileSize: req.file.size,
+    mimeType: req.file.mimetype,
+    textContent: text,
+  };
+
+  const jobId = await jobQueueService.createJob({
+    userId,
+    type: 'sow_extraction',
+    inputData: jobInput as unknown as Record<string, unknown>,
+  });
+
+  console.log(`[SOW Upload] Created async job ${jobId} for SOW processing`);
+
+  // Return job ID immediately - client will poll for status
+  res.status(202).json({
+    jobId,
+    status: 'pending',
+    message: 'SOW processing started. Poll /api/jobs/:id for status.',
+    statusUrl: `/api/jobs/${jobId}`,
+  });
+}));
+
+// Legacy synchronous endpoint (kept for backward compatibility, but marked deprecated)
+router.post('/create-from-sow-sync', isAuthenticated, upload.single('file'), asyncHandler(async (req: any, res) => {
+  if (!req.file) {
+    throw createError.badRequest("No file uploaded");
+  }
+
+  // Extract text from the document using DocumentService
+  console.log(`[SOW Upload SYNC] Processing file: ${req.file.originalname}, type: ${req.file.mimetype}, size: ${req.file.size} bytes`);
+  
+  let extractionResult;
+  try {
+    extractionResult = await documentService.extractText(req.file.buffer, req.file.mimetype);
+    documentService.validateNotEmpty(extractionResult);
+    console.log(`[SOW Upload SYNC] Extracted ${extractionResult.characterCount} characters, ${extractionResult.wordCount} words`);
+  } catch (error) {
+    if (error instanceof DocumentParseError) {
+      console.error(`[SOW Upload SYNC] Document parsing failed: ${error.message}`, error.originalError);
+      throw createError.badRequest(error.message);
+    }
+    throw error;
+  }
+  
+  const { text } = extractionResult;
+  
+  // Log first 500 chars of extracted text for debugging
+  console.log(`[SOW Upload SYNC] First 500 chars of extracted text: ${text.substring(0, 500)}`);
+
   // Extract project data from the SOW using Gemini
   let projectData;
   try {
-    console.log("[SOW Upload] Calling Gemini API to extract project data...");
+    console.log("[SOW Upload SYNC] Calling Gemini API to extract project data...");
     projectData = await extractProjectDataFromSOW(text);
-    console.log("[SOW Upload] Gemini API response received");
-    console.log(`[SOW Upload] Extracted data: ${JSON.stringify(projectData, null, 2)}`);
+    console.log("[SOW Upload SYNC] Gemini API response received");
+    console.log(`[SOW Upload SYNC] Extracted data: ${JSON.stringify(projectData, null, 2)}`);
   } catch (error: any) {
-    console.error("[SOW Upload] Error extracting project data:", error);
+    console.error("[SOW Upload SYNC] Error extracting project data:", error);
     throw createError.badRequest(error.message || "Failed to extract project data from the SOW document");
   }
 
   // Extract tasks from the project data (we'll create them separately)
   const { tasks, ...projectFields } = projectData;
-  console.log(`[SOW Upload] Tasks to create: ${tasks?.length || 0}`);
+  console.log(`[SOW Upload SYNC] Tasks to create: ${tasks?.length || 0}`);
 
   // Create the project with the extracted data
   const userId = req.user.id;
@@ -143,22 +198,22 @@ router.post('/create-from-sow', isAuthenticated, upload.single('file'), asyncHan
     status: 'planning' // Set initial status
   });
   
-  console.log(`[SOW Upload] Creating project: ${data.name}`);
+  console.log(`[SOW Upload SYNC] Creating project: ${data.name}`);
   
   // Create project and tasks - save everything that can be saved
   try {
-    console.log(`[SOW Upload] Creating project and ${tasks?.length || 0} tasks...`);
+    console.log(`[SOW Upload SYNC] Creating project and ${tasks?.length || 0} tasks...`);
     
     // Create project and tasks - partial success is OK
     const result = await storage.createProjectWithTasks(data, tasks || []);
     const { project, tasks: createdTasks, failedTasks } = result;
     
-    console.log(`[SOW Upload] Project created with ID: ${project.id}`);
-    console.log(`[SOW Upload] Task creation results: ${createdTasks.length} succeeded, ${failedTasks.length} failed`);
+    console.log(`[SOW Upload SYNC] Project created with ID: ${project.id}`);
+    console.log(`[SOW Upload SYNC] Task creation results: ${createdTasks.length} succeeded, ${failedTasks.length} failed`);
     
     // Log any failures for debugging
     if (failedTasks.length > 0) {
-      console.warn(`[SOW Upload] The following tasks failed to create:`);
+      console.warn(`[SOW Upload SYNC] The following tasks failed to create:`);
       failedTasks.forEach((ft, index) => {
         console.warn(`  ${index + 1}. "${ft.title}": ${ft.error}`);
       });
@@ -182,7 +237,7 @@ router.post('/create-from-sow', isAuthenticated, upload.single('file'), asyncHan
     res.status(201).json(response);
   } catch (error: any) {
     // This should only happen if the project itself fails to create
-    console.error(`[SOW Upload] Failed to create project:`, error);
+    console.error(`[SOW Upload SYNC] Failed to create project:`, error);
     throw createError.internal(`Failed to create project: ${error.message}`);
   }
 }));

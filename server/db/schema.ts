@@ -329,6 +329,32 @@ export const notifications = pgTable("notifications", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// ============= ASYNC JOB PROCESSING =============
+
+export const asyncJobStatusEnum = pgEnum('async_job_status', ['pending', 'processing', 'completed', 'failed']);
+export const asyncJobTypeEnum = pgEnum('async_job_type', ['sow_extraction', 'report_generation', 'bulk_import']);
+
+export const asyncJobs = pgTable("async_jobs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  type: asyncJobTypeEnum("type").notNull(),
+  status: asyncJobStatusEnum("status").default('pending').notNull(),
+  progress: integer("progress").default(0), // 0-100
+  progressMessage: varchar("progress_message", { length: 500 }),
+  inputData: jsonb("input_data"), // Job input parameters (e.g., file metadata)
+  resultData: jsonb("result_data"), // Job result on completion
+  errorMessage: text("error_message"), // Error details on failure
+  startedAt: timestamp("started_at"),
+  completedAt: timestamp("completed_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_async_jobs_user_id").on(table.userId),
+  index("idx_async_jobs_status").on(table.status),
+  index("idx_async_jobs_type").on(table.type),
+  index("idx_async_jobs_created_at").on(table.createdAt),
+]);
+
 // ============= RELATIONS =============
 
 export const projectsRelations = relations(projects, ({ one, many }) => ({
@@ -422,4 +448,5 @@ export type ProjectTemplate = typeof projectTemplates.$inferSelect;
 export type KanbanColumn = typeof kanbanColumns.$inferSelect;
 export type ProjectStakeholder = typeof projectStakeholders.$inferSelect;
 export type Notification = typeof notifications.$inferSelect;
+export type AsyncJob = typeof asyncJobs.$inferSelect;
 

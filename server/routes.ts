@@ -31,6 +31,11 @@ import emailRoutes from "./routes/emailRoutes";
 import debugRoutes from "./routes/debugRoutes";
 import recurringTaskRoutes from "./routes/recurringTaskRoutes";
 import adminRoutes from "./routes/adminRoutes";
+import jobRoutes from "./routes/jobRoutes";
+
+// Import job queue service and processors
+import { jobQueueService } from "./services/jobQueueService";
+import { registerSOWProcessor } from "./services/sowJobProcessor";
 
 export async function setupRoutes(app: express.Application) {
   // Setup authentication middleware first (blueprint: javascript_auth_all_persistance)
@@ -67,6 +72,14 @@ export async function setupRoutes(app: express.Application) {
   app.use('/api/debug', debugRoutes);
   app.use('/api/recurring', recurringTaskRoutes);
   app.use('/api/admin', adminRoutes);
+  app.use('/api/jobs', jobRoutes);
+
+  // ============= ASYNC JOB PROCESSING =============
+  // Register job processors
+  registerSOWProcessor();
+  
+  // Start the background job processor (polls every 3 seconds)
+  jobQueueService.startProcessor(3000);
 
   // ============= ERROR HANDLING MIDDLEWARE =============
   // Must be registered AFTER all routes
