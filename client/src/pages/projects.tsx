@@ -1,6 +1,6 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { Plus, Search, Users, Paperclip, Settings, FileText } from "lucide-react";
+import { Plus, Search, Users, Paperclip, Settings, FileText, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -21,6 +21,7 @@ import { TaskForm } from "@/components/task-form";
 import { StakeholderDialog } from "@/components/stakeholder-dialog";
 import { FileAttachmentDialog } from "@/components/file-attachment-dialog";
 import { SOWFileUpload } from "@/components/sow-file-upload";
+import { ProjectHealthBadge } from "@/components/project-health-badge";
 import { useUIStore } from "@/stores/useUIStore";
 
 export default function Projects() {
@@ -187,7 +188,10 @@ export default function Projects() {
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold truncate">{project.name}</h3>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-semibold truncate">{project.name}</h3>
+                      <ProjectHealthBadge projectId={project.id} showLabel={false} size="sm" />
+                    </div>
                     <p className="text-sm text-muted-foreground capitalize mt-1">
                       {project.status?.replace('_', ' ')}
                     </p>
@@ -264,6 +268,21 @@ export default function Projects() {
                   >
                     <Settings className="h-3 w-3 mr-1" />
                     Settings
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      // Navigate to AI analysis tab in settings
+                      useUIStore.getState().setProjectSettingsActiveTab('ai-analysis');
+                      setLocation(`/projects/${project.id}/settings`);
+                    }}
+                    data-testid={`button-ai-analysis-${project.id}`}
+                    className="text-primary border-primary/30 hover:bg-primary/10"
+                  >
+                    <Sparkles className="h-3 w-3 mr-1" />
+                    AI Analysis
                   </Button>
                 </div>
               </CardContent>

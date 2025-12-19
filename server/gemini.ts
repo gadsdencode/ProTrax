@@ -391,6 +391,566 @@ Respond with JSON in this format:
   }
 }
 
+// ============= AI-ENHANCED RISK & ESTIMATION =============
+
+export interface RiskDetectionResult {
+  overallRiskLevel: 'low' | 'medium' | 'high' | 'critical';
+  riskScore: number; // 0-100
+  identifiedRisks: Array<{
+    type: 'dependency_bottleneck' | 'deadline_pressure' | 'resource_overload' | 'scope_creep' | 'blocked_tasks' | 'unassigned_tasks' | 'missing_estimates';
+    severity: 'low' | 'medium' | 'high' | 'critical';
+    description: string;
+    affectedTasks: number[]; // task IDs
+    recommendation: string;
+  }>;
+  summary: string;
+}
+
+export interface EffortEstimationResult {
+  taskEstimates: Array<{
+    taskId: number;
+    taskTitle: string;
+    suggestedStoryPoints: number | null;
+    suggestedHours: number | null;
+    confidence: number; // 0-1
+    reasoning: string;
+  }>;
+  teamVelocity: {
+    averagePointsPerSprint: number;
+    averageHoursPerTask: number;
+    dataPointsUsed: number;
+  };
+  recommendations: string[];
+}
+
+export interface ComprehensiveAnalysisResult {
+  riskAnalysis: RiskDetectionResult;
+  effortEstimation: EffortEstimationResult;
+  projectHealthScore: number; // 0-100
+  actionItems: Array<{
+    priority: 'high' | 'medium' | 'low';
+    action: string;
+    impact: string;
+  }>;
+  executiveSummary: string;
+}
+
+/**
+ * Analyzes project tasks and dependencies to automatically detect potential risks
+ * and bottlenecks. Uses AI to identify patterns that could cause project delays.
+ */
+export async function analyzeProjectRisks(
+  projectData: any,
+  tasksData: any[],
+  dependenciesData: any[]
+): Promise<RiskDetectionResult> {
+  try {
+    // Pre-analyze data to provide structured context to AI
+    const taskStats = {
+      total: tasksData.length,
+      completed: tasksData.filter(t => t.status === 'done').length,
+      inProgress: tasksData.filter(t => t.status === 'in_progress').length,
+      blocked: tasksData.filter(t => t.status === 'blocked').length,
+      unassigned: tasksData.filter(t => !t.assigneeId).length,
+      overdue: tasksData.filter(t => t.dueDate && new Date(t.dueDate) < new Date() && t.status !== 'done').length,
+      withoutEstimates: tasksData.filter(t => !t.estimatedHours && !t.storyPoints).length,
+    };
+
+    // Analyze dependency chains
+    const dependencyMap = new Map<number, number[]>();
+    for (const dep of dependenciesData) {
+      if (!dependencyMap.has(dep.successorId)) {
+        dependencyMap.set(dep.successorId, []);
+      }
+      dependencyMap.get(dep.successorId)!.push(dep.predecessorId);
+    }
+
+    // Find tasks with many dependencies (potential bottlenecks)
+    const heavilyDependentTasks = tasksData.filter(t => {
+      const deps = dependencyMap.get(t.id) || [];
+      return deps.length >= 3;
+    });
+
+    // Calculate days until deadline
+    const projectEndDate = projectData.endDate ? new Date(projectData.endDate) : null;
+    const daysUntilDeadline = projectEndDate 
+      ? Math.ceil((projectEndDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+      : null;
+
+    const systemPrompt = `You are an expert project risk analyst. Analyze the provided project data and identify potential risks that could impact project delivery.
+
+Focus on:
+1. Dependency bottlenecks - tasks with many dependencies that could block progress
+2. Deadline pressure - tasks with short timelines or approaching due dates
+3. Resource issues - unassigned tasks, overloaded team members
+4. Blocked tasks that need immediate attention
+5. Missing estimates that make planning difficult
+6. Scope creep indicators
+
+Provide actionable recommendations for each identified risk.
+
+Respond with JSON matching this exact structure:
+{
+  "overallRiskLevel": "low" | "medium" | "high" | "critical",
+  "riskScore": number (0-100),
+  "identifiedRisks": [
+    {
+      "type": "dependency_bottleneck" | "deadline_pressure" | "resource_overload" | "scope_creep" | "blocked_tasks" | "unassigned_tasks" | "missing_estimates",
+      "severity": "low" | "medium" | "high" | "critical",
+      "description": "string",
+      "affectedTasks": [task IDs as numbers],
+      "recommendation": "string"
+    }
+  ],
+  "summary": "Executive summary of risk assessment"
+}`;
+
+    const contextData = {
+      project: {
+        name: projectData.name,
+        status: projectData.status,
+        startDate: projectData.startDate,
+        endDate: projectData.endDate,
+        daysUntilDeadline,
+        budget: projectData.budget,
+      },
+      taskStatistics: taskStats,
+      tasks: tasksData.map(t => ({
+        id: t.id,
+        title: t.title,
+        status: t.status,
+        priority: t.priority,
+        assigneeId: t.assigneeId,
+        dueDate: t.dueDate,
+        estimatedHours: t.estimatedHours,
+        storyPoints: t.storyPoints,
+        progress: t.progress,
+        dependencyCount: (dependencyMap.get(t.id) || []).length,
+        isOnCriticalPath: t.isOnCriticalPath,
+      })),
+      heavilyDependentTasks: heavilyDependentTasks.map(t => ({
+        id: t.id,
+        title: t.title,
+        dependencyCount: (dependencyMap.get(t.id) || []).length,
+      })),
+      dependencies: dependenciesData.map(d => ({
+        predecessorId: d.predecessorId,
+        successorId: d.successorId,
+        type: d.type,
+      })),
+    };
+
+    const response = await retryWithBackoff(
+      async () => ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        config: {
+          systemInstruction: systemPrompt,
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: "object",
+            properties: {
+              overallRiskLevel: { type: "string" },
+              riskScore: { type: "number" },
+              identifiedRisks: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    type: { type: "string" },
+                    severity: { type: "string" },
+                    description: { type: "string" },
+                    affectedTasks: { type: "array", items: { type: "number" } },
+                    recommendation: { type: "string" },
+                  },
+                  required: ["type", "severity", "description", "affectedTasks", "recommendation"],
+                },
+              },
+              summary: { type: "string" },
+            },
+            required: ["overallRiskLevel", "riskScore", "identifiedRisks", "summary"],
+          },
+        },
+        contents: JSON.stringify(contextData, null, 2),
+      }),
+      "analyzeProjectRisks"
+    );
+
+    const rawJson = response.text;
+    if (rawJson) {
+      return JSON.parse(rawJson);
+    }
+    throw new Error("Empty response from model");
+  } catch (error: any) {
+    console.error("Error analyzing project risks (after retries):", error);
+    return {
+      overallRiskLevel: "medium",
+      riskScore: 50,
+      identifiedRisks: [{
+        type: "missing_estimates",
+        severity: "low",
+        description: "Unable to perform AI risk analysis at this time",
+        affectedTasks: [],
+        recommendation: "Please try again later or review project risks manually",
+      }],
+      summary: "Risk analysis temporarily unavailable - AI service error",
+    };
+  }
+}
+
+/**
+ * Uses historical task data to suggest effort estimates (story points and hours)
+ * for tasks that don't have estimates yet.
+ */
+export async function estimateTaskEffort(
+  tasksToEstimate: any[],
+  historicalTasks: any[],
+  historicalTimeEntries: any[]
+): Promise<EffortEstimationResult> {
+  try {
+    // Calculate team velocity from historical data
+    const completedTasks = historicalTasks.filter(t => t.status === 'done');
+    const tasksWithPoints = completedTasks.filter(t => t.storyPoints);
+    const tasksWithHours = completedTasks.filter(t => t.estimatedHours);
+
+    // Calculate actual hours spent from time entries
+    const taskActualHours = new Map<number, number>();
+    for (const entry of historicalTimeEntries) {
+      const current = taskActualHours.get(entry.taskId) || 0;
+      taskActualHours.set(entry.taskId, current + parseFloat(entry.hours));
+    }
+
+    // Calculate averages
+    const avgPointsPerTask = tasksWithPoints.length > 0
+      ? tasksWithPoints.reduce((sum, t) => sum + (t.storyPoints || 0), 0) / tasksWithPoints.length
+      : 3;
+    
+    const avgEstimatedHours = tasksWithHours.length > 0
+      ? tasksWithHours.reduce((sum, t) => sum + parseFloat(t.estimatedHours || '0'), 0) / tasksWithHours.length
+      : 4;
+
+    // Calculate estimation accuracy from completed tasks
+    const estimationAccuracyData = completedTasks
+      .filter(t => t.estimatedHours && taskActualHours.has(t.id))
+      .map(t => ({
+        estimated: parseFloat(t.estimatedHours),
+        actual: taskActualHours.get(t.id)!,
+        ratio: taskActualHours.get(t.id)! / parseFloat(t.estimatedHours),
+      }));
+
+    const systemPrompt = `You are an expert agile estimation consultant. Based on historical task data and the tasks that need estimates, suggest appropriate story points and hours.
+
+Consider:
+1. Task complexity based on title and description
+2. Similar historical tasks and their actual effort
+3. Team's typical estimation accuracy
+4. Task dependencies and potential complexity multipliers
+
+Provide confidence scores based on how similar the task is to historical data.
+
+Respond with JSON matching this exact structure:
+{
+  "taskEstimates": [
+    {
+      "taskId": number,
+      "taskTitle": "string",
+      "suggestedStoryPoints": number or null,
+      "suggestedHours": number or null,
+      "confidence": number (0-1),
+      "reasoning": "Brief explanation of the estimate"
+    }
+  ],
+  "teamVelocity": {
+    "averagePointsPerSprint": number,
+    "averageHoursPerTask": number,
+    "dataPointsUsed": number
+  },
+  "recommendations": ["Array of estimation improvement suggestions"]
+}`;
+
+    const contextData = {
+      tasksToEstimate: tasksToEstimate.map(t => ({
+        id: t.id,
+        title: t.title,
+        description: t.description,
+        priority: t.priority,
+        currentEstimatedHours: t.estimatedHours,
+        currentStoryPoints: t.storyPoints,
+      })),
+      historicalData: {
+        totalCompletedTasks: completedTasks.length,
+        averageStoryPoints: avgPointsPerTask.toFixed(1),
+        averageEstimatedHours: avgEstimatedHours.toFixed(1),
+        estimationAccuracy: estimationAccuracyData.length > 0
+          ? (estimationAccuracyData.reduce((sum, d) => sum + d.ratio, 0) / estimationAccuracyData.length).toFixed(2)
+          : "N/A",
+      },
+      sampleCompletedTasks: completedTasks.slice(0, 20).map(t => ({
+        title: t.title,
+        storyPoints: t.storyPoints,
+        estimatedHours: t.estimatedHours,
+        actualHours: taskActualHours.get(t.id) || null,
+      })),
+    };
+
+    const response = await retryWithBackoff(
+      async () => ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        config: {
+          systemInstruction: systemPrompt,
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: "object",
+            properties: {
+              taskEstimates: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    taskId: { type: "number" },
+                    taskTitle: { type: "string" },
+                    suggestedStoryPoints: { type: "number" },
+                    suggestedHours: { type: "number" },
+                    confidence: { type: "number" },
+                    reasoning: { type: "string" },
+                  },
+                  required: ["taskId", "taskTitle", "confidence", "reasoning"],
+                },
+              },
+              teamVelocity: {
+                type: "object",
+                properties: {
+                  averagePointsPerSprint: { type: "number" },
+                  averageHoursPerTask: { type: "number" },
+                  dataPointsUsed: { type: "number" },
+                },
+                required: ["averagePointsPerSprint", "averageHoursPerTask", "dataPointsUsed"],
+              },
+              recommendations: {
+                type: "array",
+                items: { type: "string" },
+              },
+            },
+            required: ["taskEstimates", "teamVelocity", "recommendations"],
+          },
+        },
+        contents: JSON.stringify(contextData, null, 2),
+      }),
+      "estimateTaskEffort"
+    );
+
+    const rawJson = response.text;
+    if (rawJson) {
+      return JSON.parse(rawJson);
+    }
+    throw new Error("Empty response from model");
+  } catch (error: any) {
+    console.error("Error estimating task effort (after retries):", error);
+    return {
+      taskEstimates: tasksToEstimate.map(t => ({
+        taskId: t.id,
+        taskTitle: t.title,
+        suggestedStoryPoints: null,
+        suggestedHours: null,
+        confidence: 0,
+        reasoning: "Unable to generate estimate - AI service unavailable",
+      })),
+      teamVelocity: {
+        averagePointsPerSprint: 0,
+        averageHoursPerTask: 0,
+        dataPointsUsed: 0,
+      },
+      recommendations: ["AI estimation service temporarily unavailable. Please try again later."],
+    };
+  }
+}
+
+/**
+ * Performs comprehensive AI analysis of a project including risk detection,
+ * effort estimation, and health scoring in a single call.
+ */
+export async function comprehensiveProjectAnalysis(
+  projectData: any,
+  tasksData: any[],
+  dependenciesData: any[],
+  historicalTasks: any[],
+  historicalTimeEntries: any[]
+): Promise<ComprehensiveAnalysisResult> {
+  try {
+    // Get user performance data for team members
+    const assigneeIds = Array.from(new Set(tasksData.map(t => t.assigneeId).filter(Boolean)));
+    const userPerformance = await getUserPerformanceData(assigneeIds);
+    const previousProjects = await getPreviousProjectsData();
+
+    // Calculate project metrics
+    const taskStats = {
+      total: tasksData.length,
+      completed: tasksData.filter(t => t.status === 'done').length,
+      inProgress: tasksData.filter(t => t.status === 'in_progress').length,
+      blocked: tasksData.filter(t => t.status === 'blocked').length,
+      todo: tasksData.filter(t => t.status === 'todo').length,
+    };
+
+    const completionRate = taskStats.total > 0 
+      ? (taskStats.completed / taskStats.total * 100).toFixed(1)
+      : "0";
+
+    const systemPrompt = `You are an expert project management AI performing a comprehensive project analysis.
+
+Analyze the project data and provide:
+1. Risk Assessment - identify all potential issues
+2. Effort Estimation - suggest story points/hours for unestimated tasks
+3. Project Health Score - overall health from 0-100
+4. Prioritized Action Items - what the team should do next
+
+Consider historical performance data, team velocity, and previous project outcomes.
+
+Respond with JSON matching this structure:
+{
+  "riskAnalysis": {
+    "overallRiskLevel": "low" | "medium" | "high" | "critical",
+    "riskScore": number (0-100),
+    "identifiedRisks": [
+      {
+        "type": "dependency_bottleneck" | "deadline_pressure" | "resource_overload" | "scope_creep" | "blocked_tasks" | "unassigned_tasks" | "missing_estimates",
+        "severity": "low" | "medium" | "high" | "critical",
+        "description": "string",
+        "affectedTasks": [task IDs],
+        "recommendation": "string"
+      }
+    ],
+    "summary": "string"
+  },
+  "effortEstimation": {
+    "taskEstimates": [
+      {
+        "taskId": number,
+        "taskTitle": "string",
+        "suggestedStoryPoints": number or null,
+        "suggestedHours": number or null,
+        "confidence": number (0-1),
+        "reasoning": "string"
+      }
+    ],
+    "teamVelocity": {
+      "averagePointsPerSprint": number,
+      "averageHoursPerTask": number,
+      "dataPointsUsed": number
+    },
+    "recommendations": ["strings"]
+  },
+  "projectHealthScore": number (0-100),
+  "actionItems": [
+    {
+      "priority": "high" | "medium" | "low",
+      "action": "string",
+      "impact": "string"
+    }
+  ],
+  "executiveSummary": "2-3 sentence summary for stakeholders"
+}`;
+
+    const contextData = {
+      project: {
+        id: projectData.id,
+        name: projectData.name,
+        description: projectData.description,
+        status: projectData.status,
+        startDate: projectData.startDate,
+        endDate: projectData.endDate,
+        budget: projectData.budget,
+      },
+      taskStatistics: {
+        ...taskStats,
+        completionRate: `${completionRate}%`,
+        unassigned: tasksData.filter(t => !t.assigneeId).length,
+        overdue: tasksData.filter(t => t.dueDate && new Date(t.dueDate) < new Date() && t.status !== 'done').length,
+        withoutEstimates: tasksData.filter(t => !t.estimatedHours && !t.storyPoints).length,
+        onCriticalPath: tasksData.filter(t => t.isOnCriticalPath).length,
+      },
+      tasks: tasksData.map(t => ({
+        id: t.id,
+        title: t.title,
+        description: t.description?.substring(0, 200),
+        status: t.status,
+        priority: t.priority,
+        assigneeId: t.assigneeId,
+        dueDate: t.dueDate,
+        estimatedHours: t.estimatedHours,
+        storyPoints: t.storyPoints,
+        progress: t.progress,
+        isOnCriticalPath: t.isOnCriticalPath,
+      })),
+      tasksNeedingEstimates: tasksData
+        .filter(t => !t.estimatedHours && !t.storyPoints)
+        .map(t => ({ id: t.id, title: t.title, description: t.description?.substring(0, 100) })),
+      dependencies: dependenciesData,
+      teamPerformance: userPerformance.map(p => ({
+        completionRate: `${(p.completionRate * 100).toFixed(0)}%`,
+        tasksCompleted: p.totalTasksCompleted,
+        estimationAccuracy: `${((1 - p.averageTimeAccuracy) * 100).toFixed(0)}%`,
+      })),
+      historicalContext: {
+        completedTasksCount: historicalTasks.filter(t => t.status === 'done').length,
+        previousProjectsOnTime: previousProjects.filter(p => p.wasOnTime).length,
+        previousProjectsTotal: previousProjects.length,
+      },
+    };
+
+    const response = await retryWithBackoff(
+      async () => ai.models.generateContent({
+        model: "gemini-2.5-pro",
+        config: {
+          systemInstruction: systemPrompt,
+          responseMimeType: "application/json",
+        },
+        contents: JSON.stringify(contextData, null, 2),
+      }),
+      "comprehensiveProjectAnalysis"
+    );
+
+    const rawJson = response.text;
+    if (rawJson) {
+      // Clean up JSON if wrapped in code blocks
+      let jsonText = rawJson;
+      if (jsonText.includes('```json')) {
+        jsonText = jsonText.split('```json')[1].split('```')[0].trim();
+      } else if (jsonText.includes('```')) {
+        jsonText = jsonText.split('```')[1].split('```')[0].trim();
+      }
+      return JSON.parse(jsonText);
+    }
+    throw new Error("Empty response from model");
+  } catch (error: any) {
+    console.error("Error performing comprehensive analysis (after retries):", error);
+    
+    // Return a graceful fallback
+    return {
+      riskAnalysis: {
+        overallRiskLevel: "medium",
+        riskScore: 50,
+        identifiedRisks: [],
+        summary: "Unable to complete AI analysis at this time",
+      },
+      effortEstimation: {
+        taskEstimates: [],
+        teamVelocity: {
+          averagePointsPerSprint: 0,
+          averageHoursPerTask: 0,
+          dataPointsUsed: 0,
+        },
+        recommendations: ["AI analysis temporarily unavailable"],
+      },
+      projectHealthScore: 50,
+      actionItems: [{
+        priority: "high",
+        action: "Retry AI analysis when service is available",
+        impact: "Enables data-driven project decisions",
+      }],
+      executiveSummary: "AI analysis service temporarily unavailable. Please try again later.",
+    };
+  }
+}
+
 export async function extractProjectDataFromSOW(
   sowText: string
 ): Promise<{

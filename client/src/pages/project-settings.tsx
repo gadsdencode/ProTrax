@@ -1,6 +1,6 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { ArrowLeft, Save, Settings as SettingsIcon, Trash2 } from "lucide-react";
+import { ArrowLeft, Save, Settings as SettingsIcon, Trash2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Tabs,
@@ -28,6 +28,7 @@ import { useProjectSync } from "@/hooks/use-project-sync";
 import type { Project, InsertProject } from "@shared/schema";
 import { ProjectForm } from "@/components/project-form";
 import { CustomFieldsSettings } from "@/components/custom-fields-settings";
+import { AIRiskAnalysis } from "@/components/ai-risk-analysis";
 
 export default function ProjectSettings() {
   const [, setLocation] = useLocation();
@@ -164,9 +165,13 @@ export default function ProjectSettings() {
       </div>
 
       <Tabs value={projectSettingsActiveTab} onValueChange={setProjectSettingsActiveTab} className="space-y-4">
-        <TabsList className="grid w-full max-w-md grid-cols-3">
+        <TabsList className="grid w-full max-w-xl grid-cols-4">
           <TabsTrigger value="general" data-testid="tab-general">
             General
+          </TabsTrigger>
+          <TabsTrigger value="ai-analysis" data-testid="tab-ai-analysis" className="flex items-center gap-1.5">
+            <Sparkles className="h-3.5 w-3.5" />
+            AI Analysis
           </TabsTrigger>
           <TabsTrigger value="custom-fields" data-testid="tab-custom-fields">
             Custom Fields
@@ -194,6 +199,19 @@ export default function ProjectSettings() {
                 color: project.color || "#3B82F6",
               }}
             />
+          </div>
+        </TabsContent>
+
+        <TabsContent value="ai-analysis" className="space-y-4">
+          <div className="max-w-5xl">
+            <h2 className="text-xl font-semibold mb-2 flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-primary" />
+              AI-Powered Project Analysis
+            </h2>
+            <p className="text-muted-foreground mb-6">
+              Get intelligent insights about project risks, effort estimates, and actionable recommendations powered by AI.
+            </p>
+            <AIRiskAnalysis projectId={projectId} />
           </div>
         </TabsContent>
 
