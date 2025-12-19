@@ -22,10 +22,12 @@ import {
   SidebarMenuItem,
   SidebarHeader,
   SidebarFooter,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuth } from "@/hooks/use-auth";
+import { OrgSwitcher } from "@/components/org-switcher";
 
 const menuItems = [
   { title: "Dashboard", icon: Layout, url: "/" },
@@ -45,6 +47,8 @@ const viewItems = [
 export function AppSidebar() {
   const [location, setLocation] = useLocation();
   const { user, logoutMutation } = useAuth();
+  const { state } = useSidebar();
+  const isCollapsed = state === "collapsed";
 
   const getUserInitials = () => {
     if (!user) return "U";
@@ -58,12 +62,18 @@ export function AppSidebar() {
   };
 
   return (
-    <Sidebar>
-      <SidebarHeader className="border-b p-4">
-        <div className="flex items-center gap-2">
-          <Layout className="h-5 w-5 text-primary" />
-          <span className="text-lg font-semibold">ProjectHub</span>
+    <Sidebar collapsible="icon">
+      <SidebarHeader className="border-b p-3">
+        {/* App Logo/Name */}
+        <div className="flex items-center gap-2 mb-3">
+          <Layout className="h-5 w-5 text-primary shrink-0" />
+          {!isCollapsed && (
+            <span className="text-lg font-semibold">ProTrax</span>
+          )}
         </div>
+        
+        {/* Organization Switcher */}
+        <OrgSwitcher collapsed={isCollapsed} />
       </SidebarHeader>
       
       <SidebarContent>

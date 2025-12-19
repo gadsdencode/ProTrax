@@ -83,8 +83,10 @@ export interface IUserStorage {
 }
 
 export interface IProjectStorage {
-  getProjects(searchQuery?: string): Promise<Project[]>;
-  getProjectsPaginated(searchQuery?: string, pagination?: PaginationParams): Promise<PaginatedProjectsResult>;
+  /** Get projects with optional search and organization filtering */
+  getProjects(searchQuery?: string, organizationId?: string): Promise<Project[]>;
+  /** Get paginated projects with optional search and organization filtering */
+  getProjectsPaginated(searchQuery?: string, pagination?: PaginationParams, organizationId?: string): Promise<PaginatedProjectsResult>;
   getProject(id: number): Promise<Project | undefined>;
   createProject(project: InsertProject): Promise<Project>;
   createProjectWithTasks(project: InsertProject, tasks: any[]): Promise<ProjectWithTasksResult>;

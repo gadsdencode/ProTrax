@@ -31,10 +31,14 @@ export {
   stakeholderRoleEnum,
   sprintStatusEnum,
   userRoleEnum,
+  organizationRoleEnum,
   
   // Tables
   sessions,
   users,
+  organizations,
+  organizationMembers,
+  organizationInvitations,
   projects,
   sprints,
   tasks,
@@ -57,6 +61,9 @@ export {
   notifications,
   
   // Relations
+  organizationsRelations,
+  organizationMembersRelations,
+  organizationInvitationsRelations,
   projectsRelations,
   tasksRelations,
   taskHistoryRelations,
@@ -65,7 +72,16 @@ export {
   usersRelations,
   projectStakeholdersRelations,
   
-  // Database-derived types
+  // Database-derived types - Multi-tenancy
+  type Organization,
+  type InsertOrganization,
+  type OrganizationMember,
+  type InsertOrganizationMember,
+  type OrganizationInvitation,
+  type InsertOrganizationInvitation,
+  type OrganizationRole,
+  
+  // Database-derived types - Core
   type User,
   type UpsertUser,
   type Project,
@@ -101,6 +117,14 @@ export {
   // Pagination types
   type PaginationParams,
   type PaginatedResult,
+  
+  // Organization schemas
+  insertOrganizationSchema,
+  insertOrganizationMemberSchema,
+  insertOrganizationInvitationSchema,
+  type InsertOrganizationData,
+  type InsertOrganizationMemberData,
+  type InsertOrganizationInvitationData,
   
   // Insert schemas
   insertUserSchema,

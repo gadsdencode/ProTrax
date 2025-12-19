@@ -10,6 +10,7 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { PageTransition } from "@/components/page-transition";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
+import { OrganizationProvider } from "@/hooks/use-organization";
 import { ProtectedRoute } from "@/lib/protected-route";
 import { useUIStore } from "@/stores/useUIStore";
 import AuthPage from "@/pages/auth-page";
@@ -101,8 +102,11 @@ export default function App() {
           <TooltipProvider>
             {/* Blueprint: javascript_auth_all_persistance */}
             <AuthProvider>
-              <AppContent />
-              <Toaster />
+              {/* Multi-tenancy: Organization context */}
+              <OrganizationProvider>
+                <AppContent />
+                <Toaster />
+              </OrganizationProvider>
             </AuthProvider>
           </TooltipProvider>
         </ThemeProvider>

@@ -11,6 +11,9 @@ import { z } from "zod";
 // Import table definitions for schema generation
 import {
   users,
+  organizations,
+  organizationMembers,
+  organizationInvitations,
   projects,
   sprints,
   tasks,
@@ -55,6 +58,50 @@ export interface PaginatedResult<T> {
 }
 
 // ============= INSERT SCHEMAS =============
+
+// ============= ORGANIZATION SCHEMAS =============
+
+// Organization schema with sanitization
+export const insertOrganizationSchema = createInsertSchema(organizations).omit({ 
+  id: true, 
+  createdAt: true, 
+  updatedAt: true 
+}).extend({
+  name: z.string()
+    .min(1, "Organization name is required")
+    .max(255, "Organization name must be less than 255 characters")
+    .transform((val) => sanitizeControlChars(val).trim()),
+  slug: z.string()
+    .min(2, "Slug must be at least 2 characters")
+    .max(100, "Slug must be less than 100 characters")
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Slug must be lowercase alphanumeric with hyphens"),
+  description: z.union([
+    z.string().transform((val) => sanitizeControlChars(val).trim()).transform((val) => val || null),
+    z.null()
+  ]).optional(),
+});
+export type InsertOrganizationData = z.infer<typeof insertOrganizationSchema>;
+
+// Organization member schema
+export const insertOrganizationMemberSchema = createInsertSchema(organizationMembers).omit({ 
+  id: true, 
+  createdAt: true, 
+  updatedAt: true,
+  joinedAt: true,
+});
+export type InsertOrganizationMemberData = z.infer<typeof insertOrganizationMemberSchema>;
+
+// Organization invitation schema
+export const insertOrganizationInvitationSchema = createInsertSchema(organizationInvitations).omit({ 
+  id: true, 
+  createdAt: true,
+  token: true,
+  acceptedAt: true,
+}).extend({
+  email: z.string().email("Valid email is required"),
+  expiresAt: z.union([z.string(), z.date()]).transform(val => typeof val === 'string' ? new Date(val) : val),
+});
+export type InsertOrganizationInvitationData = z.infer<typeof insertOrganizationInvitationSchema>;
 
 // Insert schema for user registration
 export const insertUserSchema = createInsertSchema(users).omit({ 

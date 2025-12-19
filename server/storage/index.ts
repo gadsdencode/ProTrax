@@ -32,6 +32,7 @@ import { pool } from "../db";
 
 // Import all domain storage classes
 import { UserStorage } from "./UserStorage";
+import { OrganizationStorage } from "./OrganizationStorage";
 import { ProjectStorage } from "./ProjectStorage";
 import { SprintStorage } from "./SprintStorage";
 import { TaskStorage } from "./TaskStorage";
@@ -49,6 +50,8 @@ export * from "./types";
 
 // Re-export domain storage classes for direct use if needed
 export { UserStorage } from "./UserStorage";
+export { OrganizationStorage, organizationStorage } from "./OrganizationStorage";
+export type { OrganizationMemberWithUser, UserOrganizationMembership } from "./OrganizationStorage";
 export { ProjectStorage } from "./ProjectStorage";
 export { SprintStorage } from "./SprintStorage";
 export { TaskStorage } from "./TaskStorage";
@@ -70,6 +73,8 @@ const PostgresSessionStore = connectPg(session);
 export interface DatabaseStorageOptions {
   /** Custom UserStorage instance */
   userStorage?: UserStorage;
+  /** Custom OrganizationStorage instance */
+  organizationStorage?: OrganizationStorage;
   /** Custom ProjectStorage instance */
   projectStorage?: ProjectStorage;
   /** Custom SprintStorage instance */
@@ -121,6 +126,7 @@ export class DatabaseStorage {
 
   // Domain storage instances (composed, supports DI)
   private readonly userStorage: UserStorage;
+  private readonly _organizationStorage: OrganizationStorage;
   private readonly projectStorage: ProjectStorage;
   private readonly sprintStorage: SprintStorage;
   private readonly taskStorage: TaskStorage;
@@ -148,6 +154,7 @@ export class DatabaseStorage {
 
     // Initialize domain storage instances (use provided or create defaults)
     this.userStorage = options.userStorage ?? new UserStorage();
+    this._organizationStorage = options.organizationStorage ?? new OrganizationStorage();
     this.projectStorage = options.projectStorage ?? new ProjectStorage();
     this.sprintStorage = options.sprintStorage ?? new SprintStorage();
     this.taskStorage = options.taskStorage ?? new TaskStorage();
@@ -173,9 +180,39 @@ export class DatabaseStorage {
   getUserCountByRole = () => this.userStorage.getUserCountByRole();
   ensureAdminExists = () => this.userStorage.ensureAdminExists();
 
+  // ============= ORGANIZATION OPERATIONS =============
+  // Expose organization storage directly for full access
+  get organizations() { return this._organizationStorage; }
+  
+  // Convenience methods for common operations
+  getOrganization = (id: string) => this._organizationStorage.getOrganization(id);
+  getOrganizationBySlug = (slug: string) => this._organizationStorage.getOrganizationBySlug(slug);
+  createOrganization = (...args: Parameters<OrganizationStorage['createOrganization']>) => this._organizationStorage.createOrganization(...args);
+  updateOrganization = (...args: Parameters<OrganizationStorage['updateOrganization']>) => this._organizationStorage.updateOrganization(...args);
+  deleteOrganization = (id: string) => this._organizationStorage.deleteOrganization(id);
+  getOrganizationMembers = (orgId: string) => this._organizationStorage.getOrganizationMembers(orgId);
+  getUserOrganizations = (userId: string) => this._organizationStorage.getUserOrganizations(userId);
+  addOrganizationMember = (...args: Parameters<OrganizationStorage['addMember']>) => this._organizationStorage.addMember(...args);
+  removeOrganizationMember = (orgId: string, userId: string) => this._organizationStorage.removeMember(orgId, userId);
+
   // ============= PROJECT OPERATIONS =============
-  getProjects = (...args: Parameters<ProjectStorage['getProjects']>) => this.projectStorage.getProjects(...args);
-  getProjectsPaginated = (...args: Parameters<ProjectStorage['getProjectsPaginated']>) => this.projectStorage.getProjectsPaginated(...args);
+  /**
+   * Get projects with optional search and organization filtering
+   * @param searchQuery - Optional search term
+   * @param organizationId - Optional organization ID for multi-tenant filtering
+   */
+  getProjects = (searchQuery?: string, organizationId?: string) => 
+    this.projectStorage.getProjects(searchQuery, organizationId);
+  
+  /**
+   * Get paginated projects with optional search and organization filtering
+   * @param searchQuery - Optional search term
+   * @param pagination - Pagination parameters
+   * @param organizationId - Optional organization ID for multi-tenant filtering
+   */
+  getProjectsPaginated = (searchQuery?: string, pagination?: any, organizationId?: string) => 
+    this.projectStorage.getProjectsPaginated(searchQuery, pagination, organizationId);
+  
   getProject = (id: number) => this.projectStorage.getProject(id);
   createProject = (...args: Parameters<ProjectStorage['createProject']>) => this.projectStorage.createProject(...args);
   createProjectWithTasks = (...args: Parameters<ProjectStorage['createProjectWithTasks']>) => this.projectStorage.createProjectWithTasks(...args);

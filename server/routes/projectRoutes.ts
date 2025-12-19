@@ -7,6 +7,7 @@ import { extractProjectDataFromSOW } from "../gemini";
 import { insertProjectSchema } from "@shared/schema";
 import { documentService, DocumentParseError } from "../services/documentService";
 import { jobQueueService, SOWExtractionInput } from "../services/jobQueueService";
+import { optionalOrganization, requireOrganization } from "../middleware/organizationMiddleware";
 
 const router = Router();
 
@@ -18,27 +19,29 @@ const upload = multer({
   },
 });
 
-// Get all projects (backward compatible)
-router.get('/', isAuthenticated, asyncHandler(async (req, res) => {
+// Get all projects (organization-scoped when available)
+router.get('/', isAuthenticated, optionalOrganization, asyncHandler(async (req: any, res) => {
   const searchQuery = req.query.searchQuery as string | undefined;
-  const projects = await storage.getProjects(searchQuery);
+  const organizationId = req.organizationId; // From optionalOrganization middleware
+  const projects = await storage.getProjects(searchQuery, organizationId);
   res.json(projects);
 }));
 
-// Get paginated projects
-router.get('/paginated', isAuthenticated, asyncHandler(async (req, res) => {
+// Get paginated projects (organization-scoped when available)
+router.get('/paginated', isAuthenticated, optionalOrganization, asyncHandler(async (req: any, res) => {
   const searchQuery = req.query.searchQuery as string | undefined;
   const page = req.query.page ? parseInt(req.query.page as string) : 1;
   const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
   const sortBy = req.query.sortBy as string | undefined;
   const sortOrder = req.query.sortOrder as 'asc' | 'desc' | undefined;
+  const organizationId = req.organizationId; // From optionalOrganization middleware
 
   const paginatedProjects = await storage.getProjectsPaginated(searchQuery, {
     page,
     limit,
     sortBy,
     sortOrder
-  });
+  }, organizationId);
 
   res.json(paginatedProjects);
 }));
@@ -53,10 +56,16 @@ router.get('/:id', isAuthenticated, asyncHandler(async (req, res) => {
   res.json(project);
 }));
 
-// Create project
-router.post('/', isAuthenticated, asyncHandler(async (req: any, res) => {
+// Create project (requires organization context)
+router.post('/', isAuthenticated, requireOrganization, asyncHandler(async (req: any, res) => {
   const userId = req.user.id;
-  const data = insertProjectSchema.parse({ ...req.body, managerId: userId });
+  const organizationId = req.organizationId;
+  
+  const data = insertProjectSchema.parse({ 
+    ...req.body, 
+    managerId: userId,
+    organizationId, // Add organization ID from context
+  });
   const project = await storage.createProject(data);
   res.status(201).json(project);
 }));

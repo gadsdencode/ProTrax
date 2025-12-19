@@ -8,6 +8,7 @@ import { setupAuth } from "./auth";
 // Import all route modules
 import authRoutes from "./routes/authRoutes";
 import userRoutes from "./routes/userRoutes";
+import organizationRoutes from "./routes/organizationRoutes";
 import projectRoutes from "./routes/projectRoutes";
 import sprintRoutes from "./routes/sprintRoutes";
 import taskRoutes from "./routes/taskRoutes";
@@ -49,6 +50,7 @@ export async function setupRoutes(app: express.Application) {
   // Mount all route modules
   app.use('/api/auth', authRoutes);
   app.use('/api/users', userRoutes);
+  app.use('/api/organizations', organizationRoutes);
   app.use('/api/projects', projectRoutes);
   app.use('/api/sprints', sprintRoutes);
   app.use('/api/tasks', taskRoutes);

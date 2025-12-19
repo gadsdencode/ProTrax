@@ -4,6 +4,8 @@
  * 
  * Supports Dependency Injection: Pass a custom database instance
  * via constructor for testing or multi-tenancy scenarios.
+ * 
+ * MULTI-TENANCY: All queries filter by organizationId when provided.
  */
 
 import {
@@ -16,7 +18,7 @@ import {
   type PaginationParams,
 } from "@shared/schema";
 import { db as defaultDb } from "../db";
-import { eq, or, ilike, desc, asc, sql } from "drizzle-orm";
+import { eq, or, ilike, desc, asc, sql, and } from "drizzle-orm";
 import type { IProjectStorage, PaginatedProjectsResult, ProjectWithTasksResult, DatabaseInstance } from "./types";
 
 export class ProjectStorage implements IProjectStorage {
@@ -30,39 +32,78 @@ export class ProjectStorage implements IProjectStorage {
   constructor(dbInstance?: DatabaseInstance) {
     this.db = dbInstance ?? defaultDb;
   }
-  async getProjects(searchQuery?: string): Promise<Project[]> {
+
+  /**
+   * Get all projects, optionally filtered by search query.
+   * @param searchQuery - Optional search term to filter by name or description
+   * @param organizationId - Optional organization ID for multi-tenant filtering
+   */
+  async getProjects(searchQuery?: string, organizationId?: string): Promise<Project[]> {
+    const conditions = [];
+    
+    // Add organization filter if provided
+    if (organizationId) {
+      conditions.push(eq(projects.organizationId, organizationId));
+    }
+    
+    // Add search filter if provided
     if (searchQuery) {
       const searchPattern = `%${searchQuery}%`;
+      conditions.push(
+        or(
+          ilike(projects.name, searchPattern),
+          ilike(projects.description, searchPattern)
+        )!
+      );
+    }
+    
+    if (conditions.length > 0) {
       return await this.db
         .select()
         .from(projects)
-        .where(
-          or(
-            ilike(projects.name, searchPattern),
-            ilike(projects.description, searchPattern)
-          )
-        )
+        .where(conditions.length === 1 ? conditions[0] : and(...conditions))
         .orderBy(desc(projects.createdAt));
     }
+    
     return await this.db.select().from(projects).orderBy(desc(projects.createdAt));
   }
 
-  async getProjectsPaginated(searchQuery?: string, pagination?: PaginationParams): Promise<PaginatedProjectsResult> {
+  /**
+   * Get paginated projects with optional search and organization filtering.
+   * @param searchQuery - Optional search term
+   * @param pagination - Pagination parameters
+   * @param organizationId - Optional organization ID for multi-tenant filtering
+   */
+  async getProjectsPaginated(searchQuery?: string, pagination?: PaginationParams, organizationId?: string): Promise<PaginatedProjectsResult> {
     const page = pagination?.page || 1;
     const limit = pagination?.limit || 10;
     const sortBy = pagination?.sortBy || 'createdAt';
     const sortOrder = pagination?.sortOrder || 'desc';
     const offset = (page - 1) * limit;
 
+    const conditions = [];
+    
+    // Add organization filter if provided
+    if (organizationId) {
+      conditions.push(eq(projects.organizationId, organizationId));
+    }
+    
+    // Add search filter if provided
+    if (searchQuery) {
+      const searchPattern = `%${searchQuery}%`;
+      conditions.push(
+        or(
+          ilike(projects.name, searchPattern),
+          ilike(projects.description, searchPattern)
+        )!
+      );
+    }
+
     let query = this.db.select().from(projects);
     let countQuery = this.db.select({ count: this.db.$count(projects) }).from(projects);
 
-    if (searchQuery) {
-      const searchPattern = `%${searchQuery}%`;
-      const whereClause = or(
-        ilike(projects.name, searchPattern),
-        ilike(projects.description, searchPattern)
-      );
+    if (conditions.length > 0) {
+      const whereClause = conditions.length === 1 ? conditions[0] : and(...conditions);
       query = query.where(whereClause);
       countQuery = countQuery.where(whereClause);
     }

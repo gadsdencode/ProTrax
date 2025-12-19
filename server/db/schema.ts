@@ -38,6 +38,73 @@ export const stakeholderRoleEnum = pgEnum('stakeholder_role', ['sponsor', 'revie
 export const sprintStatusEnum = pgEnum('sprint_status', ['planned', 'active', 'completed']);
 export const userRoleEnum = pgEnum('user_role', ['admin', 'project_manager', 'member', 'viewer']);
 
+// Organization-level role (within an organization)
+export const organizationRoleEnum = pgEnum('organization_role', ['owner', 'admin', 'member', 'viewer']);
+
+// ============= MULTI-TENANCY TABLES =============
+
+/**
+ * Organizations table - the root of multi-tenant data isolation.
+ * All tenant-scoped data is associated with an organization.
+ */
+export const organizations = pgTable("organizations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name", { length: 255 }).notNull(),
+  slug: varchar("slug", { length: 100 }).unique().notNull(), // URL-friendly identifier
+  description: text("description"),
+  logoUrl: varchar("logo_url", { length: 500 }),
+  settings: jsonb("settings").default({}), // Organization-level settings
+  billingEmail: varchar("billing_email", { length: 255 }),
+  plan: varchar("plan", { length: 50 }).default('free'), // free, pro, enterprise
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_organizations_slug").on(table.slug),
+  index("idx_organizations_is_active").on(table.isActive),
+]);
+
+/**
+ * Organization members junction table.
+ * Links users to organizations with role-based access.
+ */
+export const organizationMembers = pgTable("organization_members", {
+  id: serial("id").primaryKey(),
+  organizationId: varchar("organization_id").references(() => organizations.id, { onDelete: 'cascade' }).notNull(),
+  userId: varchar("user_id").references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  role: organizationRoleEnum("role").default('member').notNull(),
+  invitedBy: varchar("invited_by").references(() => users.id),
+  invitedAt: timestamp("invited_at"),
+  joinedAt: timestamp("joined_at").defaultNow(),
+  isDefault: boolean("is_default").default(false), // User's default organization
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_org_members_org_id").on(table.organizationId),
+  index("idx_org_members_user_id").on(table.userId),
+  // Composite unique constraint: one membership per user per org
+  index("idx_org_members_unique").on(table.organizationId, table.userId),
+]);
+
+/**
+ * Organization invitations for pending members.
+ */
+export const organizationInvitations = pgTable("organization_invitations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  organizationId: varchar("organization_id").references(() => organizations.id, { onDelete: 'cascade' }).notNull(),
+  email: varchar("email", { length: 255 }).notNull(),
+  role: organizationRoleEnum("role").default('member').notNull(),
+  invitedBy: varchar("invited_by").references(() => users.id).notNull(),
+  token: varchar("token", { length: 100 }).unique().notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  acceptedAt: timestamp("accepted_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_org_invitations_org_id").on(table.organizationId),
+  index("idx_org_invitations_email").on(table.email),
+  index("idx_org_invitations_token").on(table.token),
+]);
+
 // ============= AUTH TABLES (Required for Authentication) =============
 
 export const sessions = pgTable(
@@ -68,6 +135,7 @@ export const users = pgTable("users", {
 
 export const projects = pgTable("projects", {
   id: serial("id").primaryKey(),
+  organizationId: varchar("organization_id").references(() => organizations.id, { onDelete: 'cascade' }).notNull(),
   name: varchar("name", { length: 255 }).notNull(),
   description: text("description"),
   charter: text("charter"), // Rich text project charter/scope
@@ -85,6 +153,8 @@ export const projects = pgTable("projects", {
   index("idx_projects_status").on(table.status),
   index("idx_projects_manager_id").on(table.managerId),
   index("idx_projects_created_at").on(table.createdAt),
+  // Multi-tenancy index for organization-scoped queries
+  index("idx_projects_organization_id").on(table.organizationId),
 ]);
 
 export const sprints = pgTable("sprints", {
@@ -163,12 +233,15 @@ export const taskDependencies = pgTable("task_dependencies", {
 
 export const customFields = pgTable("custom_fields", {
   id: serial("id").primaryKey(),
+  organizationId: varchar("organization_id").references(() => organizations.id, { onDelete: 'cascade' }).notNull(),
   projectId: integer("project_id").references(() => projects.id, { onDelete: 'cascade' }).notNull(),
   name: varchar("name", { length: 255 }).notNull(),
   type: customFieldTypeEnum("type").notNull(),
   options: text("options").array(), // For dropdown type
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => [
+  index("idx_custom_fields_organization_id").on(table.organizationId),
+]);
 
 export const taskCustomFieldValues = pgTable("task_custom_field_values", {
   id: serial("id").primaryKey(),
@@ -275,6 +348,7 @@ export const automationRules = pgTable("automation_rules", {
 
 export const dashboardWidgets = pgTable("dashboard_widgets", {
   id: serial("id").primaryKey(),
+  organizationId: varchar("organization_id").references(() => organizations.id, { onDelete: 'cascade' }).notNull(),
   userId: varchar("user_id").references(() => users.id, { onDelete: 'cascade' }).notNull(),
   type: widgetTypeEnum("type").notNull(),
   config: jsonb("config"), // Widget-specific configuration
@@ -283,18 +357,23 @@ export const dashboardWidgets = pgTable("dashboard_widgets", {
   height: integer("height").default(4), // Grid height
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => [
+  index("idx_dashboard_widgets_organization_id").on(table.organizationId),
+]);
 
 export const projectTemplates = pgTable("project_templates", {
   id: serial("id").primaryKey(),
+  organizationId: varchar("organization_id").references(() => organizations.id, { onDelete: 'cascade' }),
   name: varchar("name", { length: 255 }).notNull(),
   description: text("description"),
   createdBy: varchar("created_by").references(() => users.id),
   templateData: jsonb("template_data").notNull(), // Complete project structure
-  isPublic: boolean("is_public").default(false),
+  isPublic: boolean("is_public").default(false), // Public templates are visible across orgs
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => [
+  index("idx_project_templates_organization_id").on(table.organizationId),
+]);
 
 export const kanbanColumns = pgTable("kanban_columns", {
   id: serial("id").primaryKey(),
@@ -320,6 +399,7 @@ export const projectStakeholders = pgTable("project_stakeholders", {
 
 export const notifications = pgTable("notifications", {
   id: serial("id").primaryKey(),
+  organizationId: varchar("organization_id").references(() => organizations.id, { onDelete: 'cascade' }).notNull(),
   userId: varchar("user_id").references(() => users.id, { onDelete: 'cascade' }).notNull(),
   type: varchar("type", { length: 50 }).notNull(), // 'mention', 'assignment', 'deadline', etc.
   title: varchar("title", { length: 255 }).notNull(),
@@ -327,7 +407,9 @@ export const notifications = pgTable("notifications", {
   link: varchar("link", { length: 500 }),
   isRead: boolean("is_read").default(false),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => [
+  index("idx_notifications_organization_id").on(table.organizationId),
+]);
 
 // ============= ASYNC JOB PROCESSING =============
 
@@ -336,6 +418,7 @@ export const asyncJobTypeEnum = pgEnum('async_job_type', ['sow_extraction', 'rep
 
 export const asyncJobs = pgTable("async_jobs", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  organizationId: varchar("organization_id").references(() => organizations.id, { onDelete: 'cascade' }).notNull(),
   userId: varchar("user_id").references(() => users.id, { onDelete: 'cascade' }).notNull(),
   type: asyncJobTypeEnum("type").notNull(),
   status: asyncJobStatusEnum("status").default('pending').notNull(),
@@ -349,6 +432,7 @@ export const asyncJobs = pgTable("async_jobs", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [
+  index("idx_async_jobs_organization_id").on(table.organizationId),
   index("idx_async_jobs_user_id").on(table.userId),
   index("idx_async_jobs_status").on(table.status),
   index("idx_async_jobs_type").on(table.type),
@@ -357,7 +441,31 @@ export const asyncJobs = pgTable("async_jobs", {
 
 // ============= RELATIONS =============
 
+// Organization relations
+export const organizationsRelations = relations(organizations, ({ many }) => ({
+  members: many(organizationMembers),
+  invitations: many(organizationInvitations),
+  projects: many(projects),
+  customFields: many(customFields),
+  projectTemplates: many(projectTemplates),
+  dashboardWidgets: many(dashboardWidgets),
+  notifications: many(notifications),
+  asyncJobs: many(asyncJobs),
+}));
+
+export const organizationMembersRelations = relations(organizationMembers, ({ one }) => ({
+  organization: one(organizations, { fields: [organizationMembers.organizationId], references: [organizations.id] }),
+  user: one(users, { fields: [organizationMembers.userId], references: [users.id] }),
+  invitedByUser: one(users, { fields: [organizationMembers.invitedBy], references: [users.id] }),
+}));
+
+export const organizationInvitationsRelations = relations(organizationInvitations, ({ one }) => ({
+  organization: one(organizations, { fields: [organizationInvitations.organizationId], references: [organizations.id] }),
+  invitedByUser: one(users, { fields: [organizationInvitations.invitedBy], references: [users.id] }),
+}));
+
 export const projectsRelations = relations(projects, ({ one, many }) => ({
+  organization: one(organizations, { fields: [projects.organizationId], references: [organizations.id] }),
   manager: one(users, { fields: [projects.managerId], references: [users.id] }),
   tasks: many(tasks),
   sprints: many(sprints),
@@ -404,6 +512,7 @@ export const taskDependenciesRelations = relations(taskDependencies, ({ one }) =
 }));
 
 export const usersRelations = relations(users, ({ many }) => ({
+  organizationMemberships: many(organizationMembers),
   managedProjects: many(projects),
   assignedTasks: many(tasks),
   comments: many(comments),
@@ -427,6 +536,16 @@ export const projectStakeholdersRelations = relations(projectStakeholders, ({ on
 // ============= DATABASE-DERIVED TYPES =============
 // Types inferred directly from table definitions
 
+// Multi-tenancy types
+export type Organization = typeof organizations.$inferSelect;
+export type InsertOrganization = typeof organizations.$inferInsert;
+export type OrganizationMember = typeof organizationMembers.$inferSelect;
+export type InsertOrganizationMember = typeof organizationMembers.$inferInsert;
+export type OrganizationInvitation = typeof organizationInvitations.$inferSelect;
+export type InsertOrganizationInvitation = typeof organizationInvitations.$inferInsert;
+export type OrganizationRole = typeof organizationRoleEnum.enumValues[number];
+
+// Core types
 export type User = typeof users.$inferSelect;
 export type UpsertUser = typeof users.$inferInsert;
 export type Project = typeof projects.$inferSelect;

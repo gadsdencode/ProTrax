@@ -1,12 +1,25 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 import { parseErrorResponse } from "./errorUtils";
 import { toast } from "@/hooks/use-toast";
+import { useOrganizationStore } from "@/stores/useOrganizationStore";
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
     throw new Error(`${res.status}: ${text}`);
   }
+}
+
+/**
+ * Get the current organization ID for API headers.
+ * Used to inject X-Org-ID header into all requests.
+ */
+function getOrganizationIdHeader(): Record<string, string> {
+  const { currentOrganization } = useOrganizationStore.getState();
+  if (currentOrganization?.id) {
+    return { "X-Org-ID": currentOrganization.id };
+  }
+  return {};
 }
 
 /**
@@ -39,9 +52,14 @@ export async function apiRequest(
   url: string,
   data?: unknown | undefined,
 ): Promise<Response> {
+  const orgHeaders = getOrganizationIdHeader();
+  
   const res = await fetch(url, {
     method,
-    headers: data ? { "Content-Type": "application/json" } : {},
+    headers: {
+      ...(data ? { "Content-Type": "application/json" } : {}),
+      ...orgHeaders,
+    },
     body: data ? JSON.stringify(data) : undefined,
     credentials: "include",
   });
@@ -76,8 +94,12 @@ export const getQueryFn: <T>(options: {
       }
     }
     
+    // Include organization ID header for multi-tenancy
+    const orgHeaders = getOrganizationIdHeader();
+    
     const res = await fetch(url, {
       credentials: "include",
+      headers: orgHeaders,
     });
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {
