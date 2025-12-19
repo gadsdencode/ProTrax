@@ -16,7 +16,8 @@
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
-    "db:drop": "drizzle-kit drop"
+    "db:drop": "drizzle-kit drop",
+    "db:fix-multitenancy": "tsx scripts/fix-database-multitenancy.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
