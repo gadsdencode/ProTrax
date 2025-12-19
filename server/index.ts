@@ -7,23 +7,70 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
+// Sensitive keys to redact from logs (case-insensitive matching)
+const SENSITIVE_KEYS = new Set([
+  'password', 'token', 'accesstoken', 'access_token', 'refreshtoken', 'refresh_token',
+  'secret', 'apikey', 'api_key', 'authorization', 'auth', 'credential', 'credentials',
+  'sessionid', 'session_id', 'sid', 'cookie', 'jwt', 'bearer', 'privatekey', 'private_key',
+  'email', 'ssn', 'creditcard', 'credit_card', 'cardnumber', 'card_number', 'cvv', 'pin'
+]);
+
+/**
+ * Deep redacts sensitive data from objects for safe logging.
+ * Recursively traverses objects/arrays and replaces sensitive values with '[REDACTED]'.
+ */
+function redactSensitiveData(obj: unknown, depth = 0): unknown {
+  // Prevent infinite recursion and excessive nesting
+  if (depth > 10) return '[MAX_DEPTH]';
+  
+  if (obj === null || obj === undefined) return obj;
+  
+  if (Array.isArray(obj)) {
+    return obj.map(item => redactSensitiveData(item, depth + 1));
+  }
+  
+  if (typeof obj === 'object') {
+    const redacted: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(obj)) {
+      const lowerKey = key.toLowerCase();
+      if (SENSITIVE_KEYS.has(lowerKey) || 
+          Array.from(SENSITIVE_KEYS).some(sk => lowerKey.includes(sk))) {
+        redacted[key] = '[REDACTED]';
+      } else {
+        redacted[key] = redactSensitiveData(value, depth + 1);
+      }
+    }
+    return redacted;
+  }
+  
+  return obj;
+}
+
+const isProduction = process.env.NODE_ENV === 'production';
+
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
-  let capturedJsonResponse: Record<string, any> | undefined = undefined;
+  let capturedJsonResponse: Record<string, unknown> | undefined = undefined;
 
-  const originalResJson = res.json;
-  res.json = function (bodyJson, ...args) {
-    capturedJsonResponse = bodyJson;
-    return originalResJson.apply(res, [bodyJson, ...args]);
-  };
+  // Only capture response bodies in development for debugging
+  if (!isProduction) {
+    const originalResJson = res.json;
+    res.json = function (bodyJson, ...args) {
+      capturedJsonResponse = bodyJson;
+      return originalResJson.apply(res, [bodyJson, ...args]);
+    };
+  }
 
   res.on("finish", () => {
     const duration = Date.now() - start;
     if (path.startsWith("/api")) {
       let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
+      
+      // In development, append redacted response body for debugging
+      if (!isProduction && capturedJsonResponse) {
+        const redactedResponse = redactSensitiveData(capturedJsonResponse);
+        logLine += ` :: ${JSON.stringify(redactedResponse)}`;
       }
 
       if (logLine.length > 80) {

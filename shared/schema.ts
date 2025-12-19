@@ -16,6 +16,51 @@ import {
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
+// ============= SANITIZATION UTILITIES =============
+// These functions ensure data is clean before it hits the database
+
+/**
+ * Removes control characters (ASCII 0-31 and 127) from a string.
+ * These characters can cause display issues and potential security problems.
+ */
+const sanitizeControlChars = (str: string): string => {
+  return str.replace(/[\x00-\x1F\x7F]/g, '');
+};
+
+/**
+ * Truncates a string to a maximum length, adding ellipsis if truncated.
+ */
+const truncateWithEllipsis = (str: string, maxLength: number): string => {
+  if (str.length <= maxLength) return str;
+  return str.substring(0, maxLength - 3) + '...';
+};
+
+/**
+ * Creates a Zod transform that sanitizes strings:
+ * - Removes control characters
+ * - Trims whitespace
+ * - Optionally truncates to max length
+ */
+const createSanitizedString = (maxLength?: number) => {
+  return z.string()
+    .transform((val) => sanitizeControlChars(val).trim())
+    .transform((val) => maxLength ? truncateWithEllipsis(val, maxLength) : val)
+    .transform((val) => val || undefined); // Convert empty string to undefined
+};
+
+/**
+ * Creates a sanitized optional string schema.
+ */
+const createOptionalSanitizedString = (maxLength?: number) => {
+  return z.union([
+    z.string()
+      .transform((val) => sanitizeControlChars(val).trim())
+      .transform((val) => maxLength ? truncateWithEllipsis(val, maxLength) : val)
+      .transform((val) => val || null), // Convert empty string to null
+    z.null()
+  ]).optional();
+};
+
 // ============= ENUMS =============
 
 export const taskStatusEnum = pgEnum('task_status', ['todo', 'in_progress', 'review', 'done', 'blocked']);
@@ -83,7 +128,13 @@ export const projects = pgTable("projects", {
   color: varchar("color", { length: 7 }).default('#3B82F6'), // hex color for visual identification
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => [
+  // Search optimization indexes for ilike queries
+  index("idx_projects_name").on(table.name),
+  index("idx_projects_status").on(table.status),
+  index("idx_projects_manager_id").on(table.managerId),
+  index("idx_projects_created_at").on(table.createdAt),
+]);
 
 export const sprints = pgTable("sprints", {
   id: serial("id").primaryKey(),
@@ -121,7 +172,18 @@ export const tasks = pgTable("tasks", {
   sortOrder: integer("sort_order").default(0),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => [
+  // Search optimization indexes for ilike queries
+  index("idx_tasks_title").on(table.title),
+  index("idx_tasks_project_id").on(table.projectId),
+  index("idx_tasks_assignee_id").on(table.assigneeId),
+  index("idx_tasks_status").on(table.status),
+  index("idx_tasks_due_date").on(table.dueDate),
+  index("idx_tasks_sprint_id").on(table.sprintId),
+  index("idx_tasks_parent_id").on(table.parentId),
+  // Composite index for common query pattern: project + sort order
+  index("idx_tasks_project_sort").on(table.projectId, table.sortOrder),
+]);
 
 // Track all task changes for accurate burndown/CFD metrics
 export const taskHistory = pgTable("task_history", {
@@ -388,27 +450,104 @@ export const projectStakeholdersRelations = relations(projectStakeholders, ({ on
 // ============= INSERT SCHEMAS =============
 
 export const insertProjectSchema = createInsertSchema(projects).omit({ id: true, createdAt: true, updatedAt: true }).extend({
+  // Name: Required, sanitized, max 255 chars (matches DB varchar(255))
+  name: z.string()
+    .min(1, "Project name is required")
+    .transform((val) => sanitizeControlChars(val).trim())
+    .transform((val) => truncateWithEllipsis(val, 255))
+    .refine((val) => val.length > 0, "Project name cannot be empty after sanitization"),
+  // Description: Optional, sanitized
+  description: z.union([
+    z.string()
+      .transform((val) => sanitizeControlChars(val).trim())
+      .transform((val) => val || null),
+    z.null()
+  ]).optional(),
+  // Charter: Optional, sanitized (rich text)
+  charter: z.union([
+    z.string()
+      .transform((val) => sanitizeControlChars(val).trim())
+      .transform((val) => val || null),
+    z.null()
+  ]).optional(),
+  // Date fields with string-to-Date transformation
   startDate: z.union([z.string(), z.date()]).transform(val => typeof val === 'string' ? new Date(val) : val).optional(),
   endDate: z.union([z.string(), z.date()]).transform(val => typeof val === 'string' ? new Date(val) : val).optional(),
 });
 
 export const insertSprintSchema = createInsertSchema(sprints).omit({ id: true, createdAt: true, updatedAt: true }).extend({
+  // Name: Required, sanitized, max 255 chars
+  name: z.string()
+    .min(1, "Sprint name is required")
+    .transform((val) => sanitizeControlChars(val).trim())
+    .transform((val) => truncateWithEllipsis(val, 255))
+    .refine((val) => val.length > 0, "Sprint name cannot be empty"),
+  // Goal: Optional, sanitized
+  goal: z.union([
+    z.string()
+      .transform((val) => sanitizeControlChars(val).trim())
+      .transform((val) => val || null),
+    z.null()
+  ]).optional(),
+  // Date fields
   startDate: z.union([z.string(), z.date()]).transform(val => typeof val === 'string' ? new Date(val) : val),
   endDate: z.union([z.string(), z.date()]).transform(val => typeof val === 'string' ? new Date(val) : val),
 });
 
 export const insertTaskSchema = createInsertSchema(tasks).omit({ id: true, createdAt: true, updatedAt: true }).extend({
+  // Title: Required, sanitized, max 500 chars (matches DB varchar(500))
+  title: z.string()
+    .min(1, "Task title is required")
+    .transform((val) => sanitizeControlChars(val).trim())
+    .transform((val) => truncateWithEllipsis(val, 500))
+    .refine((val) => val.length > 0, "Task title cannot be empty after sanitization"),
+  // Description: Optional, sanitized (no length limit - stored as text)
+  description: z.union([
+    z.string()
+      .transform((val) => sanitizeControlChars(val).trim())
+      .transform((val) => val || null),
+    z.null()
+  ]).optional(),
+  // Date fields with string-to-Date transformation
   startDate: z.union([z.string(), z.date()]).transform(val => typeof val === 'string' ? new Date(val) : val).optional(),
   dueDate: z.union([z.string(), z.date()]).transform(val => typeof val === 'string' ? new Date(val) : val).optional(),
   recurrenceEndDate: z.union([z.string(), z.date()]).transform(val => typeof val === 'string' ? new Date(val) : val).optional(),
+  // Numeric field transformation
   estimatedHours: z.union([z.string(), z.number()]).transform(val => typeof val === 'number' ? val.toString() : val).optional(),
 });
 export const insertTaskHistorySchema = createInsertSchema(taskHistory).omit({ id: true, changedAt: true });
 export const insertTaskDependencySchema = createInsertSchema(taskDependencies).omit({ id: true, createdAt: true });
 export const insertCustomFieldSchema = createInsertSchema(customFields).omit({ id: true, createdAt: true });
-export const insertCommentSchema = createInsertSchema(comments).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertCommentSchema = createInsertSchema(comments).omit({ id: true, createdAt: true, updatedAt: true }).extend({
+  // Content: Required, sanitized (allows rich text but removes control chars)
+  content: z.string()
+    .min(1, "Comment content is required")
+    .transform((val) => sanitizeControlChars(val).trim())
+    .refine((val) => val.length > 0, "Comment cannot be empty"),
+});
 export const insertFileAttachmentSchema = createInsertSchema(fileAttachments).omit({ id: true, createdAt: true });
-export const insertRiskSchema = createInsertSchema(risks).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertRiskSchema = createInsertSchema(risks).omit({ id: true, createdAt: true, updatedAt: true }).extend({
+  // Title: Required, sanitized, max 500 chars
+  title: z.string()
+    .min(1, "Risk title is required")
+    .transform((val) => sanitizeControlChars(val).trim())
+    .transform((val) => truncateWithEllipsis(val, 500))
+    .refine((val) => val.length > 0, "Risk title cannot be empty"),
+  // Description: Optional, sanitized
+  description: z.union([
+    z.string()
+      .transform((val) => sanitizeControlChars(val).trim())
+      .transform((val) => val || null),
+    z.null()
+  ]).optional(),
+  // Mitigation plan: Optional, sanitized
+  mitigationPlan: z.union([
+    z.string()
+      .transform((val) => sanitizeControlChars(val).trim())
+      .transform((val) => val || null),
+    z.null()
+  ]).optional(),
+});
 export const insertBudgetItemSchema = createInsertSchema(budgetItems).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertTimeEntrySchema = createInsertSchema(timeEntries).omit({ id: true, createdAt: true }).extend({
   date: z.union([z.string(), z.date()]).transform(val => typeof val === 'string' ? new Date(val) : val),
