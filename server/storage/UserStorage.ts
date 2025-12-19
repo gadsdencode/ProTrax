@@ -1,34 +1,47 @@
 /**
  * User-related database operations.
  * Handles user CRUD and authentication-related queries.
+ * 
+ * Supports Dependency Injection: Pass a custom database instance
+ * via constructor for testing or multi-tenancy scenarios.
  */
 
 import { users, type User, type UpsertUser, type InsertUser } from "@shared/schema";
-import { db } from "../db";
+import { db as defaultDb } from "../db";
 import { eq, sql } from "drizzle-orm";
-import type { IUserStorage } from "./types";
+import type { IUserStorage, DatabaseInstance } from "./types";
 
 // Valid user roles
 export type UserRole = 'admin' | 'project_manager' | 'member' | 'viewer';
 
 export class UserStorage implements IUserStorage {
+  private readonly db: DatabaseInstance;
+
+  /**
+   * Creates a UserStorage instance.
+   * @param dbInstance - Optional database instance for dependency injection.
+   *                     Defaults to the shared db instance if not provided.
+   */
+  constructor(dbInstance?: DatabaseInstance) {
+    this.db = dbInstance ?? defaultDb;
+  }
   async getUser(id: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.id, id));
+    const [user] = await this.db.select().from(users).where(eq(users.id, id));
     return user;
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.username, username));
+    const [user] = await this.db.select().from(users).where(eq(users.username, username));
     return user;
   }
 
   async createUser(userData: InsertUser): Promise<User> {
-    const [user] = await db.insert(users).values(userData).returning();
+    const [user] = await this.db.insert(users).values(userData).returning();
     return user;
   }
 
   async upsertUser(userData: UpsertUser): Promise<User> {
-    const [user] = await db
+    const [user] = await this.db
       .insert(users)
       .values(userData)
       .onConflictDoUpdate({
@@ -43,14 +56,14 @@ export class UserStorage implements IUserStorage {
   }
 
   async getAllUsers(): Promise<User[]> {
-    return await db.select().from(users);
+    return await this.db.select().from(users);
   }
 
   /**
    * Update a user's role. Admin-only operation.
    */
   async updateUserRole(userId: string, role: UserRole): Promise<User> {
-    const [user] = await db
+    const [user] = await this.db
       .update(users)
       .set({ role, updatedAt: new Date() })
       .where(eq(users.id, userId))
@@ -66,7 +79,7 @@ export class UserStorage implements IUserStorage {
    * Update user profile information.
    */
   async updateUser(userId: string, data: Partial<Pick<User, 'firstName' | 'lastName' | 'email' | 'profileImageUrl' | 'weeklyCapacity'>>): Promise<User> {
-    const [user] = await db
+    const [user] = await this.db
       .update(users)
       .set({ ...data, updatedAt: new Date() })
       .where(eq(users.id, userId))
@@ -82,14 +95,14 @@ export class UserStorage implements IUserStorage {
    * Delete a user (admin-only, dangerous operation).
    */
   async deleteUser(userId: string): Promise<void> {
-    await db.delete(users).where(eq(users.id, userId));
+    await this.db.delete(users).where(eq(users.id, userId));
   }
 
   /**
    * Get count of users by role.
    */
   async getUserCountByRole(): Promise<Record<UserRole, number>> {
-    const results = await db
+    const results = await this.db
       .select({
         role: users.role,
         count: sql<number>`count(*)::int`
@@ -118,7 +131,7 @@ export class UserStorage implements IUserStorage {
    */
   async ensureAdminExists(): Promise<User | null> {
     // Check if any admin exists
-    const [existingAdmin] = await db
+    const [existingAdmin] = await this.db
       .select()
       .from(users)
       .where(eq(users.role, 'admin'));
@@ -128,7 +141,7 @@ export class UserStorage implements IUserStorage {
     }
 
     // Get first user by creation date
-    const [firstUser] = await db
+    const [firstUser] = await this.db
       .select()
       .from(users)
       .orderBy(users.createdAt)

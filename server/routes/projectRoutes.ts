@@ -1,13 +1,11 @@
 import { Router } from "express";
 import multer from "multer";
-import * as mammoth from "mammoth";
-import * as pdfParseModule from "pdf-parse";
-const pdfParse = (pdfParseModule as any).default || pdfParseModule;
 import { storage } from "../storage";
 import { isAuthenticated, hasRole, isProjectOwnerOrAdmin } from "../auth";
 import { asyncHandler, createError } from "../errorHandler";
 import { extractProjectDataFromSOW } from "../gemini";
 import { insertProjectSchema } from "@shared/schema";
+import { documentService, DocumentParseError } from "../services/documentService";
 
 const router = Router();
 
@@ -100,55 +98,26 @@ router.post('/create-from-sow', isAuthenticated, upload.single('file'), asyncHan
     throw createError.badRequest("No file uploaded");
   }
 
-  // Extract text from the document
+  // Extract text from the document using DocumentService
   console.log(`[SOW Upload] Processing file: ${req.file.originalname}, type: ${req.file.mimetype}, size: ${req.file.size} bytes`);
   
-  let text = "";
-  const mimeType = req.file.mimetype;
+  let extractionResult;
+  try {
+    extractionResult = await documentService.extractText(req.file.buffer, req.file.mimetype);
+    documentService.validateNotEmpty(extractionResult);
+    console.log(`[SOW Upload] Extracted ${extractionResult.characterCount} characters, ${extractionResult.wordCount} words`);
+  } catch (error) {
+    if (error instanceof DocumentParseError) {
+      console.error(`[SOW Upload] Document parsing failed: ${error.message}`, error.originalError);
+      throw createError.badRequest(error.message);
+    }
+    throw error;
+  }
   
-  if (mimeType === "application/pdf") {
-    // PDF file parsing
-    console.log("[SOW Upload] Extracting text from PDF...");
-    try {
-      const data = await pdfParse(req.file.buffer);
-      text = data.text;
-      console.log(`[SOW Upload] Extracted ${text.length} characters from PDF`);
-    } catch (error) {
-      console.error("Error extracting text from PDF:", error);
-      throw createError.badRequest("Failed to extract text from PDF document");
-    }
-  } else if (
-    mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
-    mimeType === "application/msword"
-  ) {
-    // Word document (.docx or .doc)
-    console.log("[SOW Upload] Extracting text from Word document...");
-    try {
-      const result = await mammoth.extractRawText({
-        buffer: req.file.buffer,
-      });
-      text = result.value;
-      console.log(`[SOW Upload] Extracted ${text.length} characters from Word document`);
-    } catch (error) {
-      console.error("Error extracting text from Word document:", error);
-      throw createError.badRequest("Failed to extract text from Word document");
-    }
-  } else if (mimeType === "text/plain") {
-    // Plain text file
-    console.log("[SOW Upload] Processing plain text file...");
-    text = req.file.buffer.toString('utf-8');
-    console.log(`[SOW Upload] Extracted ${text.length} characters from text file`);
-  } else {
-    throw createError.badRequest(`Unsupported file type: ${mimeType}. Please upload a PDF, Word document (.docx) or text file.`);
-  }
-
-  if (!text || text.trim().length === 0) {
-    throw createError.badRequest("The uploaded document appears to be empty");
-  }
+  const { text } = extractionResult;
   
   // Log first 500 chars of extracted text for debugging
   console.log(`[SOW Upload] First 500 chars of extracted text: ${text.substring(0, 500)}`);
-  console.log(`[SOW Upload] Document contains ${text.split(/\s+/).length} words`);
 
   // Extract project data from the SOW using Gemini
   let projectData;

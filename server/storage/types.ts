@@ -48,6 +48,12 @@ import type {
   PaginatedResult,
 } from "@shared/schema";
 import type session from "express-session";
+import type { db as DrizzleDb } from "../db";
+
+/**
+ * Database instance type - used for dependency injection
+ */
+export type DatabaseInstance = typeof DrizzleDb;
 
 // Extended pagination result with project statistics
 export interface PaginatedProjectsResult extends PaginatedResult<Project> {

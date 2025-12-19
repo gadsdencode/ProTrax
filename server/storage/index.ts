@@ -19,6 +19,11 @@
  * - TemplateStorage: Project templates
  * - KanbanStorage: Kanban board configuration
  * - StakeholderStorage: Project stakeholder management
+ * 
+ * Dependency Injection:
+ * All storage classes support optional DI through their constructors.
+ * Pass custom instances via DatabaseStorageOptions for testing or
+ * multi-tenancy scenarios.
  */
 
 import session from "express-session";
@@ -59,18 +64,62 @@ export { StakeholderStorage } from "./StakeholderStorage";
 const PostgresSessionStore = connectPg(session);
 
 /**
+ * Options for DatabaseStorage dependency injection.
+ * Allows passing custom storage instances for testing or customization.
+ */
+export interface DatabaseStorageOptions {
+  /** Custom UserStorage instance */
+  userStorage?: UserStorage;
+  /** Custom ProjectStorage instance */
+  projectStorage?: ProjectStorage;
+  /** Custom SprintStorage instance */
+  sprintStorage?: SprintStorage;
+  /** Custom TaskStorage instance */
+  taskStorage?: TaskStorage;
+  /** Custom CollaborationStorage instance */
+  collaborationStorage?: CollaborationStorage;
+  /** Custom RiskStorage instance */
+  riskStorage?: RiskStorage;
+  /** Custom BudgetStorage instance */
+  budgetStorage?: BudgetStorage;
+  /** Custom AutomationStorage instance */
+  automationStorage?: AutomationStorage;
+  /** Custom DashboardStorage instance */
+  dashboardStorage?: DashboardStorage;
+  /** Custom TemplateStorage instance */
+  templateStorage?: TemplateStorage;
+  /** Custom KanbanStorage instance */
+  kanbanStorage?: KanbanStorage;
+  /** Custom StakeholderStorage instance */
+  stakeholderStorage?: StakeholderStorage;
+  /** Custom session store instance */
+  sessionStore?: session.Store;
+}
+
+/**
  * Composed DatabaseStorage class that delegates to domain-specific storage classes.
  * Implements the full IStorage interface while internally using composition.
  * 
  * This follows the Single Responsibility Principle (SRP) by delegating each
  * domain's operations to specialized storage classes, while maintaining a
  * unified API for backward compatibility.
+ * 
+ * Supports Dependency Injection for better testability:
+ * @example
+ * ```typescript
+ * // For testing with mocked storage
+ * const mockUserStorage = new UserStorage(mockDb);
+ * const storage = new DatabaseStorage({ userStorage: mockUserStorage });
+ * 
+ * // Default usage (production)
+ * const storage = new DatabaseStorage();
+ * ```
  */
 export class DatabaseStorage {
   // Session store for authentication
   sessionStore: session.Store;
 
-  // Domain storage instances (composed, injected with db)
+  // Domain storage instances (composed, supports DI)
   private readonly userStorage: UserStorage;
   private readonly projectStorage: ProjectStorage;
   private readonly sprintStorage: SprintStorage;
@@ -84,27 +133,32 @@ export class DatabaseStorage {
   private readonly kanbanStorage: KanbanStorage;
   private readonly stakeholderStorage: StakeholderStorage;
 
-  constructor() {
-    // Initialize session store
-    this.sessionStore = new PostgresSessionStore({ 
+  /**
+   * Creates a DatabaseStorage instance with optional dependency injection.
+   * @param options - Optional storage instances for dependency injection.
+   *                  Any instance not provided will be created with default configuration.
+   */
+  constructor(options: DatabaseStorageOptions = {}) {
+    // Initialize session store (use provided or create default)
+    this.sessionStore = options.sessionStore ?? new PostgresSessionStore({ 
       pool: pool as any, 
       createTableIfMissing: false,
       tableName: 'sessions'
     });
 
-    // Initialize domain storage instances
-    this.userStorage = new UserStorage();
-    this.projectStorage = new ProjectStorage();
-    this.sprintStorage = new SprintStorage();
-    this.taskStorage = new TaskStorage();
-    this.collaborationStorage = new CollaborationStorage();
-    this.riskStorage = new RiskStorage();
-    this.budgetStorage = new BudgetStorage();
-    this.automationStorage = new AutomationStorage();
-    this.dashboardStorage = new DashboardStorage();
-    this.templateStorage = new TemplateStorage();
-    this.kanbanStorage = new KanbanStorage();
-    this.stakeholderStorage = new StakeholderStorage();
+    // Initialize domain storage instances (use provided or create defaults)
+    this.userStorage = options.userStorage ?? new UserStorage();
+    this.projectStorage = options.projectStorage ?? new ProjectStorage();
+    this.sprintStorage = options.sprintStorage ?? new SprintStorage();
+    this.taskStorage = options.taskStorage ?? new TaskStorage();
+    this.collaborationStorage = options.collaborationStorage ?? new CollaborationStorage();
+    this.riskStorage = options.riskStorage ?? new RiskStorage();
+    this.budgetStorage = options.budgetStorage ?? new BudgetStorage();
+    this.automationStorage = options.automationStorage ?? new AutomationStorage();
+    this.dashboardStorage = options.dashboardStorage ?? new DashboardStorage();
+    this.templateStorage = options.templateStorage ?? new TemplateStorage();
+    this.kanbanStorage = options.kanbanStorage ?? new KanbanStorage();
+    this.stakeholderStorage = options.stakeholderStorage ?? new StakeholderStorage();
   }
 
   // ============= USER OPERATIONS =============

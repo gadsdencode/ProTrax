@@ -1,6 +1,9 @@
 /**
  * Project-related database operations.
  * Handles project CRUD, search, pagination, and atomic project+tasks creation.
+ * 
+ * Supports Dependency Injection: Pass a custom database instance
+ * via constructor for testing or multi-tenancy scenarios.
  */
 
 import {
@@ -12,15 +15,25 @@ import {
   type InsertTask,
   type PaginationParams,
 } from "@shared/schema";
-import { db } from "../db";
+import { db as defaultDb } from "../db";
 import { eq, or, ilike, desc, asc, sql } from "drizzle-orm";
-import type { IProjectStorage, PaginatedProjectsResult, ProjectWithTasksResult } from "./types";
+import type { IProjectStorage, PaginatedProjectsResult, ProjectWithTasksResult, DatabaseInstance } from "./types";
 
 export class ProjectStorage implements IProjectStorage {
+  private readonly db: DatabaseInstance;
+
+  /**
+   * Creates a ProjectStorage instance.
+   * @param dbInstance - Optional database instance for dependency injection.
+   *                     Defaults to the shared db instance if not provided.
+   */
+  constructor(dbInstance?: DatabaseInstance) {
+    this.db = dbInstance ?? defaultDb;
+  }
   async getProjects(searchQuery?: string): Promise<Project[]> {
     if (searchQuery) {
       const searchPattern = `%${searchQuery}%`;
-      return await db
+      return await this.db
         .select()
         .from(projects)
         .where(
@@ -31,7 +44,7 @@ export class ProjectStorage implements IProjectStorage {
         )
         .orderBy(desc(projects.createdAt));
     }
-    return await db.select().from(projects).orderBy(desc(projects.createdAt));
+    return await this.db.select().from(projects).orderBy(desc(projects.createdAt));
   }
 
   async getProjectsPaginated(searchQuery?: string, pagination?: PaginationParams): Promise<PaginatedProjectsResult> {
@@ -41,8 +54,8 @@ export class ProjectStorage implements IProjectStorage {
     const sortOrder = pagination?.sortOrder || 'desc';
     const offset = (page - 1) * limit;
 
-    let query = db.select().from(projects);
-    let countQuery = db.select({ count: db.$count(projects) }).from(projects);
+    let query = this.db.select().from(projects);
+    let countQuery = this.db.select({ count: this.db.$count(projects) }).from(projects);
 
     if (searchQuery) {
       const searchPattern = `%${searchQuery}%`;
@@ -68,8 +81,8 @@ export class ProjectStorage implements IProjectStorage {
 
     query = query.limit(limit).offset(offset);
 
-    const statsQuery = db.select({
-      total: db.$count(projects),
+    const statsQuery = this.db.select({
+      total: this.db.$count(projects),
       active: sql<number>`COUNT(CASE WHEN ${projects.status} = 'active' THEN 1 END)`,
       onHold: sql<number>`COUNT(CASE WHEN ${projects.status} = 'on_hold' THEN 1 END)`,
       totalBudget: sql<number>`COALESCE(SUM(${projects.budget}), 0)`
@@ -109,12 +122,12 @@ export class ProjectStorage implements IProjectStorage {
   }
 
   async getProject(id: number): Promise<Project | undefined> {
-    const [project] = await db.select().from(projects).where(eq(projects.id, id));
+    const [project] = await this.db.select().from(projects).where(eq(projects.id, id));
     return project;
   }
 
   async createProject(projectData: InsertProject): Promise<Project> {
-    const [project] = await db.insert(projects).values(projectData).returning();
+    const [project] = await this.db.insert(projects).values(projectData).returning();
     return project;
   }
 
@@ -176,7 +189,7 @@ export class ProjectStorage implements IProjectStorage {
     }
     
     // Use ACID transaction for atomic project + tasks creation
-    const result = await db.transaction(async (tx) => {
+    const result = await this.db.transaction(async (tx) => {
       const [project] = await tx.insert(projects).values(projectData).returning();
       console.log(`[SOW Upload] Project created with ID: ${project.id}`);
       
@@ -221,7 +234,7 @@ export class ProjectStorage implements IProjectStorage {
       updateData.endDate = new Date(updateData.endDate);
     }
     
-    const [project] = await db
+    const [project] = await this.db
       .update(projects)
       .set({ ...updateData, updatedAt: new Date() })
       .where(eq(projects.id, id))
@@ -230,7 +243,7 @@ export class ProjectStorage implements IProjectStorage {
   }
 
   async deleteProject(id: number): Promise<void> {
-    await db.delete(projects).where(eq(projects.id, id));
+    await this.db.delete(projects).where(eq(projects.id, id));
   }
 }
 

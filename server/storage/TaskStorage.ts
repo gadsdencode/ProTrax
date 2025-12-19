@@ -1,6 +1,9 @@
 /**
  * Task-related database operations.
  * Handles task CRUD, history, dependencies, custom fields, and search.
+ * 
+ * Supports Dependency Injection: Pass a custom database instance
+ * via constructor for testing or multi-tenancy scenarios.
  */
 
 import {
@@ -21,12 +24,22 @@ import {
   type PaginationParams,
   type PaginatedResult,
 } from "@shared/schema";
-import { db } from "../db";
+import { db as defaultDb } from "../db";
 import { eq, and, desc, asc, or, ilike, gte, lte } from "drizzle-orm";
 import { debugLogTagged } from "../utils/debug";
-import type { ITaskStorage } from "./types";
+import type { ITaskStorage, DatabaseInstance } from "./types";
 
 export class TaskStorage implements ITaskStorage {
+  private readonly db: DatabaseInstance;
+
+  /**
+   * Creates a TaskStorage instance.
+   * @param dbInstance - Optional database instance for dependency injection.
+   *                     Defaults to the shared db instance if not provided.
+   */
+  constructor(dbInstance?: DatabaseInstance) {
+    this.db = dbInstance ?? defaultDb;
+  }
   // ============= CORE TASK OPERATIONS =============
 
   async getTasks(projectId?: number, searchQuery?: string): Promise<Task[]> {
@@ -34,7 +47,7 @@ export class TaskStorage implements ITaskStorage {
     
     if (projectId && !searchQuery) {
       debugLogTagged('STORAGE DEBUG', `Using direct query for projectId: ${projectId}`);
-      const result = await db
+      const result = await this.db
         .select()
         .from(tasks)
         .where(eq(tasks.projectId, projectId))
@@ -46,7 +59,7 @@ export class TaskStorage implements ITaskStorage {
     if (projectId && searchQuery) {
       debugLogTagged('STORAGE DEBUG', `Using optimized query for projectId: ${projectId} and searchQuery: ${searchQuery}`);
       const searchPattern = `%${searchQuery}%`;
-      const result = await db
+      const result = await this.db
         .select()
         .from(tasks)
         .where(
@@ -69,7 +82,7 @@ export class TaskStorage implements ITaskStorage {
     if (searchQuery) {
       debugLogTagged('STORAGE DEBUG', `Using search-only query for searchQuery: ${searchQuery}`);
       const searchPattern = `%${searchQuery}%`;
-      const result = await db
+      const result = await this.db
         .select()
         .from(tasks)
         .where(
@@ -84,7 +97,7 @@ export class TaskStorage implements ITaskStorage {
     }
     
     debugLogTagged('STORAGE DEBUG', 'Returning all tasks');
-    const allTasks = await db.select().from(tasks).orderBy(desc(tasks.createdAt));
+    const allTasks = await this.db.select().from(tasks).orderBy(desc(tasks.createdAt));
     debugLogTagged('STORAGE DEBUG', `Query without conditions returned ${allTasks.length} tasks`);
     return allTasks;
   }
@@ -96,8 +109,8 @@ export class TaskStorage implements ITaskStorage {
     const sortOrder = pagination?.sortOrder || 'asc';
     const offset = (page - 1) * limit;
 
-    let query = db.select().from(tasks);
-    let countQuery = db.select({ count: db.$count(tasks) }).from(tasks);
+    let query = this.db.select().from(tasks);
+    let countQuery = this.db.select({ count: this.db.$count(tasks) }).from(tasks);
     
     const conditions = [];
     
@@ -157,20 +170,20 @@ export class TaskStorage implements ITaskStorage {
   }
 
   async getTask(id: number): Promise<Task | undefined> {
-    const [task] = await db.select().from(tasks).where(eq(tasks.id, id));
+    const [task] = await this.db.select().from(tasks).where(eq(tasks.id, id));
     return task;
   }
 
   async getMyTasks(userId: string): Promise<Task[]> {
-    return await db.select().from(tasks).where(eq(tasks.assigneeId, userId)).orderBy(asc(tasks.dueDate));
+    return await this.db.select().from(tasks).where(eq(tasks.assigneeId, userId)).orderBy(asc(tasks.dueDate));
   }
 
   async getSubtasks(parentId: number): Promise<Task[]> {
-    return await db.select().from(tasks).where(eq(tasks.parentId, parentId)).orderBy(asc(tasks.sortOrder));
+    return await this.db.select().from(tasks).where(eq(tasks.parentId, parentId)).orderBy(asc(tasks.sortOrder));
   }
 
   async createTask(taskData: InsertTask): Promise<Task> {
-    const [task] = await db.insert(tasks).values(taskData).returning();
+    const [task] = await this.db.insert(tasks).values(taskData).returning();
     return task;
   }
 
@@ -180,7 +193,7 @@ export class TaskStorage implements ITaskStorage {
       throw new Error(`Task with id ${id} not found`);
     }
 
-    const [updatedTask] = await db
+    const [updatedTask] = await this.db
       .update(tasks)
       .set({ ...taskData, updatedAt: new Date() })
       .where(eq(tasks.id, id))
@@ -208,18 +221,18 @@ export class TaskStorage implements ITaskStorage {
   }
 
   async deleteTask(id: number): Promise<void> {
-    await db.delete(tasks).where(eq(tasks.id, id));
+    await this.db.delete(tasks).where(eq(tasks.id, id));
   }
 
   // ============= TASK HISTORY =============
 
   async createTaskHistory(historyData: InsertTaskHistory): Promise<TaskHistory> {
-    const [history] = await db.insert(taskHistory).values(historyData).returning();
+    const [history] = await this.db.insert(taskHistory).values(historyData).returning();
     return history;
   }
 
   async getTaskHistory(taskId: number): Promise<TaskHistory[]> {
-    return await db
+    return await this.db
       .select()
       .from(taskHistory)
       .where(eq(taskHistory.taskId, taskId))
@@ -227,7 +240,7 @@ export class TaskStorage implements ITaskStorage {
   }
 
   async getSprintHistory(sprintId: number, startDate?: Date, endDate?: Date): Promise<TaskHistory[]> {
-    let query = db
+    let query = this.db
       .select()
       .from(taskHistory)
       .where(eq(taskHistory.sprintId, sprintId));
@@ -238,7 +251,7 @@ export class TaskStorage implements ITaskStorage {
         gte(taskHistory.changedAt, startDate),
         lte(taskHistory.changedAt, endDate),
       ];
-      query = db
+      query = this.db
         .select()
         .from(taskHistory)
         .where(and(...conditions));
@@ -250,7 +263,7 @@ export class TaskStorage implements ITaskStorage {
   // ============= TASK DEPENDENCIES =============
 
   async getTaskDependencies(taskId: number): Promise<TaskDependency[]> {
-    return await db
+    return await this.db
       .select()
       .from(taskDependencies)
       .where(eq(taskDependencies.successorId, taskId));
@@ -262,7 +275,7 @@ export class TaskStorage implements ITaskStorage {
     
     if (taskIds.length === 0) return [];
     
-    return await db
+    return await this.db
       .select()
       .from(taskDependencies)
       .where(
@@ -280,7 +293,7 @@ export class TaskStorage implements ITaskStorage {
   async getAllDependenciesForTasks(taskIds: number[]): Promise<TaskDependency[]> {
     if (taskIds.length === 0) return [];
     
-    return await db
+    return await this.db
       .select()
       .from(taskDependencies)
       .where(
@@ -296,37 +309,37 @@ export class TaskStorage implements ITaskStorage {
   }
 
   async createTaskDependency(dependencyData: InsertTaskDependency): Promise<TaskDependency> {
-    const [dependency] = await db.insert(taskDependencies).values(dependencyData).returning();
+    const [dependency] = await this.db.insert(taskDependencies).values(dependencyData).returning();
     return dependency;
   }
 
   async deleteTaskDependency(id: number): Promise<void> {
-    await db.delete(taskDependencies).where(eq(taskDependencies.id, id));
+    await this.db.delete(taskDependencies).where(eq(taskDependencies.id, id));
   }
 
   // ============= CUSTOM FIELDS =============
 
   async getCustomFields(projectId: number): Promise<CustomField[]> {
-    return await db.select().from(customFields).where(eq(customFields.projectId, projectId));
+    return await this.db.select().from(customFields).where(eq(customFields.projectId, projectId));
   }
 
   async createCustomField(fieldData: InsertCustomField): Promise<CustomField> {
-    const [field] = await db.insert(customFields).values(fieldData).returning();
+    const [field] = await this.db.insert(customFields).values(fieldData).returning();
     return field;
   }
 
   async deleteCustomField(id: number): Promise<void> {
-    await db.delete(customFields).where(eq(customFields.id, id));
+    await this.db.delete(customFields).where(eq(customFields.id, id));
   }
 
   // ============= CUSTOM FIELD VALUES =============
 
   async getTaskCustomFieldValues(taskId: number): Promise<TaskCustomFieldValue[]> {
-    return await db.select().from(taskCustomFieldValues).where(eq(taskCustomFieldValues.taskId, taskId));
+    return await this.db.select().from(taskCustomFieldValues).where(eq(taskCustomFieldValues.taskId, taskId));
   }
 
   async setTaskCustomFieldValue(taskId: number, customFieldId: number, value: string | null): Promise<TaskCustomFieldValue> {
-    const [existing] = await db
+    const [existing] = await this.db
       .select()
       .from(taskCustomFieldValues)
       .where(
@@ -337,14 +350,14 @@ export class TaskStorage implements ITaskStorage {
       );
 
     if (existing) {
-      const [updated] = await db
+      const [updated] = await this.db
         .update(taskCustomFieldValues)
         .set({ value })
         .where(eq(taskCustomFieldValues.id, existing.id))
         .returning();
       return updated;
     } else {
-      const [created] = await db
+      const [created] = await this.db
         .insert(taskCustomFieldValues)
         .values({
           taskId,
@@ -357,7 +370,7 @@ export class TaskStorage implements ITaskStorage {
   }
 
   async setTaskCustomFieldValuesBatch(taskId: number, values: Array<{ customFieldId: number, value: string | null }>): Promise<TaskCustomFieldValue[]> {
-    const existingValues = await db
+    const existingValues = await this.db
       .select()
       .from(taskCustomFieldValues)
       .where(eq(taskCustomFieldValues.taskId, taskId));
@@ -382,7 +395,7 @@ export class TaskStorage implements ITaskStorage {
     }
 
     if (toUpdate.length > 0) {
-      await db.transaction(async (tx) => {
+      await this.db.transaction(async (tx) => {
         for (const { id, value } of toUpdate) {
           const [updated] = await tx
             .update(taskCustomFieldValues)
@@ -395,7 +408,7 @@ export class TaskStorage implements ITaskStorage {
     }
 
     if (toInsert.length > 0) {
-      const inserted = await db
+      const inserted = await this.db
         .insert(taskCustomFieldValues)
         .values(toInsert)
         .returning();
