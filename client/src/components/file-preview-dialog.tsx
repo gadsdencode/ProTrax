@@ -56,25 +56,22 @@ import type { FileAttachment } from "@shared/schema";
 import { cn } from "@/lib/utils";
 import * as mammoth from "mammoth";
 import { Light as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import javascript from 'react-syntax-highlighter/dist/esm/languages/prism/javascript';
-import typescript from 'react-syntax-highlighter/dist/esm/languages/prism/typescript';
-import jsx from 'react-syntax-highlighter/dist/esm/languages/prism/jsx';
-import tsx from 'react-syntax-highlighter/dist/esm/languages/prism/tsx';
-import python from 'react-syntax-highlighter/dist/esm/languages/prism/python';
-import json from 'react-syntax-highlighter/dist/esm/languages/prism/json';
-import css from 'react-syntax-highlighter/dist/esm/languages/prism/css';
-import sql from 'react-syntax-highlighter/dist/esm/languages/prism/sql';
-import markdown from 'react-syntax-highlighter/dist/esm/languages/prism/markdown';
-import yaml from 'react-syntax-highlighter/dist/esm/languages/prism/yaml';
-import bash from 'react-syntax-highlighter/dist/esm/languages/prism/bash';
-import markup from 'react-syntax-highlighter/dist/esm/languages/prism/markup';
+import { atomOneDark } from 'react-syntax-highlighter/dist/esm/styles/hljs';
+import javascript from 'react-syntax-highlighter/dist/esm/languages/hljs/javascript';
+import typescript from 'react-syntax-highlighter/dist/esm/languages/hljs/typescript';
+import python from 'react-syntax-highlighter/dist/esm/languages/hljs/python';
+import json from 'react-syntax-highlighter/dist/esm/languages/hljs/json';
+import css from 'react-syntax-highlighter/dist/esm/languages/hljs/css';
+import sql from 'react-syntax-highlighter/dist/esm/languages/hljs/sql';
+import markdown from 'react-syntax-highlighter/dist/esm/languages/hljs/markdown';
+import yaml from 'react-syntax-highlighter/dist/esm/languages/hljs/yaml';
+import bash from 'react-syntax-highlighter/dist/esm/languages/hljs/bash';
+import xml from 'react-syntax-highlighter/dist/esm/languages/hljs/xml';
 
 // Register only the languages we need to avoid bundle size issues
+// Note: Using hljs (highlight.js) languages with Light SyntaxHighlighter
 SyntaxHighlighter.registerLanguage('javascript', javascript);
 SyntaxHighlighter.registerLanguage('typescript', typescript);
-SyntaxHighlighter.registerLanguage('jsx', jsx);
-SyntaxHighlighter.registerLanguage('tsx', tsx);
 SyntaxHighlighter.registerLanguage('python', python);
 SyntaxHighlighter.registerLanguage('json', json);
 SyntaxHighlighter.registerLanguage('css', css);
@@ -82,8 +79,11 @@ SyntaxHighlighter.registerLanguage('sql', sql);
 SyntaxHighlighter.registerLanguage('markdown', markdown);
 SyntaxHighlighter.registerLanguage('yaml', yaml);
 SyntaxHighlighter.registerLanguage('bash', bash);
-SyntaxHighlighter.registerLanguage('html', markup);
-SyntaxHighlighter.registerLanguage('xml', markup);
+SyntaxHighlighter.registerLanguage('html', xml);
+SyntaxHighlighter.registerLanguage('xml', xml);
+// Register jsx/tsx as aliases for javascript/typescript
+SyntaxHighlighter.registerLanguage('jsx', javascript);
+SyntaxHighlighter.registerLanguage('tsx', typescript);
 
 interface FilePreviewDialogProps {
   open: boolean;
@@ -589,7 +589,7 @@ export function FilePreviewDialog({
             </Badge>
             <SyntaxHighlighter
               language="html"
-              style={oneDark}
+              style={atomOneDark}
               customStyle={{
                 margin: 0,
                 padding: '1rem',
@@ -724,7 +724,7 @@ export function FilePreviewDialog({
             {/* Syntax highlighted content */}
             <SyntaxHighlighter
               language={language}
-              style={oneDark}
+              style={atomOneDark}
               customStyle={{
                 margin: 0,
                 padding: '1rem',

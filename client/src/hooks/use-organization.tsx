@@ -8,7 +8,7 @@
  * - Manage organization settings
  */
 
-import { createContext, ReactNode, useContext, useEffect } from "react";
+import { createContext, ReactNode, useContext, useEffect, useRef } from "react";
 import {
   useQuery,
   useMutation,
@@ -67,15 +67,16 @@ export const OrganizationContext = createContext<OrganizationContextType | null>
 export function OrganizationProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
   const { user } = useAuth();
-  const { 
-    currentOrganization, 
-    currentRole,
-    setCurrentOrganization, 
-    hasOrganization,
-    isOwner,
-    isAdmin,
-    canManageMembers,
-  } = useOrganizationStore();
+  
+  // Get store state directly to avoid unnecessary re-renders
+  const currentOrganization = useOrganizationStore((state) => state.currentOrganization);
+  const currentRole = useOrganizationStore((state) => state.currentRole);
+  const setCurrentOrganization = useOrganizationStore((state) => state.setCurrentOrganization);
+  const clearOrganization = useOrganizationStore((state) => state.clearOrganization);
+
+  // Track if we've initialized to prevent infinite loops
+  const initializedRef = useRef(false);
+  const lastUserIdRef = useRef<string | null>(null);
 
   // Fetch user's organizations
   const {
@@ -88,22 +89,41 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
     enabled: !!user, // Only fetch when user is logged in
   });
 
-  // Auto-set organization on first load or when organizations change
+  // Handle user logout - clear organization
   useEffect(() => {
-    if (!user) {
-      // Clear organization when logged out
-      setCurrentOrganization(null, null);
+    if (!user && lastUserIdRef.current !== null) {
+      // User just logged out
+      clearOrganization();
+      initializedRef.current = false;
+      lastUserIdRef.current = null;
+    } else if (user) {
+      lastUserIdRef.current = user.id;
+    }
+  }, [user, clearOrganization]);
+
+  // Auto-set organization on first load when organizations are fetched
+  useEffect(() => {
+    // Skip if no user, still loading, or already initialized with orgs
+    if (!user || isLoading) {
       return;
     }
 
-    if (organizations.length > 0 && !currentOrganization) {
+    // Only auto-initialize if we don't have a current organization set
+    if (organizations.length > 0 && !currentOrganization && !initializedRef.current) {
+      initializedRef.current = true;
+      
       // Find default organization or use first one
       const defaultOrg = organizations.find(m => m.isDefault) || organizations[0];
       if (defaultOrg) {
         setCurrentOrganization(defaultOrg.organization, defaultOrg.role);
       }
     }
-  }, [organizations, currentOrganization, user, setCurrentOrganization]);
+    
+    // If organizations were fetched but empty, mark as initialized
+    if (!isLoading && organizations.length === 0) {
+      initializedRef.current = true;
+    }
+  }, [organizations, isLoading, user, currentOrganization, setCurrentOrganization]);
 
   // Switch organization mutation
   const switchOrganizationMutation = useMutation({
@@ -168,6 +188,12 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
     onError: handleMutationError,
   });
 
+  // Compute permission values directly to avoid function call issues
+  const hasOrgValue = currentOrganization !== null;
+  const isOwnerValue = currentRole === 'owner';
+  const isAdminValue = currentRole === 'owner' || currentRole === 'admin';
+  const canManageMembersValue = currentRole === 'owner' || currentRole === 'admin';
+
   return (
     <OrganizationContext.Provider
       value={{
@@ -179,10 +205,10 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
         switchOrganizationMutation,
         createOrganizationMutation,
         inviteMemberMutation,
-        hasOrganization: hasOrganization(),
-        isOwner: isOwner(),
-        isAdmin: isAdmin(),
-        canManageMembers: canManageMembers(),
+        hasOrganization: hasOrgValue,
+        isOwner: isOwnerValue,
+        isAdmin: isAdminValue,
+        canManageMembers: canManageMembersValue,
         refreshOrganizations: () => refreshOrganizations(),
       }}
     >
