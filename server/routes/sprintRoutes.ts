@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { storage } from "../storage";
-import { isAuthenticated } from "../auth";
+import { isAuthenticated, hasRole } from "../auth";
 import { asyncHandler, createError } from "../errorHandler";
 import { insertSprintSchema } from "@shared/schema";
 
@@ -37,8 +37,8 @@ router.patch('/:id', isAuthenticated, asyncHandler(async (req, res) => {
   res.json(sprint);
 }));
 
-// Delete sprint
-router.delete('/:id', isAuthenticated, asyncHandler(async (req, res) => {
+// Delete sprint (requires project_manager role or higher)
+router.delete('/:id', isAuthenticated, hasRole('project_manager'), asyncHandler(async (req, res) => {
   const id = parseInt(req.params.id);
   await storage.deleteSprint(id);
   res.status(204).send();

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { storage } from "../storage";
-import { isAuthenticated } from "../auth";
+import { isAuthenticated, hasRole } from "../auth";
 import { asyncHandler, createError } from "../errorHandler";
 import { insertTaskSchema } from "@shared/schema";
 import { SchedulingEngine } from "../scheduling";
@@ -142,8 +142,8 @@ router.patch('/:id', isAuthenticated, asyncHandler(async (req: any, res) => {
   }
 }));
 
-// Delete task
-router.delete('/:id', isAuthenticated, asyncHandler(async (req, res) => {
+// Delete task (requires member role or higher - viewers cannot delete)
+router.delete('/:id', isAuthenticated, hasRole('member'), asyncHandler(async (req, res) => {
   const id = parseInt(req.params.id);
   await storage.deleteTask(id);
   res.status(204).send();

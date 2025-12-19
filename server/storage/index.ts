@@ -113,6 +113,11 @@ export class DatabaseStorage {
   createUser = (...args: Parameters<UserStorage['createUser']>) => this.userStorage.createUser(...args);
   upsertUser = (...args: Parameters<UserStorage['upsertUser']>) => this.userStorage.upsertUser(...args);
   getAllUsers = () => this.userStorage.getAllUsers();
+  updateUserRole = (...args: Parameters<UserStorage['updateUserRole']>) => this.userStorage.updateUserRole(...args);
+  updateUser = (...args: Parameters<UserStorage['updateUser']>) => this.userStorage.updateUser(...args);
+  deleteUser = (id: string) => this.userStorage.deleteUser(id);
+  getUserCountByRole = () => this.userStorage.getUserCountByRole();
+  ensureAdminExists = () => this.userStorage.ensureAdminExists();
 
   // ============= PROJECT OPERATIONS =============
   getProjects = (...args: Parameters<ProjectStorage['getProjects']>) => this.projectStorage.getProjects(...args);

@@ -30,6 +30,7 @@ import exportRoutes from "./routes/exportRoutes";
 import emailRoutes from "./routes/emailRoutes";
 import debugRoutes from "./routes/debugRoutes";
 import recurringTaskRoutes from "./routes/recurringTaskRoutes";
+import adminRoutes from "./routes/adminRoutes";
 
 export async function setupRoutes(app: express.Application) {
   // Setup authentication middleware first (blueprint: javascript_auth_all_persistance)
@@ -65,6 +66,7 @@ export async function setupRoutes(app: express.Application) {
   app.use('/api/email', emailRoutes);
   app.use('/api/debug', debugRoutes);
   app.use('/api/recurring', recurringTaskRoutes);
+  app.use('/api/admin', adminRoutes);
 
   // ============= ERROR HANDLING MIDDLEWARE =============
   // Must be registered AFTER all routes
