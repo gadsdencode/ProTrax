@@ -61,24 +61,28 @@ const PostgresSessionStore = connectPg(session);
 /**
  * Composed DatabaseStorage class that delegates to domain-specific storage classes.
  * Implements the full IStorage interface while internally using composition.
+ * 
+ * This follows the Single Responsibility Principle (SRP) by delegating each
+ * domain's operations to specialized storage classes, while maintaining a
+ * unified API for backward compatibility.
  */
 export class DatabaseStorage {
   // Session store for authentication
   sessionStore: session.Store;
 
-  // Domain storage instances (composed)
-  private userStorage: UserStorage;
-  private projectStorage: ProjectStorage;
-  private sprintStorage: SprintStorage;
-  private taskStorage: TaskStorage;
-  private collaborationStorage: CollaborationStorage;
-  private riskStorage: RiskStorage;
-  private budgetStorage: BudgetStorage;
-  private automationStorage: AutomationStorage;
-  private dashboardStorage: DashboardStorage;
-  private templateStorage: TemplateStorage;
-  private kanbanStorage: KanbanStorage;
-  private stakeholderStorage: StakeholderStorage;
+  // Domain storage instances (composed, injected with db)
+  private readonly userStorage: UserStorage;
+  private readonly projectStorage: ProjectStorage;
+  private readonly sprintStorage: SprintStorage;
+  private readonly taskStorage: TaskStorage;
+  private readonly collaborationStorage: CollaborationStorage;
+  private readonly riskStorage: RiskStorage;
+  private readonly budgetStorage: BudgetStorage;
+  private readonly automationStorage: AutomationStorage;
+  private readonly dashboardStorage: DashboardStorage;
+  private readonly templateStorage: TemplateStorage;
+  private readonly kanbanStorage: KanbanStorage;
+  private readonly stakeholderStorage: StakeholderStorage;
 
   constructor() {
     // Initialize session store
@@ -104,123 +108,107 @@ export class DatabaseStorage {
   }
 
   // ============= USER OPERATIONS =============
-  getUser = this.delegate('userStorage', 'getUser');
-  getUserByUsername = this.delegate('userStorage', 'getUserByUsername');
-  createUser = this.delegate('userStorage', 'createUser');
-  upsertUser = this.delegate('userStorage', 'upsertUser');
-  getAllUsers = this.delegate('userStorage', 'getAllUsers');
+  getUser = (id: string) => this.userStorage.getUser(id);
+  getUserByUsername = (username: string) => this.userStorage.getUserByUsername(username);
+  createUser = (...args: Parameters<UserStorage['createUser']>) => this.userStorage.createUser(...args);
+  upsertUser = (...args: Parameters<UserStorage['upsertUser']>) => this.userStorage.upsertUser(...args);
+  getAllUsers = () => this.userStorage.getAllUsers();
 
   // ============= PROJECT OPERATIONS =============
-  getProjects = this.delegate('projectStorage', 'getProjects');
-  getProjectsPaginated = this.delegate('projectStorage', 'getProjectsPaginated');
-  getProject = this.delegate('projectStorage', 'getProject');
-  createProject = this.delegate('projectStorage', 'createProject');
-  createProjectWithTasks = this.delegate('projectStorage', 'createProjectWithTasks');
-  updateProject = this.delegate('projectStorage', 'updateProject');
-  deleteProject = this.delegate('projectStorage', 'deleteProject');
+  getProjects = (...args: Parameters<ProjectStorage['getProjects']>) => this.projectStorage.getProjects(...args);
+  getProjectsPaginated = (...args: Parameters<ProjectStorage['getProjectsPaginated']>) => this.projectStorage.getProjectsPaginated(...args);
+  getProject = (id: number) => this.projectStorage.getProject(id);
+  createProject = (...args: Parameters<ProjectStorage['createProject']>) => this.projectStorage.createProject(...args);
+  createProjectWithTasks = (...args: Parameters<ProjectStorage['createProjectWithTasks']>) => this.projectStorage.createProjectWithTasks(...args);
+  updateProject = (...args: Parameters<ProjectStorage['updateProject']>) => this.projectStorage.updateProject(...args);
+  deleteProject = (id: number) => this.projectStorage.deleteProject(id);
 
   // ============= SPRINT OPERATIONS =============
-  getSprints = this.delegate('sprintStorage', 'getSprints');
-  getSprint = this.delegate('sprintStorage', 'getSprint');
-  createSprint = this.delegate('sprintStorage', 'createSprint');
-  updateSprint = this.delegate('sprintStorage', 'updateSprint');
-  deleteSprint = this.delegate('sprintStorage', 'deleteSprint');
+  getSprints = (projectId: number) => this.sprintStorage.getSprints(projectId);
+  getSprint = (id: number) => this.sprintStorage.getSprint(id);
+  createSprint = (...args: Parameters<SprintStorage['createSprint']>) => this.sprintStorage.createSprint(...args);
+  updateSprint = (...args: Parameters<SprintStorage['updateSprint']>) => this.sprintStorage.updateSprint(...args);
+  deleteSprint = (id: number) => this.sprintStorage.deleteSprint(id);
 
   // ============= TASK OPERATIONS =============
-  getTasks = this.delegate('taskStorage', 'getTasks');
-  getTasksPaginated = this.delegate('taskStorage', 'getTasksPaginated');
-  getTask = this.delegate('taskStorage', 'getTask');
-  getMyTasks = this.delegate('taskStorage', 'getMyTasks');
-  getSubtasks = this.delegate('taskStorage', 'getSubtasks');
-  createTask = this.delegate('taskStorage', 'createTask');
-  updateTask = this.delegate('taskStorage', 'updateTask');
-  deleteTask = this.delegate('taskStorage', 'deleteTask');
+  getTasks = (...args: Parameters<TaskStorage['getTasks']>) => this.taskStorage.getTasks(...args);
+  getTasksPaginated = (...args: Parameters<TaskStorage['getTasksPaginated']>) => this.taskStorage.getTasksPaginated(...args);
+  getTask = (id: number) => this.taskStorage.getTask(id);
+  getMyTasks = (userId: string) => this.taskStorage.getMyTasks(userId);
+  getSubtasks = (parentId: number) => this.taskStorage.getSubtasks(parentId);
+  createTask = (...args: Parameters<TaskStorage['createTask']>) => this.taskStorage.createTask(...args);
+  updateTask = (...args: Parameters<TaskStorage['updateTask']>) => this.taskStorage.updateTask(...args);
+  deleteTask = (id: number) => this.taskStorage.deleteTask(id);
 
   // Task history
-  createTaskHistory = this.delegate('taskStorage', 'createTaskHistory');
-  getTaskHistory = this.delegate('taskStorage', 'getTaskHistory');
-  getSprintHistory = this.delegate('taskStorage', 'getSprintHistory');
+  createTaskHistory = (...args: Parameters<TaskStorage['createTaskHistory']>) => this.taskStorage.createTaskHistory(...args);
+  getTaskHistory = (taskId: number) => this.taskStorage.getTaskHistory(taskId);
+  getSprintHistory = (...args: Parameters<TaskStorage['getSprintHistory']>) => this.taskStorage.getSprintHistory(...args);
 
   // Task dependencies
-  getTaskDependencies = this.delegate('taskStorage', 'getTaskDependencies');
-  getProjectDependencies = this.delegate('taskStorage', 'getProjectDependencies');
-  getAllDependenciesForTasks = this.delegate('taskStorage', 'getAllDependenciesForTasks');
-  createTaskDependency = this.delegate('taskStorage', 'createTaskDependency');
-  deleteTaskDependency = this.delegate('taskStorage', 'deleteTaskDependency');
+  getTaskDependencies = (taskId: number) => this.taskStorage.getTaskDependencies(taskId);
+  getProjectDependencies = (projectId: number) => this.taskStorage.getProjectDependencies(projectId);
+  getAllDependenciesForTasks = (taskIds: number[]) => this.taskStorage.getAllDependenciesForTasks(taskIds);
+  createTaskDependency = (...args: Parameters<TaskStorage['createTaskDependency']>) => this.taskStorage.createTaskDependency(...args);
+  deleteTaskDependency = (id: number) => this.taskStorage.deleteTaskDependency(id);
 
   // Custom fields
-  getCustomFields = this.delegate('taskStorage', 'getCustomFields');
-  createCustomField = this.delegate('taskStorage', 'createCustomField');
-  deleteCustomField = this.delegate('taskStorage', 'deleteCustomField');
+  getCustomFields = (projectId: number) => this.taskStorage.getCustomFields(projectId);
+  createCustomField = (...args: Parameters<TaskStorage['createCustomField']>) => this.taskStorage.createCustomField(...args);
+  deleteCustomField = (id: number) => this.taskStorage.deleteCustomField(id);
 
   // Custom field values
-  getTaskCustomFieldValues = this.delegate('taskStorage', 'getTaskCustomFieldValues');
-  setTaskCustomFieldValue = this.delegate('taskStorage', 'setTaskCustomFieldValue');
-  setTaskCustomFieldValuesBatch = this.delegate('taskStorage', 'setTaskCustomFieldValuesBatch');
+  getTaskCustomFieldValues = (taskId: number) => this.taskStorage.getTaskCustomFieldValues(taskId);
+  setTaskCustomFieldValue = (...args: Parameters<TaskStorage['setTaskCustomFieldValue']>) => this.taskStorage.setTaskCustomFieldValue(...args);
+  setTaskCustomFieldValuesBatch = (...args: Parameters<TaskStorage['setTaskCustomFieldValuesBatch']>) => this.taskStorage.setTaskCustomFieldValuesBatch(...args);
 
   // ============= COLLABORATION OPERATIONS =============
-  getComments = this.delegate('collaborationStorage', 'getComments');
-  createComment = this.delegate('collaborationStorage', 'createComment');
+  getComments = (taskId: number) => this.collaborationStorage.getComments(taskId);
+  createComment = (...args: Parameters<CollaborationStorage['createComment']>) => this.collaborationStorage.createComment(...args);
 
-  getFileAttachments = this.delegate('collaborationStorage', 'getFileAttachments');
-  getFileAttachment = this.delegate('collaborationStorage', 'getFileAttachment');
-  createFileAttachment = this.delegate('collaborationStorage', 'createFileAttachment');
-  deleteFileAttachment = this.delegate('collaborationStorage', 'deleteFileAttachment');
+  getFileAttachments = (...args: Parameters<CollaborationStorage['getFileAttachments']>) => this.collaborationStorage.getFileAttachments(...args);
+  getFileAttachment = (id: number) => this.collaborationStorage.getFileAttachment(id);
+  createFileAttachment = (...args: Parameters<CollaborationStorage['createFileAttachment']>) => this.collaborationStorage.createFileAttachment(...args);
+  deleteFileAttachment = (id: number) => this.collaborationStorage.deleteFileAttachment(id);
 
-  getNotifications = this.delegate('collaborationStorage', 'getNotifications');
-  createNotification = this.delegate('collaborationStorage', 'createNotification');
-  markNotificationRead = this.delegate('collaborationStorage', 'markNotificationRead');
+  getNotifications = (userId: string) => this.collaborationStorage.getNotifications(userId);
+  createNotification = (...args: Parameters<CollaborationStorage['createNotification']>) => this.collaborationStorage.createNotification(...args);
+  markNotificationRead = (id: number) => this.collaborationStorage.markNotificationRead(id);
 
   // ============= RISK OPERATIONS =============
-  getRisks = this.delegate('riskStorage', 'getRisks');
-  createRisk = this.delegate('riskStorage', 'createRisk');
-  updateRisk = this.delegate('riskStorage', 'updateRisk');
+  getRisks = (projectId: number) => this.riskStorage.getRisks(projectId);
+  createRisk = (...args: Parameters<RiskStorage['createRisk']>) => this.riskStorage.createRisk(...args);
+  updateRisk = (...args: Parameters<RiskStorage['updateRisk']>) => this.riskStorage.updateRisk(...args);
 
   // ============= BUDGET OPERATIONS =============
-  getBudgetItems = this.delegate('budgetStorage', 'getBudgetItems');
-  createBudgetItem = this.delegate('budgetStorage', 'createBudgetItem');
-  getTimeEntries = this.delegate('budgetStorage', 'getTimeEntries');
-  createTimeEntry = this.delegate('budgetStorage', 'createTimeEntry');
-  getExpenses = this.delegate('budgetStorage', 'getExpenses');
-  createExpense = this.delegate('budgetStorage', 'createExpense');
+  getBudgetItems = (projectId: number) => this.budgetStorage.getBudgetItems(projectId);
+  createBudgetItem = (...args: Parameters<BudgetStorage['createBudgetItem']>) => this.budgetStorage.createBudgetItem(...args);
+  getTimeEntries = (taskId: number) => this.budgetStorage.getTimeEntries(taskId);
+  createTimeEntry = (...args: Parameters<BudgetStorage['createTimeEntry']>) => this.budgetStorage.createTimeEntry(...args);
+  getExpenses = (projectId: number) => this.budgetStorage.getExpenses(projectId);
+  createExpense = (...args: Parameters<BudgetStorage['createExpense']>) => this.budgetStorage.createExpense(...args);
 
   // ============= AUTOMATION OPERATIONS =============
-  getAutomationRules = this.delegate('automationStorage', 'getAutomationRules');
-  createAutomationRule = this.delegate('automationStorage', 'createAutomationRule');
+  getAutomationRules = (projectId: number) => this.automationStorage.getAutomationRules(projectId);
+  createAutomationRule = (...args: Parameters<AutomationStorage['createAutomationRule']>) => this.automationStorage.createAutomationRule(...args);
 
   // ============= DASHBOARD OPERATIONS =============
-  getDashboardWidgets = this.delegate('dashboardStorage', 'getDashboardWidgets');
-  createDashboardWidget = this.delegate('dashboardStorage', 'createDashboardWidget');
+  getDashboardWidgets = (userId: string) => this.dashboardStorage.getDashboardWidgets(userId);
+  createDashboardWidget = (...args: Parameters<DashboardStorage['createDashboardWidget']>) => this.dashboardStorage.createDashboardWidget(...args);
 
   // ============= TEMPLATE OPERATIONS =============
-  getProjectTemplates = this.delegate('templateStorage', 'getProjectTemplates');
-  createProjectTemplate = this.delegate('templateStorage', 'createProjectTemplate');
+  getProjectTemplates = () => this.templateStorage.getProjectTemplates();
+  createProjectTemplate = (...args: Parameters<TemplateStorage['createProjectTemplate']>) => this.templateStorage.createProjectTemplate(...args);
 
   // ============= KANBAN OPERATIONS =============
-  getKanbanColumns = this.delegate('kanbanStorage', 'getKanbanColumns');
-  createKanbanColumn = this.delegate('kanbanStorage', 'createKanbanColumn');
+  getKanbanColumns = (projectId: number) => this.kanbanStorage.getKanbanColumns(projectId);
+  createKanbanColumn = (...args: Parameters<KanbanStorage['createKanbanColumn']>) => this.kanbanStorage.createKanbanColumn(...args);
 
   // ============= STAKEHOLDER OPERATIONS =============
-  getProjectStakeholders = this.delegate('stakeholderStorage', 'getProjectStakeholders');
-  addProjectStakeholder = this.delegate('stakeholderStorage', 'addProjectStakeholder');
-  removeProjectStakeholder = this.delegate('stakeholderStorage', 'removeProjectStakeholder');
-  updateProjectStakeholder = this.delegate('stakeholderStorage', 'updateProjectStakeholder');
-
-  /**
-   * Helper method to create a delegate function that forwards calls to the appropriate domain storage.
-   * Uses TypeScript's type system to ensure type safety.
-   */
-  private delegate<T extends keyof this, M extends keyof this[T]>(
-    storageName: T,
-    methodName: M
-  ): this[T][M] {
-    const storage = this[storageName];
-    const method = storage[methodName];
-    if (typeof method === 'function') {
-      return method.bind(storage) as this[T][M];
-    }
-    return method;
-  }
+  getProjectStakeholders = (projectId: number) => this.stakeholderStorage.getProjectStakeholders(projectId);
+  addProjectStakeholder = (...args: Parameters<StakeholderStorage['addProjectStakeholder']>) => this.stakeholderStorage.addProjectStakeholder(...args);
+  removeProjectStakeholder = (...args: Parameters<StakeholderStorage['removeProjectStakeholder']>) => this.stakeholderStorage.removeProjectStakeholder(...args);
+  updateProjectStakeholder = (...args: Parameters<StakeholderStorage['updateProjectStakeholder']>) => this.stakeholderStorage.updateProjectStakeholder(...args);
 }
 
 // Singleton instance for backward compatibility
@@ -228,4 +216,3 @@ export const storage = new DatabaseStorage();
 
 // Also export the interface from the original storage for compatibility
 export type { IStorage } from "./types";
-
