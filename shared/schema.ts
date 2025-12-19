@@ -30,6 +30,7 @@ export {
   automationActionEnum,
   stakeholderRoleEnum,
   sprintStatusEnum,
+  userRoleEnum,
   
   // Tables
   sessions,

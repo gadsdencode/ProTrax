@@ -44,6 +44,133 @@ export function isAuthenticated(req: Request, res: Response, next: NextFunction)
   res.status(401).json({ error: "Unauthorized", message: "Authentication required" });
 }
 
+// ============= ROLE-BASED ACCESS CONTROL (RBAC) =============
+
+// Valid user roles in order of privilege (highest to lowest)
+export type UserRole = 'admin' | 'project_manager' | 'member' | 'viewer';
+
+const ROLE_HIERARCHY: Record<UserRole, number> = {
+  admin: 4,
+  project_manager: 3,
+  member: 2,
+  viewer: 1,
+};
+
+/**
+ * Middleware factory to check if authenticated user has the required role.
+ * Uses role hierarchy: admin > project_manager > member > viewer
+ * 
+ * @param requiredRole - Minimum role required to access the route
+ * @param options - Configuration options
+ * @param options.exact - If true, requires exact role match (no hierarchy)
+ * @returns Express middleware function
+ * 
+ * @example
+ * router.delete('/projects/:id', isAuthenticated, hasRole('admin'), handler);
+ * router.post('/projects', isAuthenticated, hasRole('project_manager'), handler);
+ */
+export function hasRole(requiredRole: UserRole, options: { exact?: boolean } = {}) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    // Ensure user is authenticated first
+    if (!req.isAuthenticated() || !req.user) {
+      return res.status(401).json({ 
+        error: "Unauthorized", 
+        message: "Authentication required" 
+      });
+    }
+
+    const userRole = (req.user.role || 'member') as UserRole;
+    
+    // Validate the role exists in hierarchy
+    if (!(userRole in ROLE_HIERARCHY)) {
+      console.warn(`Invalid user role detected: ${userRole}`);
+      return res.status(403).json({ 
+        error: "Forbidden", 
+        message: "Invalid user role" 
+      });
+    }
+
+    // Check role permission
+    const hasPermission = options.exact
+      ? userRole === requiredRole
+      : ROLE_HIERARCHY[userRole] >= ROLE_HIERARCHY[requiredRole];
+
+    if (!hasPermission) {
+      return res.status(403).json({ 
+        error: "Forbidden", 
+        message: `This action requires ${requiredRole} privileges` 
+      });
+    }
+
+    next();
+  };
+}
+
+/**
+ * Shortcut middleware for admin-only routes.
+ * Equivalent to hasRole('admin')
+ */
+export const isAdmin = hasRole('admin');
+
+/**
+ * Shortcut middleware for project manager or higher routes.
+ * Equivalent to hasRole('project_manager')
+ */
+export const isProjectManager = hasRole('project_manager');
+
+/**
+ * Middleware to check if user is the project manager OR has admin role.
+ * Useful for project-specific operations where the owner should also have access.
+ * 
+ * @param getProjectId - Function to extract project ID from request
+ */
+export function isProjectOwnerOrAdmin(getProjectId: (req: Request) => number | string) {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    if (!req.isAuthenticated() || !req.user) {
+      return res.status(401).json({ 
+        error: "Unauthorized", 
+        message: "Authentication required" 
+      });
+    }
+
+    const userRole = (req.user.role || 'member') as UserRole;
+    
+    // Admins always have access
+    if (userRole === 'admin') {
+      return next();
+    }
+
+    // Check if user is the project manager
+    const projectId = getProjectId(req);
+    try {
+      const project = await storage.getProject(Number(projectId));
+      
+      if (!project) {
+        return res.status(404).json({ 
+          error: "Not Found", 
+          message: "Project not found" 
+        });
+      }
+
+      if (project.managerId === req.user.id) {
+        return next();
+      }
+
+      // User is neither admin nor project owner
+      return res.status(403).json({ 
+        error: "Forbidden", 
+        message: "Only project managers or admins can perform this action" 
+      });
+    } catch (error) {
+      console.error('Error checking project ownership:', error);
+      return res.status(500).json({ 
+        error: "Internal Server Error", 
+        message: "Failed to verify project ownership" 
+      });
+    }
+  };
+}
+
 export function setupAuth(app: express.Application) {
   const sessionSettings: session.SessionOptions = {
     secret: process.env.SESSION_SECRET || "dev-secret-change-in-production",

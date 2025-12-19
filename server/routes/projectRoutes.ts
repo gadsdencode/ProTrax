@@ -4,7 +4,7 @@ import * as mammoth from "mammoth";
 import * as pdfParseModule from "pdf-parse";
 const pdfParse = (pdfParseModule as any).default || pdfParseModule;
 import { storage } from "../storage";
-import { isAuthenticated } from "../auth";
+import { isAuthenticated, hasRole, isProjectOwnerOrAdmin } from "../auth";
 import { asyncHandler, createError } from "../errorHandler";
 import { extractProjectDataFromSOW } from "../gemini";
 import { insertProjectSchema } from "@shared/schema";
@@ -69,8 +69,8 @@ router.patch('/:id', isAuthenticated, asyncHandler(async (req, res) => {
   res.json(project);
 }));
 
-// Delete project
-router.delete('/:id', isAuthenticated, asyncHandler(async (req, res) => {
+// Delete project (requires admin role OR project owner)
+router.delete('/:id', isAuthenticated, isProjectOwnerOrAdmin((req) => parseInt(req.params.id)), asyncHandler(async (req, res) => {
   const id = parseInt(req.params.id);
   await storage.deleteProject(id);
   res.status(204).send();
@@ -309,8 +309,8 @@ router.post('/:id/stakeholders', isAuthenticated, asyncHandler(async (req: any, 
   res.status(201).json(stakeholder);
 }));
 
-// Remove project stakeholder
-router.delete('/:id/stakeholders/:userId', isAuthenticated, asyncHandler(async (req, res) => {
+// Remove project stakeholder (requires project manager or higher)
+router.delete('/:id/stakeholders/:userId', isAuthenticated, isProjectOwnerOrAdmin((req) => parseInt(req.params.id)), asyncHandler(async (req, res) => {
   const projectId = parseInt(req.params.id);
   const userId = req.params.userId;
   await storage.removeProjectStakeholder(projectId, userId);

@@ -36,6 +36,7 @@ export const automationTriggerEnum = pgEnum('automation_trigger', ['task_created
 export const automationActionEnum = pgEnum('automation_action', ['change_status', 'assign_user', 'send_notification', 'create_task']);
 export const stakeholderRoleEnum = pgEnum('stakeholder_role', ['sponsor', 'reviewer', 'observer', 'team_member', 'client', 'vendor']);
 export const sprintStatusEnum = pgEnum('sprint_status', ['planned', 'active', 'completed']);
+export const userRoleEnum = pgEnum('user_role', ['admin', 'project_manager', 'member', 'viewer']);
 
 // ============= AUTH TABLES (Required for Authentication) =============
 
@@ -58,6 +59,7 @@ export const users = pgTable("users", {
   lastName: varchar("last_name"),
   profileImageUrl: varchar("profile_image_url"),
   weeklyCapacity: integer("weekly_capacity").default(40), // hours per week
+  role: userRoleEnum("role").default('member'), // RBAC: admin, project_manager, member, viewer
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
