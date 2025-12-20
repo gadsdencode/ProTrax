@@ -7,7 +7,7 @@
  * - View and accept pending invitations
  */
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import {
@@ -67,6 +67,19 @@ export default function Onboarding() {
   const [, setLocation] = useLocation();
   const [createOrgOpen, setCreateOrgOpen] = useState(false);
   const setCurrentOrganization = useOrganizationStore((state) => state.setCurrentOrganization);
+  const currentOrganization = useOrganizationStore((state) => state.currentOrganization);
+
+  // Redirect to dashboard when user gains an organization
+  // This handles the case when org is created via the dialog
+  useEffect(() => {
+    if (currentOrganization) {
+      // Small delay to allow toast to show
+      const timer = setTimeout(() => {
+        setLocation("/");
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [currentOrganization, setLocation]);
 
   // Fetch pending invitations for the current user
   const { data: invitations = [], isLoading: loadingInvitations } = useQuery<PendingInvitation[]>({
