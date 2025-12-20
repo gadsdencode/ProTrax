@@ -102,10 +102,38 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
   }, [user, clearOrganization]);
 
   // Auto-set organization on first load when organizations are fetched
+  // Also validates that persisted organization is still valid
   useEffect(() => {
-    // Skip if no user, still loading, or already initialized with orgs
+    // Skip if no user or still loading
     if (!user || isLoading) {
       return;
+    }
+
+    // VALIDATION: If we have a persisted currentOrganization, verify the user is still a member
+    if (currentOrganization && organizations.length > 0) {
+      const stillMember = organizations.find(
+        m => m.organization.id === currentOrganization.id
+      );
+      
+      if (!stillMember) {
+        // User is no longer a member of the persisted organization
+        // This can happen if they were removed, or the org was deleted
+        console.debug('[Org] Clearing stale persisted organization:', currentOrganization.id);
+        clearOrganization();
+        
+        // Try to auto-select a new valid organization
+        const defaultOrg = organizations.find(m => m.isDefault) || organizations[0];
+        if (defaultOrg) {
+          setCurrentOrganization(defaultOrg.organization, defaultOrg.role);
+        }
+        initializedRef.current = true;
+        return;
+      }
+      
+      // User is still a member, but role might have changed - update it
+      if (stillMember.role !== currentRole) {
+        setCurrentOrganization(currentOrganization, stillMember.role);
+      }
     }
 
     // Only auto-initialize if we don't have a current organization set
@@ -119,11 +147,15 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
       }
     }
     
-    // If organizations were fetched but empty, mark as initialized
+    // If organizations were fetched but empty, mark as initialized and clear any stale org
     if (!isLoading && organizations.length === 0) {
       initializedRef.current = true;
+      if (currentOrganization) {
+        // Clear stale persisted org since user has no memberships
+        clearOrganization();
+      }
     }
-  }, [organizations, isLoading, user, currentOrganization, setCurrentOrganization]);
+  }, [organizations, isLoading, user, currentOrganization, currentRole, setCurrentOrganization, clearOrganization]);
 
   // Switch organization mutation
   const switchOrganizationMutation = useMutation({

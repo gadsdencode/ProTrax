@@ -334,14 +334,19 @@ router.delete('/:id/invitations/:invitationId',
 /**
  * POST /api/organizations/invitations/:token/accept
  * Accept an invitation by token
+ * 
+ * SECURITY: The user's email must match the invitation email.
+ * This prevents unauthorized token usage.
  */
 router.post('/invitations/:token/accept',
   isAuthenticated,
   asyncHandler(async (req: any, res) => {
     const userId = req.user.id;
+    const userEmail = req.user.email; // May be null/undefined
     const token = req.params.token;
     
-    const membership = await storage.organizations.acceptInvitation(token, userId);
+    // Email validation is performed inside acceptInvitation
+    const membership = await storage.organizations.acceptInvitation(token, userId, userEmail);
     
     // Get the organization details
     const organization = await storage.getOrganization(membership.organizationId);
@@ -381,6 +386,84 @@ router.post('/:id/switch',
     res.json({
       organization,
       role: membership.role,
+    });
+  })
+);
+
+// ============================================================================
+// USER INVITATION ENDPOINTS
+// ============================================================================
+
+/**
+ * GET /api/organizations/my-invitations
+ * Get pending invitations for the current user by their email
+ * Used on the onboarding page to show invitations the user can accept
+ */
+router.get('/my-invitations',
+  isAuthenticated,
+  asyncHandler(async (req: any, res) => {
+    const userEmail = req.user.email;
+    
+    if (!userEmail) {
+      // User has no email, can't have invitations
+      res.json([]);
+      return;
+    }
+    
+    const invitations = await storage.organizations.getPendingInvitationsByEmail(userEmail);
+    
+    // Remove token from response for security (users don't need it directly)
+    const safeInvitations = invitations.map(inv => ({
+      id: inv.id,
+      organizationId: inv.organizationId,
+      email: inv.email,
+      role: inv.role,
+      expiresAt: inv.expiresAt,
+      createdAt: inv.createdAt,
+      organization: {
+        id: inv.organization.id,
+        name: inv.organization.name,
+        slug: inv.organization.slug,
+        description: inv.organization.description,
+        logoUrl: inv.organization.logoUrl,
+      },
+    }));
+    
+    res.json(safeInvitations);
+  })
+);
+
+/**
+ * POST /api/organizations/my-invitations/:invitationId/accept
+ * Accept an invitation for the current user
+ */
+router.post('/my-invitations/:invitationId/accept',
+  isAuthenticated,
+  asyncHandler(async (req: any, res) => {
+    const userId = req.user.id;
+    const userEmail = req.user.email;
+    const invitationId = req.params.invitationId;
+    
+    // Get the invitation to find the token
+    const invitations = userEmail 
+      ? await storage.organizations.getPendingInvitationsByEmail(userEmail)
+      : [];
+    
+    const invitation = invitations.find(inv => inv.id === invitationId);
+    
+    if (!invitation) {
+      throw createError.notFound('Invitation not found or you do not have access to it');
+    }
+    
+    // Accept using the token (which validates everything)
+    const membership = await storage.organizations.acceptInvitation(invitation.token, userId);
+    
+    // Get the organization details
+    const organization = await storage.getOrganization(membership.organizationId);
+    
+    res.status(201).json({
+      membership,
+      organization,
     });
   })
 );

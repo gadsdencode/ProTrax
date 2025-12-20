@@ -431,9 +431,50 @@ export class OrganizationStorage {
   }
 
   /**
-   * Accept an invitation
+   * Get pending invitations for a user by their email
+   * Returns invitations with organization details
    */
-  async acceptInvitation(token: string, userId: string): Promise<OrganizationMember> {
+  async getPendingInvitationsByEmail(email: string): Promise<(OrganizationInvitation & { organization: Organization })[]> {
+    const invitations = await this.db
+      .select({
+        id: organizationInvitations.id,
+        organizationId: organizationInvitations.organizationId,
+        email: organizationInvitations.email,
+        role: organizationInvitations.role,
+        invitedBy: organizationInvitations.invitedBy,
+        token: organizationInvitations.token,
+        expiresAt: organizationInvitations.expiresAt,
+        acceptedAt: organizationInvitations.acceptedAt,
+        createdAt: organizationInvitations.createdAt,
+        organization: organizations,
+      })
+      .from(organizationInvitations)
+      .innerJoin(organizations, eq(organizations.id, organizationInvitations.organizationId))
+      .where(
+        and(
+          sql`LOWER(${organizationInvitations.email}) = LOWER(${email})`,
+          isNull(organizationInvitations.acceptedAt),
+          sql`${organizationInvitations.expiresAt} > NOW()`,
+          eq(organizations.isActive, true)
+        )
+      )
+      .orderBy(desc(organizationInvitations.createdAt));
+    
+    return invitations as (OrganizationInvitation & { organization: Organization })[];
+  }
+
+  /**
+   * Accept an invitation
+   * 
+   * SECURITY: Validates that the accepting user's email matches the invited email.
+   * This prevents unauthorized users from accepting invitations intended for others.
+   * 
+   * @param token - The invitation token
+   * @param userId - The accepting user's ID
+   * @param userEmail - The accepting user's email (optional, but required for validation)
+   * @throws Error if email doesn't match or invitation is invalid
+   */
+  async acceptInvitation(token: string, userId: string, userEmail?: string | null): Promise<OrganizationMember> {
     const invitation = await this.getInvitationByToken(token);
     
     if (!invitation) {
@@ -446,6 +487,28 @@ export class OrganizationStorage {
     
     if (new Date(invitation.expiresAt) < new Date()) {
       throw new Error('Invitation has expired');
+    }
+
+    // SECURITY: Validate that the accepting user's email matches the invitation email
+    // This prevents someone with access to the token from accepting an invitation
+    // that was meant for a different email address
+    if (!userEmail) {
+      // User has no email set - lookup from database
+      const [user] = await this.db
+        .select({ email: users.email })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
+      
+      if (!user?.email) {
+        throw new Error('Your account must have a verified email address to accept this invitation. Please add an email to your profile.');
+      }
+      userEmail = user.email;
+    }
+
+    // Case-insensitive email comparison
+    if (userEmail.toLowerCase() !== invitation.email.toLowerCase()) {
+      throw new Error(`This invitation was sent to ${invitation.email}. Please sign in with the correct account to accept it.`);
     }
 
     // Use transaction for atomic operation

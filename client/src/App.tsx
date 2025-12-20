@@ -1,4 +1,4 @@
-import { Switch, Route } from "wouter";
+import { Switch, Route, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -10,10 +10,11 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { PageTransition } from "@/components/page-transition";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
-import { OrganizationProvider } from "@/hooks/use-organization";
+import { OrganizationProvider, useOrganization } from "@/hooks/use-organization";
 import { ProtectedRoute } from "@/lib/protected-route";
 import { useUIStore } from "@/stores/useUIStore";
 import AuthPage from "@/pages/auth-page";
+import Onboarding from "@/pages/onboarding";
 import Dashboard from "@/pages/dashboard";
 import Projects from "@/pages/projects";
 import ProjectSettings from "@/pages/project-settings";
@@ -48,6 +49,9 @@ function Router() {
       {/* Auth page - public */}
       <Route path="/auth" component={AuthPage} />
       
+      {/* Onboarding - for authenticated users without an organization */}
+      <Route path="/onboarding" component={Onboarding} />
+      
       {/* 404 */}
       <Route component={NotFound} />
     </Switch>
@@ -56,6 +60,8 @@ function Router() {
 
 function AppContent() {
   const { user } = useAuth();
+  const { hasOrganization, isLoading: orgLoading } = useOrganization();
+  const [location] = useLocation();
   const { isSidebarOpen, setSidebarOpen } = useUIStore();
   
   // Sidebar width configuration
@@ -64,9 +70,14 @@ function AppContent() {
     "--sidebar-width-icon": "3rem",
   };
 
+  // Don't show sidebar on auth or onboarding pages, or if user has no organization
+  const isAuthPage = location === "/auth";
+  const isOnboardingPage = location === "/onboarding";
+  const showSidebar = user && !isAuthPage && !isOnboardingPage && (hasOrganization || orgLoading);
+
   return (
     <>
-      {user ? (
+      {showSidebar ? (
         <SidebarProvider 
           style={style as React.CSSProperties}
           open={isSidebarOpen}
