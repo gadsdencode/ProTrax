@@ -212,6 +212,16 @@
   body {
     @apply font-sans antialiased bg-background text-foreground;
   }
+
+  /* Typography - Enforce tight tracking for headings per design guidelines */
+  h1, h2, h3, h4, h5, h6 {
+    @apply tracking-tight;
+  }
+
+  /* Display headings get tighter tracking */
+  h1 {
+    @apply tracking-tighter;
+  }
 }
 
 /**

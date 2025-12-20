@@ -1,21 +1,20 @@
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { AlertCircle, CheckCircle2, Clock, FolderKanban, Mail, ChevronDown, ArrowRight, ListTodo, Plus, UserCheck, Upload } from "lucide-react";
+import { AlertCircle, CheckCircle2, Clock, FolderKanban, Mail, ChevronDown, ArrowRight, ListTodo, UserCheck } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { EmailReportDialog } from "@/components/email-report-dialog";
 import { EmptyState } from "@/components/empty-state";
-import { useUIStore } from "@/stores/useUIStore";
+import { DashboardSkeleton } from "@/components/dashboard-skeleton";
 import type { Project, Task, PaginatedResult } from "@shared/schema";
 
-export default function Dashboard() {
+// Extracted content component for better suspense handling
+function DashboardContent() {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
-  const { setActiveDialog } = useUIStore();
   const [emailDialogOpen, setEmailDialogOpen] = useState(false);
   const [selectedReportType, setSelectedReportType] = useState<string>("summary");
   
@@ -39,6 +38,13 @@ export default function Dashboard() {
 
   const allTasks = recentTasksPaginated?.data || [];
 
+  // Show unified skeleton when any critical data is loading
+  const isInitialLoading = projectsLoading && tasksLoading && allTasksLoading;
+  
+  if (isInitialLoading) {
+    return <DashboardSkeleton />;
+  }
+
   const handleEmailReport = (reportType: string) => {
     setSelectedReportType(reportType);
     setEmailDialogOpen(true);
@@ -50,6 +56,7 @@ export default function Dashboard() {
       value: projects?.filter(p => p.status === 'active').length || 0,
       icon: FolderKanban,
       color: "text-primary",
+      isLoading: projectsLoading,
     },
     {
       title: "Tasks Due This Week",
@@ -62,6 +69,7 @@ export default function Dashboard() {
       }).length || 0,
       icon: Clock,
       color: "text-chart-3",
+      isLoading: tasksLoading,
     },
     {
       title: "Overdue Tasks",
@@ -71,6 +79,7 @@ export default function Dashboard() {
       }).length || 0,
       icon: AlertCircle,
       color: "text-destructive",
+      isLoading: tasksLoading,
     },
     {
       title: "Completed This Week",
@@ -82,14 +91,15 @@ export default function Dashboard() {
       }).length || 0,
       icon: CheckCircle2,
       color: "text-chart-2",
+      isLoading: tasksLoading,
     },
   ];
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6 animate-in fade-in-0 duration-300">
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-semibold mb-2" data-testid="text-dashboard-title">
+          <h1 className="text-2xl font-semibold tracking-tight mb-2" data-testid="text-dashboard-title">
             Welcome back, {user?.firstName || 'there'}!
           </h1>
           <p className="text-muted-foreground">
@@ -121,29 +131,32 @@ export default function Dashboard() {
         </DropdownMenu>
       </div>
 
-      {/* Stats Grid */}
+      {/* Stats Grid - Renders all at once */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {stats.map((stat) => (
-          <Card key={stat.title}>
+        {stats.map((stat, index) => (
+          <Card 
+            key={stat.title}
+            className="animate-in fade-in-0 slide-in-from-bottom-4 duration-500"
+            style={{ animationDelay: `${index * 50}ms` }}
+          >
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
               <stat.icon className={`h-4 w-4 ${stat.color}`} />
             </CardHeader>
             <CardContent>
-              {projectsLoading || tasksLoading ? (
-                <Skeleton className="h-8 w-12" />
-              ) : (
-                <div className="text-2xl font-bold" data-testid={`stat-${stat.title.toLowerCase().replace(/\s+/g, '-')}`}>
-                  {stat.value}
-                </div>
-              )}
+              <div 
+                className="text-2xl font-bold" 
+                data-testid={`stat-${stat.title.toLowerCase().replace(/\s+/g, '-')}`}
+              >
+                {stat.value}
+              </div>
             </CardContent>
           </Card>
         ))}
       </div>
 
       {/* Recent Tasks (All Tasks) */}
-      <Card>
+      <Card className="animate-in fade-in-0 slide-in-from-bottom-4 duration-500" style={{ animationDelay: '200ms' }}>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="flex items-center gap-2">
             <ListTodo className="h-5 w-5" />
@@ -161,19 +174,7 @@ export default function Dashboard() {
           </Button>
         </CardHeader>
         <CardContent>
-          {allTasksLoading ? (
-            <div className="space-y-3">
-              {[1, 2, 3, 4, 5].map(i => (
-                <div key={i} className="flex items-center space-x-3">
-                  <Skeleton className="h-12 flex-1" />
-                  <div className="flex gap-1">
-                    <Skeleton className="h-6 w-16 rounded-full" />
-                    <Skeleton className="h-6 w-16 rounded-full" />
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : !allTasks || allTasks.length === 0 ? (
+          {!allTasks || allTasks.length === 0 ? (
             <EmptyState
               icon={ListTodo}
               title="No tasks yet"
@@ -188,10 +189,11 @@ export default function Dashboard() {
               <div className="text-xs text-muted-foreground mb-2">
                 Showing {allTasks.length} of {recentTasksPaginated?.total || 0} total tasks
               </div>
-              {allTasks.map(task => (
+              {allTasks.map((task, index) => (
                 <div
                   key={task.id}
-                  className="flex items-center justify-between p-3 rounded-lg border hover-elevate transition-all cursor-pointer"
+                  className="flex items-center justify-between p-3 rounded-lg border hover-elevate transition-all cursor-pointer animate-in fade-in-0 slide-in-from-left-4 duration-300"
+                  style={{ animationDelay: `${index * 30}ms` }}
                   data-testid={`recent-task-${task.id}`}
                   onClick={() => setLocation(`/projects/${task.projectId}/list`)}
                 >
@@ -235,24 +237,12 @@ export default function Dashboard() {
       </Card>
 
       {/* My Tasks */}
-      <Card>
+      <Card className="animate-in fade-in-0 slide-in-from-bottom-4 duration-500" style={{ animationDelay: '300ms' }}>
         <CardHeader>
           <CardTitle>My Assigned Tasks</CardTitle>
         </CardHeader>
         <CardContent>
-          {tasksLoading ? (
-            <div className="space-y-3">
-              {[1, 2, 3].map(i => (
-                <div key={i} className="flex items-center space-x-3">
-                  <Skeleton className="h-12 flex-1" />
-                  <div className="flex gap-1">
-                    <Skeleton className="h-6 w-16 rounded-full" />
-                    <Skeleton className="h-6 w-16 rounded-full" />
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : !myTasks || myTasks.length === 0 ? (
+          {!myTasks || myTasks.length === 0 ? (
             <EmptyState
               icon={UserCheck}
               title="No assigned tasks"
@@ -264,10 +254,11 @@ export default function Dashboard() {
             />
           ) : (
             <div className="space-y-2">
-              {myTasks.slice(0, 5).map(task => (
+              {myTasks.slice(0, 5).map((task, index) => (
                 <div
                   key={task.id}
-                  className="flex items-center justify-between p-3 rounded-lg border hover-elevate transition-all cursor-pointer"
+                  className="flex items-center justify-between p-3 rounded-lg border hover-elevate transition-all cursor-pointer animate-in fade-in-0 slide-in-from-left-4 duration-300"
+                  style={{ animationDelay: `${index * 30}ms` }}
                   data-testid={`my-task-${task.id}`}
                   onClick={() => setLocation(`/projects/${task.projectId}/list`)}
                 >
@@ -295,27 +286,12 @@ export default function Dashboard() {
       </Card>
 
       {/* Active Projects */}
-      <Card>
+      <Card className="animate-in fade-in-0 slide-in-from-bottom-4 duration-500" style={{ animationDelay: '400ms' }}>
         <CardHeader>
           <CardTitle>Active Projects</CardTitle>
         </CardHeader>
         <CardContent>
-          {projectsLoading ? (
-            <div className="space-y-3">
-              {[1, 2].map(i => (
-                <div key={i} className="p-4 rounded-lg border">
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex-1">
-                      <Skeleton className="h-4 w-32 mb-2" />
-                      <Skeleton className="h-3 w-full" />
-                    </div>
-                    <Skeleton className="h-3 w-3 rounded-full ml-3" />
-                  </div>
-                  <Skeleton className="h-3 w-48 mt-2" />
-                </div>
-              ))}
-            </div>
-          ) : !projects || projects.filter(p => p.status === 'active').length === 0 ? (
+          {!projects || projects.filter(p => p.status === 'active').length === 0 ? (
             <EmptyState
               icon={FolderKanban}
               title="No active projects"
@@ -327,10 +303,11 @@ export default function Dashboard() {
             />
           ) : (
             <div className="space-y-3">
-              {projects.filter(p => p.status === 'active').slice(0, 3).map(project => (
+              {projects.filter(p => p.status === 'active').slice(0, 3).map((project, index) => (
                 <div
                   key={project.id}
-                  className="p-4 rounded-lg border hover-elevate transition-all"
+                  className="p-4 rounded-lg border hover-elevate transition-all animate-in fade-in-0 slide-in-from-left-4 duration-300"
+                  style={{ animationDelay: `${index * 50}ms` }}
                   data-testid={`project-${project.id}`}
                 >
                   <div className="flex items-start justify-between">
@@ -366,6 +343,15 @@ export default function Dashboard() {
         initialReportType={selectedReportType}
       />
     </div>
+  );
+}
+
+// Main Dashboard component with Suspense wrapper
+export default function Dashboard() {
+  return (
+    <Suspense fallback={<DashboardSkeleton />}>
+      <DashboardContent />
+    </Suspense>
   );
 }
 

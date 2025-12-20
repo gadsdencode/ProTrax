@@ -1,102 +1,176 @@
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { BarChart3, Calendar, Kanban, Layout, Network, TrendingUp } from "lucide-react";
+import { Layout, Loader2 } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { HeroSection } from "@/components/landing/hero-section";
+import { BentoGrid } from "@/components/landing/bento-grid";
+import { 
+  GanttFeatureCell, 
+  KanbanFeatureCell, 
+  AIInsightsCell, 
+  PortfolioCell,
+  CalendarCell,
+  ReportsCell,
+  AnalyticsCell
+} from "@/components/landing/feature-cells";
+import { SocialProof } from "@/components/landing/social-proof";
 
 export default function Landing() {
+  const [isRedirecting, setIsRedirecting] = useState(false);
+
+  const handleLogin = () => {
+    setIsRedirecting(true);
+    // Brief delay to show loading state before redirect
+    setTimeout(() => {
+      window.location.href = '/api/login';
+    }, 150);
+  };
+
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="fixed top-0 left-0 right-0 z-50 border-b bg-background/80 backdrop-blur-sm">
-        <div className="container mx-auto px-4 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Layout className="h-6 w-6 text-primary" />
-            <span className="text-lg font-semibold">ProjectHub</span>
+      {/* Redirect overlay */}
+      {isRedirecting && (
+        <div className="fixed inset-0 z-[100] bg-background/80 backdrop-blur-sm flex items-center justify-center">
+          <div className="flex flex-col items-center gap-4">
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            <p className="text-sm text-muted-foreground">Redirecting to login...</p>
           </div>
+        </div>
+      )}
+
+      {/* Header */}
+      <header className="fixed top-0 left-0 right-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-md">
+        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 rounded-lg bg-primary/10">
+              <Layout className="h-5 w-5 text-primary" />
+            </div>
+            <span className="text-lg font-semibold tracking-tight">ProjectHub</span>
+          </div>
+          <nav className="hidden md:flex items-center gap-6">
+            <a href="#features" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+              Features
+            </a>
+            <a href="#" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+              Pricing
+            </a>
+            <a href="#" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+              Enterprise
+            </a>
+          </nav>
           <Button
-            onClick={() => window.location.href = '/api/login'}
+            onClick={handleLogin}
+            disabled={isRedirecting}
             data-testid="button-login"
+            className="h-9 px-4"
           >
-            Sign In
+            {isRedirecting ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              "Sign In"
+            )}
           </Button>
         </div>
       </header>
 
       {/* Hero Section */}
-      <section className="pt-32 pb-16 px-4">
-        <div className="container mx-auto max-w-6xl text-center">
-          <h1 className="text-5xl font-bold tracking-tight mb-6">
-            Enterprise Project Management
-            <span className="block text-primary mt-2">Built for Modern Teams</span>
-          </h1>
-          <p className="text-xl text-muted-foreground mb-8 max-w-3xl mx-auto">
-            Comprehensive PM suite with Gantt charts, Kanban boards, portfolio management, 
-            and AI-powered insights. Support for Waterfall, Agile, and Hybrid methodologies.
-          </p>
-          <Button
-            size="lg"
-            onClick={() => window.location.href = '/api/login'}
-            data-testid="button-get-started"
-            className="h-12 px-8"
-          >
-            Get Started
-          </Button>
+      <HeroSection onLogin={handleLogin} isRedirecting={isRedirecting} />
+
+      {/* Features Grid */}
+      <section id="features" className="py-20 px-4 bg-gradient-to-b from-background to-card/50">
+        <div className="container mx-auto max-w-7xl">
+          <div className="text-center mb-12">
+            <h2 className={cn(
+              "text-3xl md:text-4xl font-bold tracking-tight mb-4",
+              "animate-in fade-in-0 slide-in-from-bottom-4 duration-700"
+            )}>
+              Powerful Features for
+              <span className="text-primary"> Enterprise Teams</span>
+            </h2>
+            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+              Everything you need to manage complex projects, from planning to delivery.
+            </p>
+          </div>
+
+          {/* Bento Grid */}
+          <BentoGrid columns={3} className="auto-rows-auto">
+            {/* Row 1: Two large cards for Gantt and Kanban */}
+            <div className="col-span-1 md:col-span-2 lg:col-span-2 row-span-2">
+              <GanttFeatureCell />
+            </div>
+            <div className="col-span-1 md:col-span-2 lg:col-span-1 row-span-2">
+              <KanbanFeatureCell />
+            </div>
+            
+            {/* Row 2: Medium cards */}
+            <AIInsightsCell />
+            <PortfolioCell />
+            
+            {/* Row 3: Small cards */}
+            <CalendarCell />
+            <ReportsCell />
+            <AnalyticsCell />
+          </BentoGrid>
         </div>
       </section>
 
-      {/* Features Grid */}
-      <section className="py-16 px-4 bg-card">
-        <div className="container mx-auto max-w-6xl">
-          <h2 className="text-3xl font-bold text-center mb-12">Powerful Features</h2>
-          <div className="grid md:grid-cols-3 gap-6">
-            <FeatureCard
-              icon={<BarChart3 className="h-8 w-8 text-primary" />}
-              title="Advanced Gantt Charts"
-              description="Interactive timeline with critical path analysis, dependency tracking, and automatic schedule updates"
-            />
-            <FeatureCard
-              icon={<Kanban className="h-8 w-8 text-primary" />}
-              title="Kanban Boards"
-              description="Customizable workflows with WIP limits, drag-and-drop cards, and real-time collaboration"
-            />
-            <FeatureCard
-              icon={<Calendar className="h-8 w-8 text-primary" />}
-              title="Calendar & List Views"
-              description="Multiple perspectives on your work with powerful filtering, sorting, and grouping capabilities"
-            />
-            <FeatureCard
-              icon={<Network className="h-8 w-8 text-primary" />}
-              title="Portfolio Management"
-              description="Executive dashboards, strategic alignment, and demand management for project portfolios"
-            />
-            <FeatureCard
-              icon={<TrendingUp className="h-8 w-8 text-primary" />}
-              title="AI-Powered Insights"
-              description="Predictive analytics, automated summaries, and intelligent risk predictions using Gemini AI"
-            />
-            <FeatureCard
-              icon={<Layout className="h-8 w-8 text-primary" />}
-              title="Comprehensive Reporting"
-              description="Excel exports, burndown charts, budget tracking, and customizable status reports"
-            />
+      {/* Social Proof */}
+      <SocialProof />
+
+      {/* CTA Section */}
+      <section className="py-20 px-4 bg-gradient-to-b from-card/50 to-background">
+        <div className="container mx-auto max-w-4xl text-center">
+          <h2 className="text-3xl md:text-4xl font-bold tracking-tight mb-4">
+            Ready to transform your project management?
+          </h2>
+          <p className="text-lg text-muted-foreground mb-8 max-w-2xl mx-auto">
+            Join thousands of teams already using ProjectHub to deliver projects on time and within budget.
+          </p>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+            <Button
+              size="lg"
+              onClick={handleLogin}
+              disabled={isRedirecting}
+              className="h-12 px-8 text-base gap-2 shadow-lg shadow-primary/20"
+            >
+              {isRedirecting ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                "Get Started Free"
+              )}
+            </Button>
+            <Button
+              size="lg"
+              variant="outline"
+              className="h-12 px-8 text-base"
+            >
+              Schedule Demo
+            </Button>
           </div>
         </div>
       </section>
 
       {/* Footer */}
-      <footer className="py-8 px-4 border-t">
-        <div className="container mx-auto max-w-6xl text-center text-sm text-muted-foreground">
-          <p>© 2024 ProjectHub. Enterprise Project Management Platform.</p>
+      <footer className="py-12 px-4 border-t border-border/50">
+        <div className="container mx-auto max-w-7xl">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 rounded-lg bg-primary/10">
+                <Layout className="h-4 w-4 text-primary" />
+              </div>
+              <span className="font-semibold">ProjectHub</span>
+            </div>
+            <div className="flex items-center gap-6 text-sm text-muted-foreground">
+              <a href="#" className="hover:text-foreground transition-colors">Privacy</a>
+              <a href="#" className="hover:text-foreground transition-colors">Terms</a>
+              <a href="#" className="hover:text-foreground transition-colors">Contact</a>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              © 2024 ProjectHub. Enterprise Project Management Platform.
+            </p>
+          </div>
         </div>
       </footer>
-    </div>
-  );
-}
-
-function FeatureCard({ icon, title, description }: { icon: React.ReactNode; title: string; description: string }) {
-  return (
-    <div className="p-6 rounded-lg border bg-background hover-elevate transition-shadow">
-      <div className="mb-4">{icon}</div>
-      <h3 className="text-lg font-semibold mb-2">{title}</h3>
-      <p className="text-sm text-muted-foreground">{description}</p>
     </div>
   );
 }

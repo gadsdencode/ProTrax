@@ -28,7 +28,7 @@ import { useProjectSync } from "@/hooks/use-project-sync";
 import type { Project, InsertProject } from "@shared/schema";
 import { ProjectForm } from "@/components/project-form";
 import { CustomFieldsSettings } from "@/components/custom-fields-settings";
-import { AIRiskAnalysis } from "@/components/ai-risk-analysis";
+import { AIRiskAnalysis } from "@/components/ai-analysis";
 
 export default function ProjectSettings() {
   const [, setLocation] = useLocation();
